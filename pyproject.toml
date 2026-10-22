@@ -1,20 +1,20 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "pytest-casebook"
 dynamic = ["version"]
-description = "試験項目表と自動テストの二重管理をなくす pytest プラグイン。YAML に前提条件・操作（CLI・関数・HTTP）・期待結果を書き、大項目・中項目・小項目の階層つき HTML の試験項目表を出す"
+description = "A pytest plugin that runs test cases written in YAML (preconditions, a CLI / function / HTTP action, expected results) and writes an HTML test specification sheet with categories and subcategories"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
-authors = [{ name = "gyuro" }]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "gyuro", email = "344015443+gyuro-dev@users.noreply.github.com" }]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Framework :: Pytest",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Natural Language :: English",
     "Natural Language :: Japanese",
     "Operating System :: OS Independent",

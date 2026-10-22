@@ -1,6 +1,6 @@
 # pytest-casebook
 
-English | [日本語](README.ja.md)
+English | [日本語](https://github.com/gyuro-dev/pytest-casebook/blob/main/README.ja.md)
 
 A pytest plugin that runs test cases written in YAML and writes the results as a **test specification sheet (an HTML table with categories, subcategories and items)**. It keeps your test specification sheet and your automated tests from drifting apart, because they are the same file.
 
@@ -16,9 +16,9 @@ A pytest plugin that runs test cases written in YAML and writes the results as a
 
 Run `pytest --casebook-html=report.html` and the cases in your YAML come out as this test specification sheet. The group hierarchy is merged vertically, and preconditions, expected results and results sit on one row.
 
-![HTML report as a test specification sheet](docs/images/report-top-en.png)
+![HTML report as a test specification sheet](https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/docs/images/report-top-en.png)
 
-This is (part of) the YAML behind the table above; the whole file is [docs/screenshots-en/casebook_demo_en.yaml](docs/screenshots-en/casebook_demo_en.yaml). Nested `group:`s become the category / subcategory / item columns, `description` becomes "What is checked", and `expect:` becomes "Expected result". Cases without `expect:` are compared with golden files.
+This is (part of) the YAML behind the table above; the whole file is [docs/screenshots-en/casebook_demo_en.yaml](https://github.com/gyuro-dev/pytest-casebook/blob/main/docs/screenshots-en/casebook_demo_en.yaml). Nested `group:`s become the category / subcategory / item columns, `description` becomes "What is checked", and `expect:` becomes "Expected result". Cases without `expect:` are compared with golden files.
 
 ```yaml
 title: A small shop
@@ -57,7 +57,7 @@ If you write tests in Python you get type completion and a debugger. For unit te
 - You want "insert rows into a DB → run an API or CLI → check the response and the DB changes" as a single case
 - You want to use the same YAML outside pytest, e.g. in a demo script (`pytest_casebook.load()`)
 
-Supported: Python 3.11–3.15 and pytest 8 / 9 (checked with [scripts/check.sh](scripts/check.sh)).
+Supported: Python 3.11–3.15 and pytest 8 / 9 (checked with [scripts/check.sh](https://github.com/gyuro-dev/pytest-casebook/blob/main/scripts/check.sh)).
 
 ## Installation
 
@@ -165,30 +165,30 @@ casebook_lang = "en"
 
 Most things can be done in YAML alone. Add pytest hooks to conftest.py only when you use a DB or want to pass a test environment.
 
-Every row has a ready-to-run sample in [examples-en](examples-en). You can start by copying a sample directory and renaming things.
+Every row has a ready-to-run sample in [examples-en](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en). You can start by copying a sample directory and renaming things.
 
 | What you want to do | Where | What to write | Sample |
 |---|---|---|---|
-| Run a CLI and check its output | YAML | `command_prefix` and `command` | [01_cli](examples-en/01_cli) |
-| Call a Python function and check the return value | YAML | `call: module:function` and `args` / `kwargs` | [02_function](examples-en/02_function) |
-| Check that an exception is raised | YAML | `expect: {raises: ValueError}` | [03_exception](examples-en/03_exception) |
-| Write the expected result directly in YAML | YAML | `expect:` ([how](#expected-results-expect)) | [04_expect](examples-en/04_expect) |
-| Classify cases into categories and subcategories | YAML | nested `group:` ([how](#groups)) | [05_groups](examples-en/05_groups) |
-| Put input files in place / check the files produced | YAML | `setup: {files: ...}` and `observe: [files]` | [06_files](examples-en/06_files) |
-| Check the same action "normally" and "during an outage" | YAML + conftest.py | `states:` + `pytest_casebook_setup` | [07_states](examples-en/07_states) |
-| Insert rows into a DB, run, and check the DB afterwards | YAML + conftest.py | `casebook_env`, `pytest_casebook_setup`, `pytest_casebook_observe`, `pytest_casebook_prepare_call` | [08_db](examples-en/08_db) |
-| Run a CLI in-process and pass it a mock | YAML + conftest.py | `pytest_casebook_run_command` + `run_in_process` | [09_in_process](examples-en/09_in_process) |
-| Normalize IDs and timestamps that change on every run | YAML | `normalize:` (also possible with hooks) | [10_normalize](examples-en/10_normalize) |
-| Attach your own information to cases and use the same YAML outside pytest | YAML + Python | `meta:` and `pytest_casebook.load()` | [11_meta_load](examples-en/11_meta_load) |
-| Write golden files by hand | golden file | the body only (headers can be omitted) | [12_handwritten_golden](examples-en/12_handwritten_golden) |
-| Skip a case with a reason / record a known bug | YAML | `skip: reason` / `xfail: reason` | [13_skip_xfail](examples-en/13_skip_xfail) |
-| Call an HTTP API and check the status and response | YAML + conftest.py | `request:` + `pytest_casebook_request` | [14_http_hook](examples-en/14_http_hook) |
-| Test a FastAPI API together with its DB | YAML + conftest.py | `request:`, `setup:`, `expect:` + TestClient | [15_fastapi](examples-en/15_fastapi) |
-| Test a Flask API together with its DB | YAML + conftest.py | `request:`, `setup:`, `expect:` + test_client | [16_flask](examples-en/16_flask) |
-| Run the same cases against different environments (local and staging, mock and real, …) | conftest.py + command line | switch in `casebook_env`, `-o casebook_golden_dir=…` and `-m` ([how](#running-against-multiple-environments)) | [17_targets](examples-en/17_targets) |
+| Run a CLI and check its output | YAML | `command_prefix` and `command` | [01_cli](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/01_cli) |
+| Call a Python function and check the return value | YAML | `call: module:function` and `args` / `kwargs` | [02_function](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/02_function) |
+| Check that an exception is raised | YAML | `expect: {raises: ValueError}` | [03_exception](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/03_exception) |
+| Write the expected result directly in YAML | YAML | `expect:` ([how](#expected-results-expect)) | [04_expect](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/04_expect) |
+| Classify cases into categories and subcategories | YAML | nested `group:` ([how](#groups)) | [05_groups](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/05_groups) |
+| Put input files in place / check the files produced | YAML | `setup: {files: ...}` and `observe: [files]` | [06_files](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/06_files) |
+| Check the same action "normally" and "during an outage" | YAML + conftest.py | `states:` + `pytest_casebook_setup` | [07_states](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/07_states) |
+| Insert rows into a DB, run, and check the DB afterwards | YAML + conftest.py | `casebook_env`, `pytest_casebook_setup`, `pytest_casebook_observe`, `pytest_casebook_prepare_call` | [08_db](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/08_db) |
+| Run a CLI in-process and pass it a mock | YAML + conftest.py | `pytest_casebook_run_command` + `run_in_process` | [09_in_process](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/09_in_process) |
+| Normalize IDs and timestamps that change on every run | YAML | `normalize:` (also possible with hooks) | [10_normalize](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/10_normalize) |
+| Attach your own information to cases and use the same YAML outside pytest | YAML + Python | `meta:` and `pytest_casebook.load()` | [11_meta_load](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/11_meta_load) |
+| Write golden files by hand | golden file | the body only (headers can be omitted) | [12_handwritten_golden](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/12_handwritten_golden) |
+| Skip a case with a reason / record a known bug | YAML | `skip: reason` / `xfail: reason` | [13_skip_xfail](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/13_skip_xfail) |
+| Call an HTTP API and check the status and response | YAML + conftest.py | `request:` + `pytest_casebook_request` | [14_http_hook](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/14_http_hook) |
+| Test a FastAPI API together with its DB | YAML + conftest.py | `request:`, `setup:`, `expect:` + TestClient | [15_fastapi](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/15_fastapi) |
+| Test a Flask API together with its DB | YAML + conftest.py | `request:`, `setup:`, `expect:` + test_client | [16_flask](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/16_flask) |
+| Run the same cases against different environments (local and staging, mock and real, …) | conftest.py + command line | switch in `casebook_env`, `-o casebook_golden_dir=…` and `-m` ([how](#running-against-multiple-environments)) | [17_targets](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/17_targets) |
 | Measure coverage while writing the HTML report | pyproject.toml + command line | pytest-cov and coverage.py's `patch = ["subprocess"]` ([how](#measuring-coverage)) | — |
 
-A sample combining everything is in [examples-en/shop](examples-en/shop).
+A sample combining everything is in [examples-en/shop](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/shop).
 
 Timestamps (e.g. `2026-10-19T12:34:56Z`) and UUIDs are replaced with `<datetime>` / `<uuid>` before comparison, without any setup.
 
@@ -311,7 +311,7 @@ Differs from the expected result:
 {"item": "apple", "count": 10}
 ```
 
-[examples-en/shop](examples-en/shop) uses everything described so far (CLI, functions, three levels, states, files, a sqlite DB).
+[examples-en/shop](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/shop) uses everything described so far (CLI, functions, three levels, states, files, a sqlite DB).
 
 ```bash
 uv run pytest examples-en -o casebook_lang=en --casebook-html=reports/casebook.html
@@ -503,7 +503,7 @@ def pytest_casebook_request(request, env):
     return send_with_werkzeug_client(env.client, request)
 ```
 
-Any other client works too: read `request` (`HttpRequest`: `method`, `path`, `url`, `query`, `headers`, `json`, `body`) and return `HttpResponse(status, body, headers)` ([14_http_hook](examples-en/14_http_hook) is an example without a framework).
+Any other client works too: read `request` (`HttpRequest`: `method`, `path`, `url`, `query`, `headers`, `json`, `body`) and return `HttpResponse(status, body, headers)` ([14_http_hook](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/14_http_hook) is an example without a framework).
 
 The golden file contains `# status:` and, if the body is JSON, a formatted `----- json -----`, otherwise `----- body -----`. Response headers are not written to the golden file (they change on every run, e.g. dates). To check headers, use `headers` in `expect:`.
 
@@ -625,7 +625,7 @@ uv run pytest --target staging -o casebook_golden_dir=golden_staging -m "not loc
 
 - `golden_dir:` in the YAML takes precedence over `-o`. When switching locations per environment, do not write it in the YAML
 - Check environment-dependent answers with golden files and environment-independent ones with `expect:`, to avoid duplicated expectations
-- See [examples-en/17_targets](examples-en/17_targets)
+- See [examples-en/17_targets](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/17_targets)
 
 ### Measuring coverage
 
@@ -646,7 +646,7 @@ patch = ["subprocess"]
 ```
 
 - The subprocess has to run the Python of the environment where coverage is installed. A program name without a path, such as `python` in `command_prefix: [python, ...]`, is looked up on PATH, so with `uv run pytest` or an activated virtual environment it runs that environment's Python
-- If `pytest_casebook_run_command` returns `run_in_process` to run the CLI in-process, coverage is measured without this setting ([09_in_process](examples-en/09_in_process))
+- If `pytest_casebook_run_command` returns `run_in_process` to run the CLI in-process, coverage is measured without this setting ([09_in_process](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/09_in_process))
 
 ### Editor completion and validation
 
@@ -687,13 +687,13 @@ For each case file the report contains:
 - preconditions show non-default state names and the case's own `setup:`. Skip and known-bug reasons are shown under the result
 - the time only counts running the case (not session fixtures that build the environment)
 
-The whole report looks like this (made from the cases in [docs/screenshots-en](docs/screenshots-en)).
+The whole report looks like this (made from the cases in [docs/screenshots-en](https://github.com/gyuro-dev/pytest-casebook/tree/main/docs/screenshots-en)).
 
-![The whole HTML report](docs/images/report-overview-en.png)
+![The whole HTML report](https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/docs/images/report-overview-en.png)
 
 A failed case can be expanded below its row to show the diff.
 
-![Diff of a failed case](docs/images/report-failure-en.png)
+![Diff of a failed case](https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/docs/images/report-failure-en.png)
 
 Results are one of: passed, updated (rewritten by `--casebook-update`), skipped, expected failure, unexpected pass, failed, error (labels follow `casebook_lang`). pytest-html is not required (they can be used together).
 
@@ -720,7 +720,7 @@ scripts/check.sh 3.12            # choose the Python version
 PYTESTS=9 scripts/check.sh 3.13  # also choose the pytest version
 ```
 
-There is also an end-to-end test that starts a real PostgreSQL instance and API server with Docker ([integration/](integration)). For WSL there is a script that installs Docker Engine and uv.
+There is also an end-to-end test that starts a real PostgreSQL instance and API server with Docker ([integration/](https://github.com/gyuro-dev/pytest-casebook/tree/main/integration)). For WSL there is a script that installs Docker Engine and uv.
 
 ```bash
 scripts/integration.sh            # start → test → clean up (results in reports/integration/)
