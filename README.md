@@ -57,7 +57,7 @@ If you write tests in Python you get type completion and a debugger. For unit te
 - You want "insert rows into a DB → run an API or CLI → check the response and the DB changes" as a single case
 - You want to use the same YAML outside pytest, e.g. in a demo script (`pytest_casebook.load()`)
 
-Supported: Python 3.11–3.15 and pytest 8 / 9 (checked with [scripts/check.sh](https://github.com/gyuro-dev/pytest-casebook/blob/main/scripts/check.sh)).
+Supported: Python 3.11–3.15 and pytest 8 / 9 (checked by the GitHub Actions CI and [scripts/check.sh](https://github.com/gyuro-dev/pytest-casebook/blob/main/scripts/check.sh)).
 
 ## Installation
 
@@ -71,7 +71,7 @@ Works with Python 3.11+ and pytest 8+. Installing it is enough: pytest loads it 
 
 On Python 3.15, PyYAML is built from source until it ships 3.15 wheels. If that fails on Windows without a C compiler, install with the environment variable `PYYAML_FORCE_LIBYAML=0` (PyYAML without the C extension).
 
-The only dependencies are pytest and PyYAML. Testing HTTP APIs does not add an HTTP library either (requests are sent with your framework's test client, e.g. FastAPI's or Flask's).
+The only dependencies are pytest, PyYAML and pluggy (which pytest needs anyway). Testing HTTP APIs does not add an HTTP library either (requests are sent with your framework's test client, e.g. FastAPI's or Flask's).
 
 ## Getting started: you only write one YAML file
 
@@ -314,7 +314,7 @@ Differs from the expected result:
 [examples-en/shop](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/shop) uses everything described so far (CLI, functions, three levels, states, files, a sqlite DB).
 
 ```bash
-uv run pytest examples-en --casebook-html=reports/casebook.html
+uv run pytest examples-en/shop --casebook-html=reports/shop.html
 ```
 
 ---
@@ -672,7 +672,7 @@ A failed case shows the line in the YAML where it is written (`[wrong] (line 8)`
 
 | Option | Meaning |
 |---|---|
-| `--casebook-update` | regenerate golden files from the current output (`expect:` cases are only compared) |
+| `--casebook-update` | rewrite golden files from the current output (only those whose results changed; `expect:` cases are only compared) |
 | `--casebook-html=PATH` | write the results as HTML |
 
 All options start with `--casebook-`. Generic names such as `--update-golden` may already be defined by a project's conftest.py, and a duplicate name stops pytest from starting.

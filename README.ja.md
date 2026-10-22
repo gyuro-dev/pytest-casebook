@@ -2,8 +2,8 @@
 
 [English](README.md) | 日本語
 
-YAML に書いたテストケースを pytest で実行し、結果を**試験項目表**（大項目・中項目・小項目の HTML）として出す pytest プラグインです。\
-Excel の試験項目表と自動テストを別々に作り、2つがずれていく問題をなくします。
+YAML に書いたテストケースを pytest で実行し、結果を、大項目・中項目・小項目で整理した**試験項目表**（HTML）として出力する pytest プラグインです。\
+Excel の試験項目表と自動テストを別々に管理して、内容がずれていく問題をなくします。
 
 ## できること
 
@@ -15,8 +15,8 @@ Excel の試験項目表と自動テストを別々に作り、2つがずれて�
 - 期待結果は **YAML に直接書く**か、実際の出力から**期待出力ファイルを作って差分で比べる**（[書き方](#期待結果-expect)）
 - ケースを**大項目・中項目・小項目**（何階層でも）に分け、**試験項目表の HTML** を出す（日本語・英語。[書き方](#html-レポート)）
 
-`pytest --casebook-html=report.html` を実行すると、YAML に書いたケースがこの試験項目表として出ます。\
-グループの階層は縦に結合され、前提条件・期待結果・結果が1行に並びます。
+`pytest --casebook-html=report.html` を実行すると、YAML に書いたケースが、次のような試験項目表として出力されます。\
+グループの階層の列は縦に結合され、前提条件・期待結果・結果が1行に並びます。
 
 ![試験項目表の HTML レポート](docs/images/report-top.png)
 
@@ -28,7 +28,7 @@ Excel の試験項目表と自動テストを別々に作り、2つがずれて�
 > casebook_lang = "ja"
 > ```
 
-上の表の元の YAML です（一部。全体は [docs/screenshots/casebook_demo.yaml](docs/screenshots/casebook_demo.yaml)）。\
+上の表は、次の YAML から作りました（抜粋。全体は [docs/screenshots/casebook_demo.yaml](docs/screenshots/casebook_demo.yaml)）。\
 `group:` の入れ子が大項目・中項目・小項目の列に、`description` が確認内容の列に、`expect:` が期待結果の列になります。\
 `expect:` のないケースは、期待出力ファイルと比べます。
 
@@ -61,16 +61,16 @@ cases:
 ## 向いている場面
 
 Python のまま書けば、型の補完もデバッガも使えます。\
-単体のテストなら `@pytest.mark.parametrize` と スナップショットテスト（syrupy など）で十分です。\
+単体のテストなら `@pytest.mark.parametrize` とスナップショットテスト（syrupy など）で十分です。\
 pytest-casebook が向いているのは、次のような場面です。
 
 - テストの一覧を、エンジニア以外（QA・顧客・企画）にも見せたい。\
   試験項目表として提出したい
-- ケースは QA を含む多くの人が YAML で増やし、DB の準備などの仕組み（conftest.py の hook）はエンジニアが一度だけ書く
+- ケースは QA を含む多くの人が YAML で増やし、DB の準備などの仕組み（conftest.py の hook）はエンジニアが一度だけ書く、という分担にしたい
 - 「DB に行を入れる → API や CLI を動かす → レスポンスと DB の変化を確かめる」を、1つのケースとして書きたい
 - 同じ YAML を、デモ用のスクリプトなど pytest の外でも使いたい（`pytest_casebook.load()`）
 
-対応する Python は 3.11〜3.15、pytest は 8 と 9 です（[scripts/check.sh](scripts/check.sh) で確かめています）。
+対応する Python は 3.11〜3.15、pytest は 8 と 9 です（GitHub Actions の CI と [scripts/check.sh](scripts/check.sh) で確かめています）。
 
 ## インストール
 
@@ -83,17 +83,17 @@ uv add --dev pytest-casebook
 Python 3.11 以上と pytest 8 以上で動きます。\
 インストールするだけで pytest に読み込まれ、設定は要りません。
 
-Python 3.15 では、PyYAML に 3.15 用の wheel が出るまで、PyYAML をソースから作ります。\
+Python 3.15 では、PyYAML に 3.15 用の wheel がまだないため、インストールのときに PyYAML がソースからビルドされます。\
 C コンパイラのない Windows で失敗するときは、環境変数 `PYYAML_FORCE_LIBYAML=0` を付けて入れてください（C 拡張を使わない PyYAML になります）。
 
-依存は pytest と PyYAML だけです。\
+依存は pytest・PyYAML・pluggy（pytest にも含まれる）だけです。\
 HTTP の API を確かめるときも、HTTP のライブラリは増えません（リクエストは、FastAPI や Flask などフレームワークのテスト用クライアントで送ります）。
 
 ## はじめかた: 作るのは YAML 1つだけ
 
 CLI を実行して確かめるだけなら、作るのは YAML のファイル1つです。\
 conftest.py も Python のテストコードも要りません。\
-ここでは、名前を渡すとあいさつを出す `hello` というコマンド（自分で作った CLI）を確かめます。
+ここでは、名前を渡すとあいさつを表示する、自作の CLI `hello` を確かめます。
 
 ```text
 myproject/
@@ -127,7 +127,7 @@ cases:
 各ケースは `hello --name 佐藤` のように、`command_prefix` と `command` をつないで実行します。\
 実行するディレクトリは YAML のあるディレクトリ（ここでは `tests/`）なので、コマンドはそこから実行できる必要があります（インストール済みのコマンドや、`[python, "{casebook_dir}/../hello.py"]` のようにパスで指したスクリプトなど）。
 
-**2. 期待出力を作る**
+**2. 期待出力ファイルを作る**
 
 ```bash
 uv run pytest --casebook-update
@@ -191,7 +191,7 @@ casebook_lang = "ja"
 ほとんどのことは YAML だけでできます。\
 DB を使うときや、テスト用の環境を渡したいときだけ、conftest.py に hook（決まった名前の関数）を足します。
 
-どの行にも、そのまま動くサンプルを [examples](examples) に用意しています。\
+表の各行には、そのまま動くサンプルを [examples](examples) に用意しています（カバレッジの行を除く）。\
 サンプルのディレクトリをコピーして、名前を書き換えるところから始められます。
 
 | やりたいこと | 書く場所 | 書くもの | サンプル |
@@ -205,7 +205,7 @@ DB を使うときや、テスト用の環境を渡したいときだけ、conft
 | 同じ操作を「通常時」「障害時」で確かめたい | YAML ＋ conftest.py | `states:` ＋ `pytest_casebook_setup` | [07_states](examples/07_states) |
 | DB に行を入れてから実行し、実行後の DB を確かめたい | YAML ＋ conftest.py | `casebook_env`・`pytest_casebook_setup`・`pytest_casebook_observe`・`pytest_casebook_prepare_call` | [08_db](examples/08_db) |
 | CLI を同じプロセスで動かして、モックを渡したい | YAML ＋ conftest.py | `pytest_casebook_run_command` ＋ `run_in_process` | [09_in_process](examples/09_in_process) |
-| 実行のたびに変わる ID・日時を揃えたい | YAML | `normalize:`（hook でも書ける） | [10_normalize](examples/10_normalize) |
+| 実行のたびに変わる ID・日時をそろえたい | YAML | `normalize:`（hook でも書ける） | [10_normalize](examples/10_normalize) |
 | ケースに自分用の情報を付け、同じ YAML を pytest の外でも使いたい | YAML ＋ Python | `meta:` と `pytest_casebook.load()` | [11_meta_load](examples/11_meta_load) |
 | 期待出力ファイルを手で書きたい | 期待出力ファイル | 本文だけ（ヘッダーは省ける） | [12_handwritten_golden](examples/12_handwritten_golden) |
 | 理由を付けてケースを止めたい / 既知の不具合を書いておきたい | YAML | `skip: 理由` / `xfail: 理由` | [13_skip_xfail](examples/13_skip_xfail) |
@@ -346,7 +346,7 @@ def pytest_casebook_observe(target, env):
 [examples/shop](examples/shop) に、ここまでの書き方をすべて使ったサンプルがあります（CLI・関数・3階層・状態・ファイル・sqlite の DB）。
 
 ```bash
-uv run pytest examples -o casebook_lang=ja --casebook-html=reports/casebook.html
+uv run pytest examples/shop -o casebook_lang=ja --casebook-html=reports/shop.html
 ```
 
 ---
@@ -364,7 +364,7 @@ states:                        # 状態名 -> 内容（名前を付けた setup:
   default: {}
   outage: {db: down}
 golden_dir: golden             # 期待出力の置き場所（このファイルからの相対パス）
-check_orphans: true            # ケースがない期待出力が残っていたら失敗にする
+check_orphans: true            # ケースのない期待出力ファイルが残っていたら失敗にする
 normalize:                     # 出力に当てる置き換え
   - {pattern: 'req-[0-9a-f]+', replace: '<request-id>'}
 meta: {owner: qa}              # 自由に使う情報（下の「meta」を参照）
@@ -421,7 +421,7 @@ HTML レポートの階層の列は、実際に使われているグループの
   cases:
     - name: find_ipv6
       command: find 2001:db8::31
-      meta: {demo: true}        # ケースの meta は、グループの meta に上書きで重なる
+      meta: {demo: true}        # グループの meta に重ね、同じキーはケースの値で上書きする
 ```
 
 - hook では `case.meta` で読めます（上の例の find_ipv6 は `{"moto_only": True, "demo": True}`）
@@ -452,9 +452,8 @@ for case in doc.cases:
   YAML の隣のスクリプトなどは `{casebook_dir}` を付けて指します（例: `command_prefix: [python, "{casebook_dir}/tool.py"]`）。\
   出力に出る YAML のディレクトリのパスは `{casebook_dir}` に置き換えます
 - `files` 以外の内容は `pytest_casebook_setup` に渡します。\
-  hook がコンテキストマネージャを返すと、observe のあとに抜けます（後片付けに使います）
-- 準備はケースのたびに当て直します。\
-  前のケースの影響は残りません
+  hook がコンテキストマネージャを返すと、observe のあとにそれを抜けます（後片付けに使えます）
+- 準備はケースごとにやり直すので、前のケースの影響は残りません
 
 ### 状態 (states)
 
@@ -473,13 +472,13 @@ cases:
   - name: during_maintenance
     state: maintenance
     setup:
-      db: {users: [...]}     # ケースの setup: は、状態の内容に上書きで重なる
+      db: {users: [...]}     # 状態の内容に重ね、同じキーはケースの値で上書きする
     call: app:handle
 ```
 
-- 選んだ状態の内容に、ケースの `setup:` を上書きで重ねたものが `pytest_casebook_setup` の `data` に渡ります（`files` はファイル名ごとに重なります）
+- 選んだ状態の内容にケースの `setup:` を重ね（同じキーはケースの値で上書きする）、`pytest_casebook_setup` の `data` に渡します（`files` はファイル名ごとに重ねます）
 - `state:` を書かないケースは `default` の状態になります
-- 状態の書き方は `setup:` と同じで、同じように確かめます
+- 状態の書き方は `setup:` と同じで、書き方の誤りも同じように確かめます
 
 ### 期待出力ファイル
 
@@ -507,7 +506,7 @@ apple x 3 = 324 円
 - `--casebook-update` は、結果が変わったときだけファイルを書き直します。\
   手で書いた期待出力ファイルは、結果が同じなら書き方を変えません
 - ケースを消したのに期待出力ファイルだけが残っていると、`golden_orphans` という確認が失敗します（サブディレクトリの中も見ます）。\
-  同じディレクトリのほかのケースファイルが使う期待出力は「使われている」と数えるので、複数の YAML で `golden_dir:` を共有しても誤って知らせません。\
+  同じディレクトリのほかのケースファイルが使う期待出力は「使われている」と数えるので、複数の YAML で `golden_dir:` を共有しても、消し忘れと誤って報告しません。\
   この確認を止めるときは、YAML に `check_orphans: false` を書きます
 
 ### HTTP の API (request)
@@ -607,7 +606,7 @@ call で例外が出たのに `raises` を書いていない場合は失敗に�
 ```yaml
 expect:
   json:
-    message: {$contains: 在庫が足りません}     # 文字列が含む
+    message: {$contains: 在庫が足りません}     # この文字列を含む
     code: {$regex: '^E\d{3}$'}              # 正規表現に合う
   db.users:
     $unordered:                              # 順序を問わない（件数は同じ）
@@ -652,7 +651,7 @@ hook は、その conftest.py があるディレクトリより下の YAML の�
 | `pytest_casebook_placeholders(env)` | 比べる前 | `(実際の値, 置き換え後)` のリスト |
 | `pytest_casebook_patterns(env)` | 比べる前 | `(正規表現, 置き換え後)` のリスト |
 
-どの hook にも `config`（pytest の Config）も渡ります。\
+どの hook にも、`config`（pytest の Config）が渡ります。\
 ケースの状態の名前と内容は、`case.state` と `case.state_data` で読めます。\
 別プロセスで実行するときは、子プロセスが Python なら出力の文字コードを `casebook_encoding` にそろえます（`PYTHONIOENCODING` を設定します）。
 
@@ -717,7 +716,7 @@ patch = ["subprocess"]
 ### エディタでの補完と検証
 
 YAML の書き方の JSON Schema を同梱しています（`pytest_casebook.SCHEMA_PATH`）。\
-VS Code の YAML 拡張（Red Hat）で、キーの補完と、書いた時点での検証が効きます。
+VS Code の YAML 拡張（Red Hat）で、キーの補完と、入力中の検証が効きます。
 
 ```bash
 uv run python -c "import pytest_casebook; print(pytest_casebook.SCHEMA_PATH.as_uri())"
@@ -740,7 +739,7 @@ pytest がテストの場所として受け取るので、JUnit XML（xunit1）�
 
 | オプション | 内容 |
 |---|---|
-| `--casebook-update` | 期待出力ファイルを、今の出力で作り直す（`expect:` のケースは比べるだけ） |
+| `--casebook-update` | 期待出力ファイルを、今の出力で書き直す（結果が変わったものだけ。`expect:` のケースは比べるだけ） |
 | `--casebook-html=PATH` | 結果を HTML に出力する |
 
 オプションの名前はすべて `--casebook-` で始めています。\
@@ -748,7 +747,7 @@ pytest がテストの場所として受け取るので、JUnit XML（xunit1）�
 
 ### HTML レポート
 
-ケースのファイルごとに、次の内容を出力します。
+ケースファイルごとに、次の内容を出力します。
 
 - 大項目ごとの件数と結果
 - 確認が必要なケースの一覧（表の行へのリンク）
@@ -775,7 +774,7 @@ pytest-html は要りません（一緒に使うこともできます）。
 | 名前 | 既定値 | 内容 |
 |---|---|---|
 | `casebook_files` | `casebook_*.yaml` `casebook_*.yml` `*.casebook.yaml` `*.casebook.yml` | 集めるファイル名のパターン |
-| `casebook_golden_dir` | `golden` | 期待出力の置き場所。その下にケースのファイル名のディレクトリを作る |
+| `casebook_golden_dir` | `golden` | 期待出力ファイルの置き場所。その下に、ケースファイル名（拡張子なし）のディレクトリを作る |
 | `casebook_levels` | `Category` `Subcategory` `Item`（`casebook_lang` が `ja` なら `大項目` `中項目` `小項目`） | 階層の呼び名 |
 | `casebook_command_prefix` | （なし） | command の前に付ける引数 |
 | `casebook_encoding` | `utf-8` | command の出力の文字コード |
@@ -795,7 +794,7 @@ scripts/check.sh 3.12            # Python の版を指定する
 PYTESTS=9 scripts/check.sh 3.13  # pytest の版も絞る
 ```
 
-PostgreSQL と API サーバーを Docker で本当に起動して確かめる「実起動の試験」もあります（[integration/](integration)）。\
+PostgreSQL と API サーバーを Docker で実際に起動して確かめる「実起動の試験」もあります（[integration/](integration)）。\
 WSL なら、Docker Engine と uv を入れるスクリプトもあります。
 
 ```bash
