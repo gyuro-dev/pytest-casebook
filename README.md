@@ -46,7 +46,7 @@ cases:
                   return: {discount: 5, total: 45}
 ```
 
-> **Note**: the HTML report is in Japanese by default. Set `casebook_lang = "en"` in the ini (as in the screenshot above) for an English report; the messages of failed comparisons (golden files and `expect:`) then become English too. Other error messages, such as mistakes in the YAML, are currently in Japanese. The YAML keys, options and the Python API are in English.
+> **Note**: the HTML report and the messages of failed comparisons (golden files and `expect:`) are in English by default; set `casebook_lang = "ja"` for Japanese. Other error messages, such as mistakes in the YAML, are currently in Japanese. The YAML keys, options and the Python API are in English.
 
 ## When to use it
 
@@ -142,11 +142,11 @@ Check that the golden file is correct and commit it together with the YAML. From
 uv run pytest --casebook-html=reports/casebook.html
 ```
 
-The report and the failure messages are in Japanese by default. For English, set `casebook_lang` once in `pyproject.toml`:
+The report and the failure messages are in English by default. For Japanese, set `casebook_lang` once in `pyproject.toml`:
 
 ```toml
 [tool.pytest.ini_options]
-casebook_lang = "en"
+casebook_lang = "ja"
 ```
 
 ### Terms
@@ -314,7 +314,7 @@ Differs from the expected result:
 [examples-en/shop](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/shop) uses everything described so far (CLI, functions, three levels, states, files, a sqlite DB).
 
 ```bash
-uv run pytest examples-en -o casebook_lang=en --casebook-html=reports/casebook.html
+uv run pytest examples-en --casebook-html=reports/casebook.html
 ```
 
 ---
@@ -703,12 +703,12 @@ Results are one of: passed, updated (rewritten by `--casebook-update`), skipped,
 |---|---|---|
 | `casebook_files` | `casebook_*.yaml` `casebook_*.yml` `*.casebook.yaml` `*.casebook.yml` | file name patterns to collect |
 | `casebook_golden_dir` | `golden` | where golden files live. A directory per case file name is created under it |
-| `casebook_levels` | depends on `casebook_lang` (`ja`: `大項目` `中項目` `小項目`, `en`: `Category` `Subcategory` `Item`) | names of the levels |
+| `casebook_levels` | depends on `casebook_lang` (`en`: `Category` `Subcategory` `Item`, `ja`: `大項目` `中項目` `小項目`) | names of the levels |
 | `casebook_command_prefix` | (none) | arguments prepended to commands |
 | `casebook_encoding` | `utf-8` | encoding of command output |
 | `casebook_builtin_patterns` | `true` | replace timestamps and UUIDs with `<datetime>` / `<uuid>` |
-| `casebook_html_title` | depends on `casebook_lang` (`ja`: `試験項目表`, `en`: `Test Specification`) | title of the HTML report |
-| `casebook_lang` | `ja` | language of the HTML report and of the messages of failed comparisons (golden files and `expect:`): `ja` or `en`. Other error messages stay in Japanese |
+| `casebook_html_title` | depends on `casebook_lang` (`en`: `Test Specification`, `ja`: `試験項目表`) | title of the HTML report |
+| `casebook_lang` | `en` | language of the HTML report and of the messages of failed comparisons (golden files and `expect:`): `en` or `ja`. Other error messages stay in Japanese |
 
 ## Development (for people working on this repository)
 

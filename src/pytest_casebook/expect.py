@@ -39,7 +39,7 @@ def value_matcher(expected: Any) -> tuple[str, Any] | None:
     return None
 
 
-def match_text(expected: Any, actual: str, label: str, lang: str = "ja") -> list[str]:
+def match_text(expected: Any, actual: str, label: str, lang: str = "en") -> list[str]:
     """
     文字列の期待値と比べ、違いの説明のリストを返す（一致すれば空）。
 
@@ -83,7 +83,7 @@ def _mismatch(m: dict[str, str], label: str, expected: Any, actual: Any) -> str:
     return m["mismatch"].format(label=label, expected=_show(expected), actual=_show(actual))
 
 
-def match_value(expected: Any, actual: Any, label: str, lang: str = "ja") -> list[str]:
+def match_value(expected: Any, actual: Any, label: str, lang: str = "en") -> list[str]:
     """
     値の期待値と比べ、違いの説明のリストを返す（一致すれば空）。
 

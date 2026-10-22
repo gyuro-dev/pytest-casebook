@@ -40,7 +40,7 @@ uv run pytest examples/08_db
 結果を HTML の表で見るときは、`--casebook-html` を付けます。
 
 ```bash
-uv run pytest examples --casebook-html=reports/examples.html
+uv run pytest examples -o casebook_lang=ja --casebook-html=reports/examples.html
 ```
 
 期待出力ファイル（`golden/`）を作り直すときは、`--casebook-update` を付けます。

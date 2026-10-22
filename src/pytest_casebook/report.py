@@ -71,7 +71,7 @@ def _outcome_of(report: pytest.TestReport) -> str:
 class CasebookHtmlReport:
     """`--casebook-html` を付けたときに登録する pytest プラグイン。"""
 
-    def __init__(self, path: Path, title: str, lang: str = "ja") -> None:
+    def __init__(self, path: Path, title: str, lang: str = "en") -> None:
         self.path = path
         self.title = title
         self.lang = lang
@@ -299,7 +299,7 @@ def _file_section(texts: dict[str, Any], rows: list[CaseRow]) -> str:
 
 
 def build_html(
-    title: str, rows: list[CaseRow], generated_at: datetime.datetime, lang: str = "ja"
+    title: str, rows: list[CaseRow], generated_at: datetime.datetime, lang: str = "en"
 ) -> str:
     """結果の行から HTML 全体を組み立てる。"""
     texts = TEXTS[lang]

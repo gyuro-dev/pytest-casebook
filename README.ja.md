@@ -20,6 +20,14 @@ Excel の試験項目表と自動テストを別々に作り、2つがずれて�
 
 ![試験項目表の HTML レポート](docs/images/report-top.png)
 
+> **レポートを日本語にする**: HTML レポートと、比較の失敗（期待出力・`expect:`）のメッセージの既定は英語です。\
+> 日本語にするときは、`pyproject.toml` に一度だけ書きます（[ini の設定](#ini-の設定)）。
+>
+> ```toml
+> [tool.pytest.ini_options]
+> casebook_lang = "ja"
+> ```
+
 上の表の元の YAML です（一部。全体は [docs/screenshots/casebook_demo.yaml](docs/screenshots/casebook_demo.yaml)）。\
 `group:` の入れ子が大項目・中項目・小項目の列に、`description` が確認内容の列に、`expect:` が期待結果の列になります。\
 `expect:` のないケースは、期待出力ファイルと比べます。
@@ -156,6 +164,14 @@ uv run pytest --casebook-update
 
 ```bash
 uv run pytest --casebook-html=reports/casebook.html
+```
+
+レポートの既定は英語です。\
+日本語にするときは、`pyproject.toml` に一度だけ書きます。
+
+```toml
+[tool.pytest.ini_options]
+casebook_lang = "ja"
 ```
 
 ### 用語
@@ -330,7 +346,7 @@ def pytest_casebook_observe(target, env):
 [examples/shop](examples/shop) に、ここまでの書き方をすべて使ったサンプルがあります（CLI・関数・3階層・状態・ファイル・sqlite の DB）。
 
 ```bash
-uv run pytest examples --casebook-html=reports/casebook.html
+uv run pytest examples -o casebook_lang=ja --casebook-html=reports/casebook.html
 ```
 
 ---
@@ -760,12 +776,12 @@ pytest-html は要りません（一緒に使うこともできます）。
 |---|---|---|
 | `casebook_files` | `casebook_*.yaml` `casebook_*.yml` `*.casebook.yaml` `*.casebook.yml` | 集めるファイル名のパターン |
 | `casebook_golden_dir` | `golden` | 期待出力の置き場所。その下にケースのファイル名のディレクトリを作る |
-| `casebook_levels` | `大項目` `中項目` `小項目`（`casebook_lang` が `en` なら `Category` `Subcategory` `Item`） | 階層の呼び名 |
+| `casebook_levels` | `Category` `Subcategory` `Item`（`casebook_lang` が `ja` なら `大項目` `中項目` `小項目`） | 階層の呼び名 |
 | `casebook_command_prefix` | （なし） | command の前に付ける引数 |
 | `casebook_encoding` | `utf-8` | command の出力の文字コード |
 | `casebook_builtin_patterns` | `true` | 日時と UUID を `<datetime>` / `<uuid>` に置き換える |
-| `casebook_html_title` | `試験項目表`（`casebook_lang` が `en` なら `Test Specification`） | HTML レポートの題名 |
-| `casebook_lang` | `ja` | HTML レポートと、比較の失敗（期待出力・`expect:`）のメッセージの言語。`ja` か `en`（YAML の書き方の誤りなど、ほかのエラーメッセージは日本語のまま） |
+| `casebook_html_title` | `Test Specification`（`casebook_lang` が `ja` なら `試験項目表`） | HTML レポートの題名 |
+| `casebook_lang` | `en` | HTML レポートと、比較の失敗（期待出力・`expect:`）のメッセージの言語。`en` か `ja`（YAML の書き方の誤りなど、ほかのエラーメッセージは日本語のまま） |
 
 ## 開発（このリポジトリで作業する人向け）
 

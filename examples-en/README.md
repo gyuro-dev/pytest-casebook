@@ -42,7 +42,7 @@ uv run pytest examples-en/08_db
 To see the results as an HTML table, add `--casebook-html`.
 
 ```bash
-uv run pytest examples-en -o casebook_lang=en --casebook-html=reports/examples-en.html
+uv run pytest examples-en --casebook-html=reports/examples-en.html
 ```
 
 To regenerate the golden files (`golden/`), add `--casebook-update`.

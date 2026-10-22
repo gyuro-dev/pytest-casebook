@@ -97,7 +97,8 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         type="linelist",
         default=[],
         help="グループの階層の呼び名（YAML の levels がないときに使う。省略時は"
-        " casebook_lang の言語の既定。ja なら 大項目 中項目 小項目）",
+        " casebook_lang の言語の既定。en なら Category Subcategory Item、"
+        "ja なら 大項目 中項目 小項目）",
     )
     parser.addini(
         "casebook_command_prefix",
@@ -114,11 +115,12 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addini(
         "casebook_html_title",
         default="",
-        help="HTML レポートの題名（省略時は casebook_lang の言語の既定。ja なら 試験項目表）",
+        help="HTML レポートの題名（省略時は casebook_lang の言語の既定。"
+        "en なら Test Specification、ja なら 試験項目表）",
     )
     parser.addini(
         "casebook_lang",
-        default="ja",
+        default="en",
         help=f"HTML レポートと、比較の失敗のメッセージの言語（{' / '.join(LANGS)}）",
     )
 
@@ -578,11 +580,11 @@ def _observe(
     return value
 
 
-def _render_observed(target: str, value: Any, no_files: str = MESSAGES["ja"]["no_files"]) -> str:
+def _render_observed(target: str, value: Any, no_files: str = MESSAGES["en"]["no_files"]) -> str:
     """
     observe で取り出した値の表記（1件を1行にする）。
 
-    期待出力ファイルには、言語の設定によらず日本語の「（ファイルなし）」を書く
+    期待出力ファイルには、言語の設定によらず `(no files)` を書く
     （言語を変えただけで期待出力が変わらないように）。
     """
     if target == FILES_TARGET:
