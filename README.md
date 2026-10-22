@@ -462,7 +462,7 @@ Only the results are compared: `# exit_code:` (`# status:` for requests) and the
 - A body without a heading is treated as stdout for commands, return for calls and json for requests. If there is only one output, the body alone is enough
 - A heading you did not write is expected to be empty (without a stderr heading, stderr must be empty)
 - `--casebook-update` only rewrites a file when the results changed. Hand-written golden files keep their form as long as the results are the same
-- If a golden file is left over after its case was removed, the `golden_orphans` check fails (subdirectories are checked too). Golden files used by other case files in the same directory count as used, so sharing `golden_dir:` between several YAML files does not cause false alarms. To turn the check off, write `check_orphans: false` in the YAML
+- If a golden file is left over after its case was removed, the `golden_orphans` check fails (subdirectories are checked too). It looks at `.txt` files and at files with any extension used in `golden:` (e.g. `.json`), so other files you keep there, such as notes, are not reported. Golden files used by other case files in the same directory count as used, so sharing `golden_dir:` between several YAML files does not cause false alarms. To turn the check off, write `check_orphans: false` in the YAML
 
 ### HTTP APIs (request)
 
