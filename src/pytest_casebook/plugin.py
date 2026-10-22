@@ -50,7 +50,15 @@ from .model import (
 )
 from .normalize import BUILTIN_PATTERNS, Normalizer, compile_patterns
 from .report import CasebookHtmlReport
-from .runner import CasebookRunError, CommandResult, import_callable, invoke, run_subprocess
+from .runner import (
+    CasebookRunError,
+    CommandResult,
+    WorkerTimeout,
+    import_callable,
+    invoke,
+    run_subprocess,
+    run_with_timeout,
+)
 from .serialize import compact, describe_exception, render_rows, serialize, to_jsonable
 
 CASEBOOK_DIR_TOKEN = "{casebook_dir}"
@@ -527,7 +535,12 @@ def _execute_call(
         case=case, env=env, args=args, kwargs=kwargs, workdir=workdir, config=config
     )
     with _in_dir(workdir):
-        result = invoke(func, args, kwargs)
+        try:
+            result = invoke(func, args, kwargs, timeout=case.timeout)
+        except WorkerTimeout:
+            raise CasebookRunError(
+                error("call_timeout", timeout=case.timeout, call=case.call)
+            ) from None
 
     header = [("call", str(case.call))]
     if case.args:
@@ -546,17 +559,31 @@ def _execute_call(
 def _execute_request(
     config: pytest.Config, hook: Any, case: Case, env: Any, workdir: Path | None
 ) -> _Outcome:
-    assert case.request is not None
-    with _in_dir(workdir):
-        response = hook.pytest_casebook_request(
-            case=case, request=case.request, env=env, workdir=workdir, config=config
+    request = case.request
+    assert request is not None
+
+    def send() -> Any:
+        return hook.pytest_casebook_request(
+            case=case, request=request, env=env, workdir=workdir, config=config
         )
+
+    with _in_dir(workdir):
+        if case.timeout is None:
+            response = send()
+        else:
+            # 時間内に返らなければケースを失敗にする（hook は止められず、裏で動き続ける）
+            try:
+                response = run_with_timeout(send, case.timeout)
+            except WorkerTimeout:
+                raise CasebookRunError(
+                    error("request_timeout", timeout=case.timeout, request=request.display)
+                ) from None
     if response is None:
         raise CasebookRunError(error("no_request_hook"))
     if not isinstance(response, HttpResponse):
         raise CasebookRunError(error("bad_response", type=type(response).__name__))
     return _Outcome(
-        header=[("request", case.request.display), ("status", str(response.status))],
+        header=[("request", request.display), ("status", str(response.status))],
         response=response,
     )
 
