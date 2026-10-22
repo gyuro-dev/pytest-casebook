@@ -5,7 +5,7 @@ name: casebook-integration
 
 services:
   db:
-    image: postgres:17.6
+    image: postgres:18.4
     environment:
       POSTGRES_USER: casebook
       POSTGRES_PASSWORD: casebook
