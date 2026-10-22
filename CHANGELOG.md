@@ -1,41 +1,90 @@
-# 変更履歴
+# Changelog
 
-## 0.3.0（2026-10-23）
+All notable changes to this project are documented in this file. The format is based on
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html) (while the major version is 0, an
+incompatible change raises the minor version).
 
-### 変わったこと
+## [Unreleased]
 
-- YAML の書き方の誤りと、ケースを実行するときの誤り（コマンドが見つからない、関数を import できないなど）のメッセージも、`casebook_lang` の言語で出すようにした（既定は英語）
-- `pytest_casebook.load()` に `lang` を足した（メッセージと、`levels` の既定の言語。既定は `en`）。`levels` を渡さなければ、`lang` の言語の既定の呼び名になる（0.2.0 までは日本語の「大項目・中項目・小項目」）
+### Added
 
-### 足したこと
+- `env:` sets environment variables for `command:` cases. It can be written at the top of the
+  case file, on groups and on cases, and is merged key by key (file -> group -> case; `null`
+  removes an inherited value). Exposed as `Case.env` and `CasebookDoc.env`.
+- `timeout` now also applies to `call:` and `request:` cases: the case fails when the
+  function or the request hook does not finish in time. The function is not stopped (it
+  keeps running in a background thread); use pytest-timeout for a hard limit.
+- The HTML report can be filtered by result (toggle buttons with counts) and by text
+  (groups, case, command, description, preconditions, expected results).
 
-- 実行せずに試験項目表を出せるようにした（`pytest --collect-only --casebook-html=...`）。集めたが実行していないケースは、結果を「未実施」（Not run）として表に残す（`-x` で途中で止まったときも）
-- JSON Schema を GitHub の URL で指せるようにした（スキーマに `$id` を付け、README とサンプルの1行目に `# yaml-language-server: $schema=...` を書いた）。エディタで出るスキーマの説明は英語と日本語の両方にした
+### Fixed
 
-## 0.2.0（2026-10-22）
+- `golden_orphans` now also checks golden files with the extensions used in `golden:`
+  (e.g. `.json`), not only `.txt`. Other files in the golden directory are still ignored.
 
-### 変わったこと
+## [0.3.0] - 2026-10-23
 
-- HTML レポートと比較の失敗のメッセージの既定の言語を、日本語から英語にした（ini の `casebook_lang` の既定が `ja` から `en` に）。日本語にするときは `casebook_lang = "ja"` を書く
-- 期待出力ファイルの「ファイルなし」の表記を、言語によらず `(no files)` にした（0.1.0 では「（ファイルなし）」）
+### Changed
 
-## 0.1.0（2026-10-22）
+- Messages for mistakes in the YAML and for errors while running a case (command not found,
+  cannot import a function, etc.) now follow `casebook_lang` too (English by default).
+- `pytest_casebook.load()` takes `lang` (the language of the messages and of the default
+  `levels`; defaults to `en`). Without `levels`, the level names of that language are used
+  (up to 0.2.0 the default was the Japanese 大項目・中項目・小項目).
 
-最初の版。
+### Added
 
-### できること
+- Write the test specification sheet without running the cases:
+  `pytest --collect-only --casebook-html=...`. Cases that were collected but not run are kept
+  in the report as "Not run" (also when `-x` stops the session).
+- The JSON Schema can be referenced by its GitHub URL (`$id` in the schema, and
+  `# yaml-language-server: $schema=...` on the first line of the samples and in the README).
+  The descriptions shown by editors are in English and Japanese.
 
-- YAML に「前提条件 → 操作 → 期待結果」の形でケースを書き、pytest で実行する
-  - 操作: CLI の実行（`command:`）、Python 関数の呼び出し（`call:`、async にも対応）、HTTP の API へのリクエスト（`request:`）
-  - 前提条件: `setup:`（`files` は作業ディレクトリに置く。それ以外は `pytest_casebook_setup` hook に渡す）と、名前を付けた前提条件の `states:`
-  - 期待結果: YAML の `expect:`、または期待出力ファイル（`--casebook-update` で作る。比べるのは結果だけで、手で書くときはヘッダーを省ける）
-  - 実行後の値: `observe:`（DB の行などを1件1行で期待出力に残す）
-- グループの入れ子で大項目・中項目・小項目のように分類し、`--casebook-html` で試験項目表の形の HTML を出す（ini の `casebook_lang = en` で、レポートと比較の失敗のメッセージを英語にもできる）
-- `expect:` の比べ方: 文字列は完全一致・`{contains}`・`{regex}`、値は書いたキーだけ・`$contains`・`$regex`・`$unordered`・`$includes`
-- 実行のたびに変わる値の正規化（日時・UUID は自動。ほかは `normalize:` か hook）
-- `skip:` / `xfail:` に理由を書ける。`meta:` に自由な情報を書け、`pytest_casebook.load()` で pytest の外からも YAML を読める
-- 失敗したケースの YAML の行番号を出す。YAML の JSON Schema（`pytest_casebook.SCHEMA_PATH`）でエディタの補完と検証が効く
-- `command:` のプログラム名（`python` など）は PATH から探す（Windows でも仮想環境の Python で動く）。pytest-cov と一緒に使え、coverage.py の `patch = ["subprocess"]` で別プロセスの分も測れる
-- 依存は pytest と PyYAML だけ。HTTP は利用する側のテスト用クライアントで送る（`pytest_casebook.http` にアダプター）
-- Python 3.11〜3.15、pytest 8 / 9、pytest-xdist で確かめている（Windows と WSL の Ubuntu 22.04）
-- 型の検査（mypy の strict）と ruff（pytest の書き方・pathlib などの規則も含む）で確かめている
+## [0.2.0] - 2026-10-22
+
+### Changed
+
+- The default language of the HTML report and of comparison failures is now English
+  (`casebook_lang` defaults to `en` instead of `ja`). Set `casebook_lang = "ja"` for
+  Japanese.
+- Golden files write `(no files)` for an empty `files` target whatever the language
+  (0.1.0 wrote 「（ファイルなし）」).
+
+## [0.1.0] - 2026-10-22
+
+The first release.
+
+### Added
+
+- Write cases in YAML as "preconditions -> action -> expected result" and run them with pytest
+  - Actions: run a CLI (`command:`), call a Python function (`call:`, async supported), send a
+    request to an HTTP API (`request:`)
+  - Preconditions: `setup:` (`files` are put in a working directory; everything else is passed
+    to the `pytest_casebook_setup` hook) and named preconditions, `states:`
+  - Expected results: `expect:` in YAML, or golden files (generated with `--casebook-update`;
+    only the results are compared, and the headers can be omitted when written by hand)
+  - Values after the action: `observe:` (e.g. DB rows written one per line into golden files)
+- Nested groups such as categories / subcategories / items, and an HTML test specification
+  sheet with `--casebook-html` (English or Japanese with `casebook_lang`)
+- Matchers in `expect:`: exact, `{contains}` and `{regex}` for text; only the written keys,
+  `$contains`, `$regex`, `$unordered` and `$includes` for values
+- Normalization of values that change on every run (datetimes and UUIDs automatically; others
+  with `normalize:` or hooks)
+- Reasons for `skip:` / `xfail:`; free-form `meta:`; `pytest_casebook.load()` to read the YAML
+  outside pytest
+- The YAML line of a failed case is reported; a JSON Schema (`pytest_casebook.SCHEMA_PATH`)
+  for editor completion and validation
+- Program names in `command:` (such as `python`) are looked up on PATH (the virtual
+  environment's Python is used on Windows too). Works with pytest-cov; subprocesses are
+  measured with coverage.py's `patch = ["subprocess"]`
+- Depends only on pytest and PyYAML. HTTP requests are sent with your framework's test client
+  (adapters in `pytest_casebook.http`)
+- Checked with Python 3.11-3.15, pytest 8 / 9 and pytest-xdist (Windows and Ubuntu 22.04 on
+  WSL), mypy (strict) and ruff
+
+[Unreleased]: https://github.com/gyuro-dev/pytest-casebook/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/gyuro-dev/pytest-casebook/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/gyuro-dev/pytest-casebook/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/gyuro-dev/pytest-casebook/releases/tag/v0.1.0
