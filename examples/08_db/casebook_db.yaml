@@ -1,0 +1,37 @@
+# ケースの前に DB に行を入れ、実行後の DB の中身を確かめる。
+# 作るのは YAML と conftest.py（DB の用意・行の投入・行の取り出し）。
+title: DB を使う
+
+cases:
+  - name: withdraw_golden
+    description: 実行後のテーブル全体を期待出力ファイルに残す（1行を1行の JSON で書く）
+    setup:
+      db:
+        members: [{id: 1, name: 佐藤, active: 1}, {id: 2, name: 鈴木, active: 1}]
+    call: members:withdraw
+    args: [2]
+    observe: [db.members, db.history]
+
+  - name: withdraw_expect
+    description: 変わったところだけを YAML で確かめる（書いたキーだけを比べる）
+    setup:
+      db:
+        members: [{id: 1, name: 佐藤, active: 1}]
+    call: members:withdraw
+    args: [1]
+    expect:
+      return: {withdrawn: true}
+      db.members: [{id: 1, active: 0}]
+      db.history: [{member_id: 1, action: withdraw}]
+
+  - name: withdraw_twice
+    description: 退会済みなら例外になり、DB は変わらない
+    setup:
+      db:
+        members: [{id: 1, name: 佐藤, active: 0}]
+    call: members:withdraw
+    args: [1]
+    expect:
+      raises: AlreadyWithdrawn
+      db.members: [{id: 1, active: 0}]
+      db.history: []

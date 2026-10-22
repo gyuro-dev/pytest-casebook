@@ -1,0 +1,19 @@
+# CLI を実行して、出力を期待出力ファイルと比べる。作るのはこの YAML だけ（conftest.py は要らない）。
+#
+#   uv run pytest examples/01_cli --casebook-update   # 期待出力ファイルを作る（最初の1回）
+#   uv run pytest examples/01_cli                     # 期待出力ファイルと比べる
+title: CLI を実行する
+command_prefix: [python, greet.py]   # どのケースでも先頭に付ける（command は YAML のあるディレクトリで実行する）
+
+cases:
+  - name: greet
+    description: 名前を渡すとあいさつする
+    command: --name 佐藤
+
+  - name: greet_polite
+    description: --polite を付けると「様」になる
+    command: --name 佐藤 --polite
+
+  - name: greet_without_name
+    description: 名前を渡さないとエラーになる（終了コード 2 と stderr も期待出力に残る）
+    command: --polite

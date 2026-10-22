@@ -1,0 +1,19 @@
+# 実行のたびに変わる値を、決まった表記に置き換えてから比べる。作るのはこの YAML だけ。
+#
+# - 日時（2026-10-19T12:34:56+00:00 など）と UUID は、何もしなくても <datetime> / <uuid> になる
+# - それ以外は normalize: に正規表現で書く
+#   （conftest.py の pytest_casebook_placeholders / pytest_casebook_patterns でも書ける）
+title: 変わる値をそろえる
+
+normalize:
+  - {pattern: 'ord-\d+', replace: '<order-id>'}
+
+cases:
+  - name: create
+    description: ID・UUID・日時が置き換わった形で期待出力ファイルに残る
+    call: order_ids:create
+    args: [apple]
+  - name: receipt
+    description: 文字列の中の値も置き換わる
+    call: order_ids:receipt
+    args: [melon]

@@ -1,0 +1,7 @@
+# case: delete
+# request: DELETE /notes/3
+# status: 204
+----- body -----
+
+----- observe: db.notes -----
+[]

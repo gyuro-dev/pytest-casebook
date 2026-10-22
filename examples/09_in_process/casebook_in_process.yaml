@@ -1,0 +1,20 @@
+# CLI を同じプロセスで動かして、モックのクライアントを渡す。
+# 作るのは YAML と conftest.py（pytest_casebook_run_command と run_in_process）。
+title: CLI を同じプロセスで動かす
+command_prefix: weather   # 実際のプログラムは起動しない（conftest.py が weather.main を呼ぶ）
+
+cases:
+  - name: tokyo
+    description: モックの答えで予報を表示する
+    command: tokyo
+  - name: unknown_city
+    description: 予報がなければエラー（終了コード 1）
+    command: osaka
+    expect:
+      exit_code: 1
+      stderr: "エラー: osaka の予報はありません"
+  - name: missing_argument
+    description: 引数がなければ argparse のエラー（sys.exit(2) は終了コード 2 になる）
+    command: --unknown
+    expect:
+      exit_code: 2

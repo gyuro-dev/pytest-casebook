@@ -1,0 +1,30 @@
+# Organize cases into categories, subcategories and items. Nesting group: sets the depth of the hierarchy.
+#
+#   uv run pytest examples-en/05_groups -o casebook_lang=en --casebook-html=reports/groups.html
+#   (see the results as a hierarchical table)
+#   uv run pytest examples-en/05_groups -k Okinawa   # filter by group name
+title: Shipping fees
+levels: [Category, Subcategory, Item]   # names of the hierarchy levels (as many as you like)
+
+cases:
+  - group: Shipping fee
+    description: The fee depends on the region and the amount
+    cases:
+      - group: Standard
+        cases:
+          - group: Kanto
+            cases:
+              - {name: kanto, description: Kanto is 600 yen, call: "shipping_en:fee", args: [kanto, 1000], expect: {return: 600}}
+          - group: Okinawa
+            cases:
+              - {name: okinawa, description: Okinawa is 1500 yen, call: "shipping_en:fee", args: [okinawa, 1000], expect: {return: 1500}}
+      - group: Free
+        description: Free from 5000 yen, or for members
+        cases:
+          - group: Amount
+            cases:
+              - {name: free_by_amount, description: Exactly 5000 yen is free, call: "shipping_en:fee", args: [kansai, 5000], expect: {return: 0}}
+              - {name: not_free_4999, description: 4999 yen is not free, call: "shipping_en:fee", args: [kansai, 4999], expect: {return: 700}}
+          - group: Member
+            cases:
+              - {name: free_member, description: Members ship free whatever the amount, call: "shipping_en:fee", args: [okinawa, 100], kwargs: {member: true}, expect: {return: 0}}

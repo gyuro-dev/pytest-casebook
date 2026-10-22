@@ -1,0 +1,15 @@
+# case: receipt_golden
+# command: shop receipt orders.csv
+# state: default
+# exit_code: 0
+----- stdout -----
+2 件の明細を receipt.txt に書きました（合計 5090 円）
+----- observe: files -----
+=== orders.csv ===
+item,quantity
+apple,2
+melon,5
+=== receipt.txt ===
+apple x 2: 240 円
+melon x 5: 4850 円
+合計: 5090 円

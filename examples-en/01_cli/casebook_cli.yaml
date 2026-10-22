@@ -1,0 +1,19 @@
+# Run a CLI and compare its output with a golden file. This YAML is all you write (no conftest.py).
+#
+#   uv run pytest examples-en/01_cli --casebook-update   # create the golden files (first run only)
+#   uv run pytest examples-en/01_cli                     # compare with the golden files
+title: Run a CLI
+command_prefix: [python, greet_en.py]   # prepended to every case (command runs in the YAML's directory)
+
+cases:
+  - name: greet
+    description: Greets the given name
+    command: --name Alice
+
+  - name: greet_polite
+    description: --polite switches to a formal greeting
+    command: --name Alice --polite
+
+  - name: greet_without_name
+    description: Fails without a name (exit code 2 and stderr are kept in the golden file too)
+    command: --polite

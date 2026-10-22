@@ -1,0 +1,39 @@
+# 同じケースを、別々の環境（local と staging）に流す。
+#
+#   uv run pytest examples/17_targets                                   # local
+#   uv run pytest examples/17_targets --target staging \
+#       -o casebook_golden_dir=golden_staging -m "not local_only"       # staging
+#
+# - どこにつなぐかは conftest.py の casebook_env が --target で切り替える
+# - 期待出力ファイルは環境ごとに別の置き場所（golden/ と golden_staging/）に作る。
+#   そのため、この YAML には golden_dir: を書かない（書くと -o より YAML が優先される）
+# - 環境によって答えが変わる確認は期待出力ファイルで、どの環境でも同じ確認は expect: で書く
+title: 環境を切り替える
+levels: [確認]
+
+cases:
+  - group: 環境によって答えが変わる
+    cases:
+      - name: list_items
+        description: 商品の一覧（環境ごとの期待出力ファイルと比べる）
+        call: catalog:list_items
+
+  - group: どの環境でも同じ
+    cases:
+      - name: apple_price
+        description: りんごの値段はどの環境でも同じ
+        call: catalog:price
+        args: [apple]
+        expect: {return: 120}
+      - name: unknown_item
+        call: catalog:price
+        args: [grape]
+        expect: {raises: LookupError}
+
+  - group: local でだけ流す
+    marks: [local_only]
+    cases:
+      - name: reset
+        description: 初期化はローカルでしか使えない（staging では -m で除く）
+        call: catalog:reset
+        expect: {return: 初期化しました}

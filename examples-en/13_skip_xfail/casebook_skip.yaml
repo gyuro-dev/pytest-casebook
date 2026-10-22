@@ -1,0 +1,25 @@
+# Stop a case with a reason (skip:), or record that it is known to fail (xfail:).
+# The reason appears in the terminal (pytest -rsx) and in the result column of the HTML report.
+# This YAML is all you write.
+title: Skips and known bugs
+
+cases:
+  - name: simple
+    call: stringutil_en:title_case
+    args: [hello]
+    expect: {return: Hello}
+
+  - name: apostrophe
+    description: Capitalizes after an apostrophe too
+    xfail: "fails until bug #42 is fixed"
+    call: stringutil_en:title_case
+    args: ["o'neil"]
+    expect: {return: "O'Neil"}
+
+  - group: Other languages
+    skip: on hold until the spec is decided (on a group, it applies to every case inside)
+    cases:
+      - name: german
+        call: stringutil_en:title_case
+        args: [straße]
+        expect: {return: Straße}

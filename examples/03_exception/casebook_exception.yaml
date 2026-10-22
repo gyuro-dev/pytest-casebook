@@ -1,0 +1,40 @@
+# 例外になることを確かめる。作るのはこの YAML だけ。
+title: 例外を確かめる
+
+cases:
+  - group: 期待出力ファイルで確かめる
+    cases:
+      - name: negative_amount
+        description: 例外は「----- raises -----」として期待出力ファイルに残る
+        call: accounts:withdraw
+        args: [1000, 0]
+
+  - group: YAML で確かめる
+    cases:
+      - name: by_type
+        description: 型名だけを書くと、型だけを比べる
+        call: accounts:withdraw
+        args: [1000, 5000]
+        expect:
+          raises: InsufficientFunds
+
+      - name: by_parent_type
+        description: 親クラスの名前でも一致する（InsufficientFunds は AccountError を継承）
+        call: accounts:withdraw
+        args: [1000, 5000]
+        expect:
+          raises: AccountError
+
+      - name: with_message
+        description: "「型名: メッセージ」と書くと、メッセージまで比べる"
+        call: accounts:withdraw
+        args: [1000, 5000]
+        expect:
+          raises: "InsufficientFunds: 残高が足りません（残高 1000 円）"
+
+      - name: message_contains
+        description: メッセージの一部だけを確かめる
+        call: accounts:withdraw
+        args: [1000, 5000]
+        expect:
+          raises: {contains: 残高が足りません}

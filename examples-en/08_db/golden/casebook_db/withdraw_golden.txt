@@ -1,0 +1,13 @@
+# case: withdraw_golden
+# call: members_en:withdraw
+# args: [2]
+----- return -----
+{
+  "member_id": 2,
+  "withdrawn": true
+}
+----- observe: db.members -----
+{"id": 1, "name": "Alice", "active": 1}
+{"id": 2, "name": "Bob", "active": 0}
+----- observe: db.history -----
+{"id": 1, "member_id": 2, "action": "withdraw"}

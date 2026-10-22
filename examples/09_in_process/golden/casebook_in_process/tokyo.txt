@@ -1,0 +1,5 @@
+# case: tokyo
+# command: weather tokyo
+# exit_code: 0
+----- stdout -----
+tokyo: 晴れ、最高 25 度

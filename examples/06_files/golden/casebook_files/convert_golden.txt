@@ -1,0 +1,21 @@
+# case: convert_golden
+# command: python '{casebook_dir}/csv2json.py' users.csv users.json
+# exit_code: 0
+----- stdout -----
+2 件を users.json に書きました
+----- observe: files -----
+=== users.csv ===
+id,name
+1,佐藤
+2,鈴木
+=== users.json ===
+[
+  {
+    "id": "1",
+    "name": "佐藤"
+  },
+  {
+    "id": "2",
+    "name": "鈴木"
+  }
+]

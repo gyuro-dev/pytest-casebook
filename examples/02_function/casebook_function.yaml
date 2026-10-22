@@ -1,0 +1,19 @@
+# Python の関数を呼んで、戻り値を確かめる。作るのはこの YAML だけ。
+# 戻り値は JSON にして期待出力ファイルに残る（dataclass は __type__ とフィールドになる）。
+title: 関数を呼ぶ
+
+cases:
+  - name: add
+    description: 2つの数を足す
+    call: calc:add        # モジュール:関数
+    args: [1, 2]
+
+  - name: add_kwargs
+    description: 引数は名前でも渡せる
+    call: calc:add
+    kwargs: {a: 10, b: 20}
+
+  - name: summarize
+    description: dataclass の戻り値も比べられる
+    call: calc:summarize
+    args: [[3, 5, 10]]

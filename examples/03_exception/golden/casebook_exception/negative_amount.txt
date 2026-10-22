@@ -1,0 +1,5 @@
+# case: negative_amount
+# call: accounts:withdraw
+# args: [1000, 0]
+----- raises -----
+ValueError: 金額は1円以上にしてください

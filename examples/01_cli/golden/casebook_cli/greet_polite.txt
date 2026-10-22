@@ -1,0 +1,5 @@
+# case: greet_polite
+# command: python greet.py --name 佐藤 --polite
+# exit_code: 0
+----- stdout -----
+こんにちは、佐藤様

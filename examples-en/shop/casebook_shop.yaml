@@ -1,0 +1,140 @@
+title: Shop sample
+description: Checks pricing, stock, receipt files and orders (DB) from both the CLI and Python functions
+levels: [Category, Subcategory, Item]
+command_prefix: shop
+
+states:
+  default: {}
+  sold_out:
+    stock: {apple: 0, melon: 0}
+
+cases:
+  - group: Pricing
+    description: Member discount and bulk discount
+    cases:
+      - group: Regular purchase
+        cases:
+          - group: CLI
+            cases:
+              - name: price_one
+                description: Buying just one gets no discount
+                command: price apple 1
+              - name: price_member
+                description: Members get 10% off
+                command: price apple 3 --member
+              - name: price_bulk_member
+                description: A member buying 5 or more gets 50 yen off on top of 10% off
+                command: price melon 5 --member
+          - group: Function
+            cases:
+              - name: quote_bulk
+                description: 5 or more gets 50 yen off (checked through the function's return value)
+                call: shop_en:quote
+                args: [banana, 5]
+      - group: Invalid input
+        cases:
+          - name: price_unknown_item
+            description: An item that does not exist is an error
+            command: price grape 1
+          - name: quote_zero
+            description: A quantity of 0 raises ValueError
+            call: shop_en:quote
+            args: [apple, 0]
+
+  - group: Stock
+    cases:
+      - group: Normal
+        cases:
+          - name: stock_available
+            description: Shows the count when in stock
+            command: stock apple
+          - name: stock_empty
+            description: An item with 0 in stock shows out of stock and returns exit code 3
+            command: stock banana
+      - group: Sold out
+        state: sold_out
+        cases:
+          - name: stock_sold_out
+            description: In the sold-out state, shows out of stock
+            command: stock apple
+          - name: stock_sold_out_func
+            description: In the sold-out state, available is false
+            call: shop_en:stock
+            args: [melon]
+
+  - group: Receipt file
+    description: Put the input file in place with setup.files and check the output file with observe
+    cases:
+      - group: Check with a golden file
+        cases:
+          - name: receipt_golden
+            description: Make a receipt from the order CSV and keep the created file in the golden file
+            setup:
+              files:
+                orders.csv: |
+                  item,quantity
+                  apple,2
+                  melon,5
+            command: receipt orders.csv
+            observe: [files]
+      - group: Check in YAML
+        cases:
+          - name: receipt_expect
+            description: Check the total line of the receipt file and the message shown
+            setup:
+              files:
+                orders.csv: |
+                  item,quantity
+                  banana,1
+            command: receipt orders.csv --out out.txt
+            expect:
+              exit_code: 0
+              stdout: {contains: 1 line(s)}
+              files:
+                out.txt: |
+                  banana x 1: 80 yen
+                  Total: 80 yen
+          - name: receipt_missing_file
+            description: A missing input file is an error
+            command: receipt nothing.csv
+            expect:
+              exit_code: 1
+              stderr: {regex: 'file not found: nothing\.csv$'}
+
+  - group: Orders (DB)
+    description: Insert rows with setup's db and check the tables after the run
+    cases:
+      - group: Check with a golden file
+        cases:
+          - name: order_golden
+            description: Ordering reduces stock and adds one order row (the whole tables are kept in the golden file)
+            setup:
+              db:
+                stock: [{item: apple, count: 10}, {item: melon, count: 2}]
+            call: orders_en:place_order
+            args: [apple, 3]
+            observe: [db.stock, db.orders]
+      - group: Check in YAML
+        cases:
+          - name: order_expect
+            description: Ordering reduces stock and adds one order row
+            setup:
+              db:
+                stock: [{item: apple, count: 10}]
+            call: orders_en:place_order
+            args: [apple, 3]
+            expect:
+              return: {item: apple, quantity: 3}
+              db.stock: [{item: apple, count: 7}]
+              db.orders: [{item: apple, quantity: 3}]
+          - name: order_out_of_stock
+            description: Not enough stock raises an exception and the DB does not change
+            setup:
+              db:
+                stock: [{item: melon, count: 2}]
+            call: orders_en:place_order
+            args: [melon, 5]
+            expect:
+              raises: OutOfStock
+              db.stock: [{item: melon, count: 2}]
+              db.orders: []

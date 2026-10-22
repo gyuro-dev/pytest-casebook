@@ -1,0 +1,20 @@
+# Run a CLI in-process and pass it a mock client.
+# You write the YAML and a conftest.py (pytest_casebook_run_command and run_in_process).
+title: Run a CLI in-process
+command_prefix: weather   # no real program is started (conftest.py calls weather_en.main)
+
+cases:
+  - name: tokyo
+    description: Shows the forecast from the mock's answer
+    command: tokyo
+  - name: unknown_city
+    description: Fails when there is no forecast (exit code 1)
+    command: osaka
+    expect:
+      exit_code: 1
+      stderr: "error: no forecast for osaka"
+  - name: missing_argument
+    description: Without the argument, argparse fails (sys.exit(2) becomes exit code 2)
+    command: --unknown
+    expect:
+      exit_code: 2

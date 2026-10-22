@@ -1,0 +1,15 @@
+# case: receipt_golden
+# command: shop receipt orders.csv
+# state: default
+# exit_code: 0
+----- stdout -----
+Wrote 2 line(s) to receipt.txt (total 5090 yen)
+----- observe: files -----
+=== orders.csv ===
+item,quantity
+apple,2
+melon,5
+=== receipt.txt ===
+apple x 2: 240 yen
+melon x 5: 4850 yen
+Total: 5090 yen

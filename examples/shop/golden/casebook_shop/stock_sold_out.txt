@@ -1,0 +1,6 @@
+# case: stock_sold_out
+# command: shop stock apple
+# state: sold_out
+# exit_code: 3
+----- stdout -----
+apple: 0 個（在庫切れ）

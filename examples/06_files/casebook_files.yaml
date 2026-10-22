@@ -1,0 +1,38 @@
+# 入力ファイルを置いてから実行し、できたファイルを確かめる。作るのはこの YAML だけ。
+#
+# setup.files があると、ケースごとに一時的な作業ディレクトリを作ってファイルを置き、そこで実行する。
+# 作業ディレクトリは YAML のディレクトリとは別の場所なので、YAML の隣のスクリプトは
+# {casebook_dir}（YAML のあるディレクトリ）を付けて指す。
+title: ファイルを置いて実行する
+command_prefix: [python, "{casebook_dir}/csv2json.py"]
+
+cases:
+  - name: convert_golden
+    description: できたファイルの中身を期待出力ファイルに残す（observe に files を書く）
+    setup:
+      files:
+        users.csv: |
+          id,name
+          1,佐藤
+          2,鈴木
+    command: users.csv users.json
+    observe: [files]
+
+  - name: convert_expect
+    description: できたファイルの中身を YAML で確かめる（書いたファイルだけを比べる）
+    setup:
+      files:
+        users.csv: |
+          id,name
+          3,高橋
+    command: users.csv out.json
+    expect:
+      stdout: "1 件を out.json に書きました"
+      files:
+        out.json: |
+          [
+            {
+              "id": "3",
+              "name": "高橋"
+            }
+          ]

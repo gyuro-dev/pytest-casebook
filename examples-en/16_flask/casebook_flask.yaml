@@ -1,0 +1,50 @@
+# Call a Flask API and check the response and the change in the DB.
+# The YAML is written the same way as 15_fastapi (only how conftest.py sends requests differs).
+title: Flask notes API
+levels: [Feature]
+
+cases:
+  - group: List
+    cases:
+      - name: list_by_tag
+        description: The query tag filters the notes
+        setup:
+          db:
+            notes: [{id: 1, text: Milk, tag: shopping}, {id: 2, text: Meeting, tag: work}]
+        request: {path: /notes, query: {tag: work}}
+        expect:
+          status: 200
+          json: [{id: 2, text: Meeting}]
+
+  - group: Create
+    cases:
+      - name: create
+        description: Creating returns 201 and a Location header, and adds one row to the DB
+        request: {method: POST, path: /notes, json: {text: Milk, tag: shopping}}
+        expect:
+          status: 201
+          headers: {Location: {regex: '^/notes/\d+$'}}
+          db.notes: [{text: Milk, tag: shopping}]
+
+      - name: create_without_text
+        description: Without text it is 400 and the DB does not change
+        request: {method: POST, path: /notes, json: {tag: work}}
+        expect:
+          status: 400
+          json: {error: text is required}
+          db.notes: []
+
+  - group: Delete
+    cases:
+      - name: delete
+        description: Deleting returns 204 (no body) and removes the row from the DB (kept in the golden file)
+        setup:
+          db: {notes: [{id: 3, text: Old note, tag: null}]}
+        request: DELETE /notes/3
+        observe: [db.notes]
+
+      - name: delete_missing
+        description: A note that does not exist is 404
+        request: DELETE /notes/99
+        expect:
+          status: 404

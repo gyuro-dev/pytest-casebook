@@ -1,0 +1,10 @@
+# case: receipt_small
+# command: store receipt apple=2 banana=1
+# state: default
+# exit_code: 0
+----- stdout -----
+apple x 2: $30
+banana x 1: $10
+Subtotal: $40
+Shipping: $50
+Total: $90

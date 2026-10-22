@@ -1,0 +1,122 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pytest-casebook"
+dynamic = ["version"]
+description = "試験項目表と自動テストの二重管理をなくす pytest プラグイン。YAML に前提条件・操作（CLI・関数・HTTP）・期待結果を書き、大項目・中項目・小項目の階層つき HTML の試験項目表を出す"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "gyuro" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: Pytest",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Natural Language :: Japanese",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
+    "Topic :: Software Development :: Testing",
+    "Typing :: Typed",
+]
+keywords = ["pytest", "yaml", "golden", "snapshot", "test-specification"]
+dependencies = [
+    "pluggy>=1.5.0",
+    "pytest>=8.0.0",
+    "pyyaml>=6.0",
+]
+
+[project.urls]
+Repository = "https://github.com/gyuro-dev/pytest-casebook"
+Issues = "https://github.com/gyuro-dev/pytest-casebook/issues"
+Changelog = "https://github.com/gyuro-dev/pytest-casebook/blob/main/CHANGELOG.md"
+
+# pip install するだけで pytest がこのプラグインを読み込む
+[project.entry-points.pytest11]
+casebook = "pytest_casebook.plugin"
+
+[dependency-groups]
+dev = [
+    "fastapi>=0.148.0",
+    "flask>=3.1.3",
+    "httpx2>=2.14.0",
+    "jsonschema>=4.26.0",
+    "mypy>=2.4.0",
+    "pytest-xdist>=3.8.0",
+    "ruff>=0.8.0",
+    "types-pyyaml>=6.0.12.20260906",
+]
+integration = [
+    "psycopg[binary]>=3.3.6",
+]
+
+# バージョンは src/pytest_casebook/__init__.py の __version__ だけに書く
+[tool.setuptools.dynamic]
+version = { attr = "pytest_casebook.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# 型の情報を持つパッケージであることを示す（PEP 561）
+[tool.setuptools.package-data]
+pytest_casebook = ["py.typed", "casebook.schema.json"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "C4",  # flake8-comprehensions
+    "RUF", # Ruff-specific rules
+    "N",   # pep8-naming
+    "PT",  # flake8-pytest-style
+    "PIE", # flake8-pie
+    "PTH", # flake8-use-pathlib
+    "RET", # flake8-return
+    "PERF", # Perflint
+    "PGH", # pygrep-hooks
+    "ISC", # flake8-implicit-str-concat
+    "TID", # flake8-tidy-imports
+    "BLE", # flake8-blind-except
+]
+ignore = [
+    "RUF001", # 日本語文字列中の全角記号許容
+    "RUF002", # 日本語docstring中の全角記号許容
+    "RUF003", # 日本語コメント中の全角記号許容
+    "N818",   # サンプルの例外は業務の名前（OutOfStock など）にしたいので、Error で終わらなくてよい
+]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src"]
+
+[[tool.mypy.overrides]]
+# hook の仕様は本体のない関数（docstring だけ）なので、戻り値がないことを問わない
+module = "pytest_casebook.hookspecs"
+disable_error_code = ["empty-body"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-v", "--tb=short"]

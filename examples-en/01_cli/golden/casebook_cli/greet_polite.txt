@@ -1,0 +1,5 @@
+# case: greet_polite
+# command: python greet_en.py --name Alice --polite
+# exit_code: 0
+----- stdout -----
+Good day to you, Alice.

@@ -1,0 +1,29 @@
+# ケースを大項目・中項目・小項目に分ける。group: を入れ子にすると、その深さが階層になる。
+#
+#   uv run pytest examples/05_groups --casebook-html=reports/groups.html   # 階層の表で結果を見る
+#   uv run pytest examples/05_groups -k 沖縄                             # グループ名で絞り込む
+title: 送料の計算
+levels: [大項目, 中項目, 小項目]   # 階層の呼び名（いくつでも）
+
+cases:
+  - group: 送料
+    description: 地域と金額で送料が決まる
+    cases:
+      - group: 通常
+        cases:
+          - group: 関東
+            cases:
+              - {name: kanto, description: 関東は 600 円, call: "shipping:fee", args: [kanto, 1000], expect: {return: 600}}
+          - group: 沖縄
+            cases:
+              - {name: okinawa, description: 沖縄は 1500 円, call: "shipping:fee", args: [okinawa, 1000], expect: {return: 1500}}
+      - group: 無料
+        description: 5000 円以上、または会員は無料
+        cases:
+          - group: 金額
+            cases:
+              - {name: free_by_amount, description: ちょうど 5000 円で無料, call: "shipping:fee", args: [kansai, 5000], expect: {return: 0}}
+              - {name: not_free_4999, description: 4999 円は無料にならない, call: "shipping:fee", args: [kansai, 4999], expect: {return: 700}}
+          - group: 会員
+            cases:
+              - {name: free_member, description: 会員は金額によらず無料, call: "shipping:fee", args: [okinawa, 100], kwargs: {member: true}, expect: {return: 0}}

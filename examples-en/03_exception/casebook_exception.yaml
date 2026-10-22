@@ -1,0 +1,40 @@
+# Check that an exception is raised. This YAML is all you write.
+title: Check exceptions
+
+cases:
+  - group: Check with a golden file
+    cases:
+      - name: negative_amount
+        description: The exception is kept in the golden file under "----- raises -----"
+        call: accounts_en:withdraw
+        args: [1000, 0]
+
+  - group: Check in YAML
+    cases:
+      - name: by_type
+        description: With only a type name, only the type is compared
+        call: accounts_en:withdraw
+        args: [1000, 5000]
+        expect:
+          raises: InsufficientFunds
+
+      - name: by_parent_type
+        description: A parent class name matches too (InsufficientFunds inherits from AccountError)
+        call: accounts_en:withdraw
+        args: [1000, 5000]
+        expect:
+          raises: AccountError
+
+      - name: with_message
+        description: '"TypeName: message" compares the message as well'
+        call: accounts_en:withdraw
+        args: [1000, 5000]
+        expect:
+          raises: "InsufficientFunds: Insufficient funds (balance: 1000 yen)"
+
+      - name: message_contains
+        description: Check only part of the message
+        call: accounts_en:withdraw
+        args: [1000, 5000]
+        expect:
+          raises: {contains: Insufficient funds}

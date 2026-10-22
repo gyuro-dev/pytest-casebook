@@ -1,0 +1,13 @@
+# case: list_items
+# call: catalog:list_items
+----- return -----
+[
+  {
+    "item": "apple",
+    "price": 120
+  },
+  {
+    "item": "banana",
+    "price": 80
+  }
+]

@@ -1,0 +1,6 @@
+# Owners who review changes. Changes to workflows and repository settings files
+# (.github/) always need the owner's review once rulesets require code owner review.
+# 変更を確認する人。ルール（rulesets）でコードオーナーの確認を必須にすると、
+# ワークフローなど .github/ の変更には必ず持ち主の確認が要る。
+*         @gyuro-dev
+/.github/ @gyuro-dev

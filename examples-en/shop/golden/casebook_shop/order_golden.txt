@@ -1,0 +1,15 @@
+# case: order_golden
+# call: orders_en:place_order
+# args: ["apple", 3]
+# state: default
+----- return -----
+{
+  "order_id": 1,
+  "item": "apple",
+  "quantity": 3
+}
+----- observe: db.stock -----
+{"item": "apple", "count": 7}
+{"item": "melon", "count": 2}
+----- observe: db.orders -----
+{"id": 1, "item": "apple", "quantity": 3}

@@ -1,0 +1,10 @@
+# case: receipt_small
+# command: store receipt りんご=2 バナナ=1
+# state: default
+# exit_code: 0
+----- stdout -----
+りんご x 2: 300 円
+バナナ x 1: 100 円
+小計: 400 円
+送料: 500 円
+合計: 900 円

@@ -1,0 +1,24 @@
+# 理由を付けてケースを止める（skip:）、または失敗すると分かっていることを書く（xfail:）。
+# 理由はターミナル（pytest -rsx）と HTML レポートの結果の列に出る。作るのはこの YAML だけ。
+title: スキップと既知の不具合
+
+cases:
+  - name: simple
+    call: stringutil:title_case
+    args: [hello]
+    expect: {return: Hello}
+
+  - name: apostrophe
+    description: アポストロフィの後も大文字にする
+    xfail: "不具合 #42 を直すまでは失敗する"
+    call: stringutil:title_case
+    args: ["o'neil"]
+    expect: {return: "O'Neil"}
+
+  - group: 多言語
+    skip: 仕様が決まるまで止める（グループに書くと中のケースすべてに付く）
+    cases:
+      - name: german
+        call: stringutil:title_case
+        args: [straße]
+        expect: {return: Straße}

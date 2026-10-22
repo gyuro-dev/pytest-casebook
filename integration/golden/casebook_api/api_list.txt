@@ -1,0 +1,16 @@
+# case: api_list
+# request: GET /todos
+# status: 200
+----- json -----
+[
+  {
+    "id": 1,
+    "title": "牛乳を買う",
+    "done": false
+  },
+  {
+    "id": 2,
+    "title": "本を返す",
+    "done": true
+  }
+]

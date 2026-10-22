@@ -1,0 +1,37 @@
+# 実起動の試験で使うサービス（PostgreSQL と API サーバー）。
+# scripts/integration.sh が起動・待機・片付けまでを行う。
+# ポートは環境変数で変えられる（ほかのサービスとぶつかるとき）。
+name: casebook-integration
+
+services:
+  db:
+    image: postgres:17.6
+    environment:
+      POSTGRES_USER: casebook
+      POSTGRES_PASSWORD: casebook
+      POSTGRES_DB: casebook
+    ports:
+      - "${CASEBOOK_DB_PORT:-55432}:5432"
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U casebook -d casebook"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build: ./api
+    environment:
+      DATABASE_URL: postgresql://casebook:casebook@db:5432/casebook
+      API_TOKEN: secret
+    ports:
+      - "${CASEBOOK_API_PORT:-58000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

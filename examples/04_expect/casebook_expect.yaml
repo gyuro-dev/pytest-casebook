@@ -1,0 +1,37 @@
+# 期待結果を YAML に直接書く（期待出力ファイルは作らない）。作るのはこの YAML だけ。
+# 書いた項目だけを比べる。
+title: 期待結果を YAML に書く
+command_prefix: [python, inventory.py]
+
+cases:
+  - group: command
+    cases:
+      - name: in_stock
+        description: 在庫があれば個数を表示する（完全一致）
+        command: apple
+        expect:
+          exit_code: 0
+          stdout: "apple: 10 個"          # 末尾の改行は問わない
+          stderr: ""
+
+      - name: out_of_stock
+        description: 在庫切れは終了コード 3 と stderr（一部だけを確かめる）
+        command: banana
+        expect:
+          exit_code: 3
+          stderr: {contains: 在庫切れ}
+
+      - name: count_pattern
+        description: 正規表現で確かめる
+        command: apple
+        expect:
+          stdout: {regex: '^apple: \d+ 個$'}
+
+  - group: call
+    cases:
+      - name: check_subset
+        description: 辞書は書いたキーだけを比べる（日付のように変わる値は書かなくてよい）
+        call: inventory:check
+        args: [apple]
+        expect:
+          return: {item: apple, available: true}

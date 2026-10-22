@@ -1,0 +1,6 @@
+# case: price_bulk_member
+# command: shop price melon 5 --member
+# state: default
+# exit_code: 0
+----- stdout -----
+melon x 5 = 4360 yen (discount 540 yen)

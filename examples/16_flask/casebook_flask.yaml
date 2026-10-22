@@ -1,0 +1,50 @@
+# Flask の API を呼び、レスポンスと DB の変化を確かめる。
+# YAML の書き方は 15_fastapi と同じ（違うのは conftest.py のリクエストの送り方だけ）。
+title: Flask のメモ API
+levels: [機能]
+
+cases:
+  - group: 一覧
+    cases:
+      - name: list_by_tag
+        description: クエリ tag で絞り込む
+        setup:
+          db:
+            notes: [{id: 1, text: 牛乳, tag: 買い物}, {id: 2, text: 会議, tag: 仕事}]
+        request: {path: /notes, query: {tag: 仕事}}
+        expect:
+          status: 200
+          json: [{id: 2, text: 会議}]
+
+  - group: 登録
+    cases:
+      - name: create
+        description: 登録すると 201 と Location ヘッダーを返し、DB に1行増える
+        request: {method: POST, path: /notes, json: {text: 牛乳, tag: 買い物}}
+        expect:
+          status: 201
+          headers: {Location: {regex: '^/notes/\d+$'}}
+          db.notes: [{text: 牛乳, tag: 買い物}]
+
+      - name: create_without_text
+        description: text がなければ 400 で、DB は変わらない
+        request: {method: POST, path: /notes, json: {tag: 仕事}}
+        expect:
+          status: 400
+          json: {error: text は必須です}
+          db.notes: []
+
+  - group: 削除
+    cases:
+      - name: delete
+        description: 削除すると 204（本文なし）で、DB から消える（期待出力ファイルに残す）
+        setup:
+          db: {notes: [{id: 3, text: 古いメモ, tag: null}]}
+        request: DELETE /notes/3
+        observe: [db.notes]
+
+      - name: delete_missing
+        description: ないメモは 404
+        request: DELETE /notes/99
+        expect:
+          status: 404

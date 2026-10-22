@@ -1,0 +1,56 @@
+# Dependabot: keep dependencies and GitHub Actions up to date.
+# Dependabot: 依存と GitHub Actions を新しく保つ。
+#
+# cooldown waits a few days before proposing a new release, so that a compromised release
+# that is pulled soon after publication is less likely to be picked up. Security updates
+# are not delayed.
+# cooldown は、出たばかりの版をすぐには提案せず数日待つ（公開直後に取り下げられる
+# 乗っ取られた版を取り込みにくくするため）。セキュリティの修正は待たずに提案される。
+version: 2
+updates:
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    groups:
+      python-dependencies:
+        patterns: ["*"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  # The end-to-end test (integration/): the API server image and its requirements.
+  # 実起動の試験（integration/）: API サーバーのイメージと、その依存。
+  - package-ecosystem: "pip"
+    directory: "/integration/api"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 7
+    groups:
+      integration-python:
+        patterns: ["*"]
+
+  - package-ecosystem: "docker"
+    directory: "/integration/api"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "docker-compose"
+    directory: "/integration"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 7

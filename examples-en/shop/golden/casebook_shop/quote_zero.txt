@@ -1,0 +1,6 @@
+# case: quote_zero
+# call: shop_en:quote
+# args: ["apple", 0]
+# state: default
+----- raises -----
+ValueError: the quantity must be at least 1

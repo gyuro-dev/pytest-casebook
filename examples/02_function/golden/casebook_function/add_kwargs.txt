@@ -1,0 +1,5 @@
+# case: add_kwargs
+# call: calc:add
+# kwargs: {"a": 10, "b": 20}
+----- return -----
+30

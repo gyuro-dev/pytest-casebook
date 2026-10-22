@@ -1,0 +1,111 @@
+# README のスクリーンショット用のケース（scripts/screenshots.sh が実行する）。
+# 見せるために、失敗・スキップ・既知の不具合をわざと1件ずつ入れている。
+# --casebook-update は付けないこと（失敗するケースの期待出力ファイルが書き換わる）。
+title: 小さなお店
+description: 価格の計算・在庫の確認・注文の明細を、CLI と Python の関数から確かめる
+levels: [大項目, 中項目, 小項目]
+command_prefix: store
+
+states:
+  default: {}
+  sold_out:
+    stock: {りんご: 0, メロン: 0}
+
+cases:
+  - group: 価格計算
+    description: 会員割引とまとめ買い割引
+    cases:
+      - group: 通常の購入
+        cases:
+          - group: CLI
+            cases:
+              - name: price_one
+                description: 1個だけなら割引はない
+                command: price りんご 1
+              - name: price_member
+                description: 会員は1割引きになる
+                command: price りんご 3 --member
+          - group: 関数
+            cases:
+              - name: quote_bulk
+                description: 5個以上で50円引きになる
+                call: store:quote
+                args: [バナナ, 5]
+                expect:
+                  return: {discount: 50, total: 450}
+      - group: 入力の誤り
+        cases:
+          - name: price_unknown_item
+            description: 存在しない商品はエラーになる
+            command: price ぶどう 1
+            expect:
+              exit_code: 1
+              stderr: {contains: 商品がありません}
+          - name: quote_zero
+            description: 個数0は ValueError になる
+            call: store:quote
+            args: [りんご, 0]
+            expect:
+              raises: ValueError
+
+  - group: 在庫
+    cases:
+      - group: 通常時
+        cases:
+          - name: stock_available
+            description: 在庫があれば個数を表示する
+            command: stock りんご
+          - name: stock_empty
+            description: 在庫0の商品は在庫切れと表示し、終了コード3を返す
+            command: stock バナナ
+            expect:
+              exit_code: 3
+              stdout: {contains: 在庫切れ}
+      - group: 売り切れ時
+        state: sold_out
+        cases:
+          - name: stock_sold_out
+            description: 売り切れの状態では available が false になる
+            call: store:stock
+            args: [メロン]
+            expect:
+              return: {available: false}
+
+  - group: 注文
+    cases:
+      - group: 明細
+        cases:
+          - name: receipt_small
+            description: 3,000円未満は送料500円がかかる
+            command: receipt りんご=2 バナナ=1
+          - name: receipt_free_shipping
+            description: ちょうど3,000円なら送料は無料になる
+            command: receipt メロン=2 りんご=4
+      - group: 引き当て
+        cases:
+          - name: reserve_short
+            description: 在庫が足りなければ OutOfStock になる
+            setup:
+              stock: {メロン: 1}
+            call: store:reserve
+            args: [メロン, 2]
+            expect:
+              raises: OutOfStock
+      - group: ポイント
+        cases:
+          - name: points_round_down
+            description: 100円未満の端数はポイントにならない
+            xfail: "不具合 #12: 端数を切り上げている"
+            call: store:points
+            args: [450]
+            expect:
+              return: 4
+      - group: クーポン
+        skip: 仕様が決まるまで止める
+        cases:
+          - name: coupon_percent
+            description: 10% 引きのクーポンを使える
+            call: store:coupon
+            args: [OFF10, 1000]
+            expect:
+              return: 900

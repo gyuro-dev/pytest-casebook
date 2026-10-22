@@ -1,0 +1,5 @@
+# case: negative_amount
+# call: accounts_en:withdraw
+# args: [1000, 0]
+----- raises -----
+ValueError: The amount must be at least 1 yen

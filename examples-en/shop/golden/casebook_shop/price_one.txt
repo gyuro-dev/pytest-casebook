@@ -1,0 +1,6 @@
+# case: price_one
+# command: shop price apple 1
+# state: default
+# exit_code: 0
+----- stdout -----
+apple x 1 = 120 yen (discount 0 yen)

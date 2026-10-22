@@ -1,0 +1,6 @@
+# case: price_one
+# command: store price apple 1
+# state: default
+# exit_code: 0
+----- stdout -----
+apple x 1 = $15 (discount $0)

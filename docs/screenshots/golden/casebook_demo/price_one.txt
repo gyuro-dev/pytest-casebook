@@ -1,0 +1,6 @@
+# case: price_one
+# command: store price りんご 1
+# state: default
+# exit_code: 0
+----- stdout -----
+りんご x 1 = 150 円（割引 0 円）

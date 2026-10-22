@@ -1,0 +1,19 @@
+# Call a Python function and check its return value. This YAML is all you write.
+# The return value is kept in the golden file as JSON (a dataclass becomes __type__ plus its fields).
+title: Call a function
+
+cases:
+  - name: add
+    description: Adds two numbers
+    call: calc_en:add        # module:function
+    args: [1, 2]
+
+  - name: add_kwargs
+    description: Arguments can also be passed by name
+    call: calc_en:add
+    kwargs: {a: 10, b: 20}
+
+  - name: summarize
+    description: A dataclass return value can be compared too
+    call: calc_en:summarize
+    args: [[3, 5, 10]]

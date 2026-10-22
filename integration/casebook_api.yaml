@@ -1,0 +1,93 @@
+# 本物の API サーバー（Docker の FastAPI + PostgreSQL）に HTTP で送り、レスポンスと DB を確かめる
+title: API（実起動）
+levels: [機能]
+
+request_defaults:
+  headers: {Authorization: Bearer secret}
+
+cases:
+  - group: 一覧
+    cases:
+      - name: api_list
+        description: 全件を id の順に返す（期待出力ファイルに残す）
+        setup:
+          db:
+            todos: [{id: 1, title: 牛乳を買う, done: false}, {id: 2, title: 本を返す, done: true}]
+        request: GET /todos
+
+      - name: api_list_done
+        description: done=true で完了したものだけ
+        setup:
+          db:
+            todos: [{id: 1, title: 牛乳を買う, done: false}, {id: 2, title: 本を返す, done: true}]
+        request: {path: /todos, query: {done: true}}
+        expect:
+          status: 200
+          json: [{id: 2, title: 本を返す}]
+
+  - group: 登録
+    cases:
+      - name: api_create
+        description: 登録すると 201 で、DB に1行増える。created_at は正規化される
+        request: {method: POST, path: /todos, json: {title: 牛乳を買う}}
+        expect:
+          status: 201
+          json: {id: 1, title: 牛乳を買う, done: false, created_at: <datetime>}
+          db.todos: [{id: 1, title: 牛乳を買う, done: false}]
+
+      - name: api_create_after_rows
+        description: 既にある行の次の id で登録される
+        setup:
+          db: {todos: [{id: 7, title: 既存, done: false}]}
+        request: {method: POST, path: /todos, json: {title: 新規}}
+        expect:
+          status: 201
+          json: {id: 8}
+          db.todos:
+            $unordered: [{title: 新規}, {title: 既存}]
+
+      - name: api_create_without_token
+        description: トークンがなければ 401 で、DB は変わらない
+        request:
+          method: POST
+          path: /todos
+          json: {title: 牛乳を買う}
+          headers: {Authorization: ""}
+        expect:
+          status: 401
+          json: {detail: 認証が必要です}
+          db.todos: []
+
+      - name: api_create_invalid
+        description: title がなければ 422（FastAPI の入力チェック）
+        request: {method: POST, path: /todos, json: {}}
+        expect:
+          status: 422
+          json: {detail: {$includes: [{loc: [body, title]}]}}
+
+  - group: 完了と削除
+    cases:
+      - name: api_complete
+        description: 完了にすると DB の done が true になる
+        setup:
+          db: {todos: [{id: 5, title: 本を返す, done: false}]}
+        request: PATCH /todos/5/done
+        expect:
+          status: 200
+          db.todos: [{id: 5, done: true}]
+
+      - name: api_delete
+        description: 削除すると 204（本文なし）で、DB から消える
+        setup:
+          db: {todos: [{id: 3, title: 古いメモ, done: true}]}
+        request: DELETE /todos/3
+        expect:
+          status: 204
+          body: ""
+          db.todos: []
+
+      - name: api_delete_missing
+        request: DELETE /todos/99
+        expect:
+          status: 404
+          json: {detail: 見つかりません}

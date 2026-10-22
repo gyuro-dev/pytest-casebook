@@ -1,0 +1,10 @@
+# case: summarize
+# call: calc_en:summarize
+# args: [[3, 5, 10]]
+----- return -----
+{
+  "__type__": "Summary",
+  "count": 3,
+  "total": 18,
+  "average": 6.0
+}

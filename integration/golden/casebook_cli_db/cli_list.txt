@@ -1,0 +1,6 @@
+# case: cli_list
+# command: python '{casebook_dir}/todo_cli.py' list
+# exit_code: 0
+----- stdout -----
+1. [ ] 牛乳を買う
+2. [x] 本を返す

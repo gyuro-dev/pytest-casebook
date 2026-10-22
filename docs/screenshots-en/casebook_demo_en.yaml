@@ -1,0 +1,111 @@
+# Cases for the README.md screenshots (run by scripts/screenshots.sh with casebook_lang=en).
+# One failure, one skip and one known bug (xfail) are included on purpose to show them.
+# Do not use --casebook-update (it would rewrite the golden file of the failing case).
+title: A small shop
+description: Check prices, stock and receipts through the CLI and Python functions
+levels: [Category, Subcategory, Item]
+command_prefix: store
+
+states:
+  default: {}
+  sold_out:
+    stock: {apple: 0, melon: 0}
+
+cases:
+  - group: Pricing
+    description: Member and bulk discounts
+    cases:
+      - group: Normal purchase
+        cases:
+          - group: CLI
+            cases:
+              - name: price_one
+                description: No discount for a single item
+                command: price apple 1
+              - name: price_member
+                description: Members get 10% off
+                command: price apple 3 --member
+          - group: Function
+            cases:
+              - name: quote_bulk
+                description: 5 or more items get $5 off
+                call: store_en:quote
+                args: [banana, 5]
+                expect:
+                  return: {discount: 5, total: 45}
+      - group: Invalid input
+        cases:
+          - name: price_unknown_item
+            description: An unknown item is an error
+            command: price grape 1
+            expect:
+              exit_code: 1
+              stderr: {contains: no such item}
+          - name: quote_zero
+            description: A quantity of 0 raises ValueError
+            call: store_en:quote
+            args: [apple, 0]
+            expect:
+              raises: ValueError
+
+  - group: Stock
+    cases:
+      - group: Normal
+        cases:
+          - name: stock_available
+            description: Shows the count when in stock
+            command: stock apple
+          - name: stock_empty
+            description: An item with no stock shows "out of stock" and exits with 3
+            command: stock banana
+            expect:
+              exit_code: 3
+              stdout: {contains: out of stock}
+      - group: Sold out
+        state: sold_out
+        cases:
+          - name: stock_sold_out
+            description: In the sold-out state, available is false
+            call: store_en:stock
+            args: [melon]
+            expect:
+              return: {available: false}
+
+  - group: Orders
+    cases:
+      - group: Receipt
+        cases:
+          - name: receipt_small
+            description: Orders under $300 pay $50 shipping
+            command: receipt apple=2 banana=1
+          - name: receipt_free_shipping
+            description: Shipping is free at exactly $300
+            command: receipt melon=2 apple=4
+      - group: Reservation
+        cases:
+          - name: reserve_short
+            description: Not enough stock raises OutOfStock
+            setup:
+              stock: {melon: 1}
+            call: store_en:reserve
+            args: [melon, 2]
+            expect:
+              raises: OutOfStock
+      - group: Points
+        cases:
+          - name: points_round_down
+            description: Amounts under $10 earn no points
+            xfail: "bug #12: rounds up"
+            call: store_en:points
+            args: [45]
+            expect:
+              return: 4
+      - group: Coupons
+        skip: on hold until the spec is decided
+        cases:
+          - name: coupon_percent
+            description: A 10% off coupon can be used
+            call: store_en:coupon
+            args: [OFF10, 100]
+            expect:
+              return: 90

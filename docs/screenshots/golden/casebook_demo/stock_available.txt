@@ -1,0 +1,6 @@
+# case: stock_available
+# command: store stock りんご
+# state: default
+# exit_code: 0
+----- stdout -----
+りんご: 10 個

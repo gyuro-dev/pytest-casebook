@@ -1,0 +1,8 @@
+# case: price_unknown_item
+# command: shop price grape 1
+# state: default
+# exit_code: 1
+----- stdout -----
+
+----- stderr -----
+エラー: 商品がありません: grape

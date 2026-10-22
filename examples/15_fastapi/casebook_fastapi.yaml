@@ -1,0 +1,74 @@
+# FastAPI の API を呼び、レスポンスと DB の変化を確かめる。
+# 作るのは YAML と conftest.py（TestClient と DB の用意・リクエストの送信・行の投入と取り出し）。
+title: FastAPI の TODO API
+levels: [機能]
+
+# どのリクエストにも付けるヘッダー（ケースの headers で上書きできる）
+request_defaults:
+  headers: {Authorization: Bearer secret}
+
+cases:
+  - group: 一覧
+    cases:
+      - name: list_all
+        description: 全件を id の順に返す（レスポンスを期待出力ファイルに残す）
+        setup:
+          db:
+            todos: [{id: 1, title: 牛乳を買う, done: 0}, {id: 2, title: 本を返す, done: 1}]
+        request: GET /todos
+
+      - name: list_done_only
+        description: クエリ done=true で完了したものだけ
+        setup:
+          db:
+            todos: [{id: 1, title: 牛乳を買う, done: 0}, {id: 2, title: 本を返す, done: 1}]
+        request: {path: /todos, query: {done: true}}
+        expect:
+          status: 200
+          json: [{id: 2}]
+
+  - group: 登録
+    cases:
+      - name: create
+        description: 登録すると 201 を返し、DB に1行増える
+        request: {method: POST, path: /todos, json: {title: 牛乳を買う}}
+        expect:
+          status: 201
+          json: {title: 牛乳を買う, done: false}
+          db.todos: [{title: 牛乳を買う, done: 0}]
+
+      - name: create_without_token
+        description: トークンがなければ 401 で、DB は変わらない
+        request:
+          method: POST
+          path: /todos
+          json: {title: 牛乳を買う}
+          headers: {Authorization: ""}
+        expect:
+          status: 401
+          json: {detail: 認証が必要です}
+          db.todos: []
+
+      - name: create_invalid
+        description: title がなければ 422（FastAPI の入力チェック）
+        request: {method: POST, path: /todos, json: {}}
+        expect:
+          status: 422
+          db.todos: []
+
+  - group: 完了
+    cases:
+      - name: complete
+        description: 完了にすると、DB の done が 1 になる
+        setup:
+          db: {todos: [{id: 5, title: 本を返す, done: 0}]}
+        request: PATCH /todos/5/done
+        expect:
+          status: 200
+          db.todos: [{id: 5, done: 1}]
+
+      - name: complete_missing
+        description: ない TODO は 404
+        request: PATCH /todos/99/done
+        expect:
+          status: 404

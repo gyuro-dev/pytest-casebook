@@ -1,0 +1,19 @@
+# Replace values that change on every run with fixed placeholders before comparing. This YAML is all you write.
+#
+# - Date-times (such as 2026-10-19T12:34:56+00:00) and UUIDs become <datetime> / <uuid> out of the box
+# - For anything else, write a regular expression under normalize:
+#   (or use pytest_casebook_placeholders / pytest_casebook_patterns in conftest.py)
+title: Normalize changing values
+
+normalize:
+  - {pattern: 'ord-\d+', replace: '<order-id>'}
+
+cases:
+  - name: create
+    description: The ID, UUID and date-time are kept in the golden file already replaced
+    call: order_ids_en:create
+    args: [apple]
+  - name: receipt
+    description: Values inside a string are replaced too
+    call: order_ids_en:receipt
+    args: [melon]

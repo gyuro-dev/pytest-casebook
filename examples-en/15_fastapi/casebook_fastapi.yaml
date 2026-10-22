@@ -1,0 +1,74 @@
+# Call a FastAPI API and check the response and the change in the DB.
+# You write the YAML and a conftest.py (preparing the TestClient and DB, sending requests, inserting and reading rows).
+title: FastAPI TODO API
+levels: [Feature]
+
+# headers added to every request (a case's headers can override them)
+request_defaults:
+  headers: {Authorization: Bearer secret}
+
+cases:
+  - group: List
+    cases:
+      - name: list_all
+        description: Returns all items in id order (the response is kept in the golden file)
+        setup:
+          db:
+            todos: [{id: 1, title: Buy milk, done: 0}, {id: 2, title: Return the book, done: 1}]
+        request: GET /todos
+
+      - name: list_done_only
+        description: The query done=true returns only completed items
+        setup:
+          db:
+            todos: [{id: 1, title: Buy milk, done: 0}, {id: 2, title: Return the book, done: 1}]
+        request: {path: /todos, query: {done: true}}
+        expect:
+          status: 200
+          json: [{id: 2}]
+
+  - group: Create
+    cases:
+      - name: create
+        description: Creating returns 201 and adds one row to the DB
+        request: {method: POST, path: /todos, json: {title: Buy milk}}
+        expect:
+          status: 201
+          json: {title: Buy milk, done: false}
+          db.todos: [{title: Buy milk, done: 0}]
+
+      - name: create_without_token
+        description: Without a token it is 401 and the DB does not change
+        request:
+          method: POST
+          path: /todos
+          json: {title: Buy milk}
+          headers: {Authorization: ""}
+        expect:
+          status: 401
+          json: {detail: Authentication required}
+          db.todos: []
+
+      - name: create_invalid
+        description: Without title it is 422 (FastAPI's input validation)
+        request: {method: POST, path: /todos, json: {}}
+        expect:
+          status: 422
+          db.todos: []
+
+  - group: Complete
+    cases:
+      - name: complete
+        description: Completing sets done to 1 in the DB
+        setup:
+          db: {todos: [{id: 5, title: Return the book, done: 0}]}
+        request: PATCH /todos/5/done
+        expect:
+          status: 200
+          db.todos: [{id: 5, done: 1}]
+
+      - name: complete_missing
+        description: A TODO that does not exist is 404
+        request: PATCH /todos/99/done
+        expect:
+          status: 404

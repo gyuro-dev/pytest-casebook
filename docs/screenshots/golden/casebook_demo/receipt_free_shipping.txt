@@ -1,0 +1,10 @@
+# case: receipt_free_shipping
+# command: store receipt メロン=2 りんご=4
+# state: default
+# exit_code: 0
+----- stdout -----
+メロン x 2: 2400 円
+りんご x 4: 600 円
+小計: 3000 円
+送料: 0 円
+合計: 3000 円

@@ -1,0 +1,50 @@
+# Check an HTTP API (request:). The smallest example, without a framework.
+# You write the YAML and a conftest.py (pytest_casebook_request, which sends the request).
+title: request basics
+
+cases:
+  - group: How to write it
+    cases:
+      - name: list_empty
+        description: 'Can be written as a "METHOD path" string (without a method it is GET)'
+        request: GET /todos
+        expect:
+          status: 200
+          json: []
+
+      - name: create
+        description: Can also be written as a mapping of method, path and json. status and json are kept in the golden file
+        request:
+          method: POST
+          path: /todos
+          json: {title: Buy milk}
+
+  - group: Expected results
+    cases:
+      - name: create_expect
+        description: json compares only the keys you write (no need to write id)
+        request: {method: POST, path: /todos, json: {title: Buy milk}}
+        expect:
+          status: 201
+          json: {title: Buy milk, done: false}
+
+      - name: create_without_title
+        description: Invalid input is 422
+        request: {method: POST, path: /todos, json: {}}
+        expect:
+          status: 422
+          json: {detail: title is required}
+
+      - name: get_existing
+        description: "Gets the data prepared in setup:"
+        setup:
+          todos: [{id: 7, title: Return the book, done: true}]
+        request: /todos/7
+        expect:
+          status: 200
+          json: {id: 7, done: true}
+
+      - name: get_missing
+        request: /todos/99
+        expect:
+          status: 404

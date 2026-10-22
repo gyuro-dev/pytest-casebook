@@ -1,0 +1,6 @@
+# case: quote_zero
+# call: shop:quote
+# args: ["apple", 0]
+# state: default
+----- raises -----
+ValueError: 個数は1以上にしてください

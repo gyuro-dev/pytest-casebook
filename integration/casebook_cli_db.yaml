@@ -1,0 +1,50 @@
+# 本物の PostgreSQL に読み書きする CLI（別プロセス）と関数（call:）を確かめる
+title: CLI と関数（実起動の DB）
+levels: [操作]
+command_prefix: [python, "{casebook_dir}/todo_cli.py"]
+
+cases:
+  - group: CLI
+    cases:
+      - name: cli_list_empty
+        description: 1件もなければメッセージ
+        command: list
+        expect:
+          exit_code: 0
+          stdout: TODO はありません
+
+      - name: cli_list
+        description: 一覧を表示する（期待出力ファイルに残す）
+        setup:
+          db:
+            todos: [{id: 1, title: 牛乳を買う, done: false}, {id: 2, title: 本を返す, done: true}]
+        command: list
+
+      - name: cli_add
+        description: 追加すると DB に1行増える
+        command: [add, 牛乳 2本]
+        expect:
+          stdout: "1 を追加しました: 牛乳 2本"
+          db.todos: [{id: 1, title: 牛乳 2本, done: false}]
+
+      - name: cli_done_missing
+        description: ない id はエラー（終了コード 1）で、DB は変わらない
+        command: done 99
+        expect:
+          exit_code: 1
+          stderr: {contains: 99 は見つかりません}
+          db.todos: []
+
+  - group: 関数
+    cases:
+      - name: call_summary
+        description: DB の接続を受け取る関数の戻り値を確かめる
+        setup:
+          db:
+            todos:
+              - {id: 1, title: a, done: true}
+              - {id: 2, title: b, done: false}
+              - {id: 3, title: c, done: false}
+        call: todo_repo:summary
+        expect:
+          return: {total: 3, done: 1, open: 2}

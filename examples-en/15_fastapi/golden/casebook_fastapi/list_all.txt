@@ -1,0 +1,16 @@
+# case: list_all
+# request: GET /todos
+# status: 200
+----- json -----
+[
+  {
+    "id": 1,
+    "title": "Buy milk",
+    "done": false
+  },
+  {
+    "id": 2,
+    "title": "Return the book",
+    "done": true
+  }
+]

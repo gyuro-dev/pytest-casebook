@@ -1,0 +1,6 @@
+# case: stock_available
+# command: store stock apple
+# state: default
+# exit_code: 0
+----- stdout -----
+apple: 10

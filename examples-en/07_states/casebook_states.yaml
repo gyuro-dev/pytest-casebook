@@ -1,0 +1,55 @@
+# Check the same operation under states such as "normal", "new pricing" and "maintenance".
+# You write the YAML and a conftest.py (pytest_casebook_setup, which applies the state).
+#
+# A state is a "named setup:". Pick one with state: on a group or a case, and its content is
+# passed to pytest_casebook_setup. On a group, every case inside gets that state.
+title: Switch states
+levels: [State]
+
+states:
+  default:
+    flags: {new_pricing: false, maintenance: false}
+  new_pricing:
+    flags: {new_pricing: true, maintenance: false}
+  maintenance:
+    flags: {new_pricing: false, maintenance: true}
+
+cases:
+  - group: Normal
+    description: Without state, the state is default
+    cases:
+      - name: normal
+        description: No discount
+        call: features_en:price
+        args: [1000]
+        expect: {return: 1000}
+
+  - group: New pricing
+    state: new_pricing
+    cases:
+      - name: discounted
+        description: 10% off
+        call: features_en:price
+        args: [1000]
+        expect: {return: 900}
+      - name: discounted_small
+        description: Fractions are rounded down
+        call: features_en:price
+        args: [99]
+        expect: {return: 89}
+
+  - group: Maintenance
+    state: maintenance
+    cases:
+      - name: maintenance
+        description: Raises an exception
+        call: features_en:price
+        args: [1000]
+        expect: {raises: "RuntimeError: Under maintenance"}
+      - name: override_by_setup
+        description: "A case's setup: can override the state (here it switches back to new pricing)"
+        setup:
+          flags: {new_pricing: true, maintenance: false}
+        call: features_en:price
+        args: [1000]
+        expect: {return: 900}

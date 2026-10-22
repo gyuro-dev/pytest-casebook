@@ -1,0 +1,6 @@
+# case: stock_empty
+# command: shop stock banana
+# state: default
+# exit_code: 3
+----- stdout -----
+banana: 0 in stock (out of stock)

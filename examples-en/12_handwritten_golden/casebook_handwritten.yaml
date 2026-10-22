@@ -1,0 +1,16 @@
+# Write the golden files by hand (for example, to fix the expected values before the implementation).
+#
+# A golden file does not need headers such as # case: or # command: (they are not compared).
+# If there is only one output, just write its body. See the files in golden/casebook_handwritten/.
+title: Write golden files by hand
+command_prefix: [python, wordcount_en.py]
+
+cases:
+  - name: count_words
+    description: Counts each word (the golden file has only the body)
+    command: ""
+    stdin: "b a b"
+  - name: no_words
+    description: Exit code 1 when there are no words (the golden file has exit_code and stderr)
+    command: ""
+    stdin: ""

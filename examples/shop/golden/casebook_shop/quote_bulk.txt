@@ -1,0 +1,13 @@
+# case: quote_bulk
+# call: shop:quote
+# args: ["banana", 5]
+# state: default
+----- return -----
+{
+  "__type__": "Quote",
+  "item": "banana",
+  "quantity": 5,
+  "unit_price": 80,
+  "discount": 50,
+  "total": 350
+}

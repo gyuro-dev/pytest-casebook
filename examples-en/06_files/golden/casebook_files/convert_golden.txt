@@ -1,0 +1,21 @@
+# case: convert_golden
+# command: python '{casebook_dir}/csv2json_en.py' users.csv users.json
+# exit_code: 0
+----- stdout -----
+Wrote 2 row(s) to users.json
+----- observe: files -----
+=== users.csv ===
+id,name
+1,Alice
+2,Bob
+=== users.json ===
+[
+  {
+    "id": "1",
+    "name": "Alice"
+  },
+  {
+    "id": "2",
+    "name": "Bob"
+  }
+]

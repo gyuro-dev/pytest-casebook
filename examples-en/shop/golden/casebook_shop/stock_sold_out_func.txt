@@ -1,0 +1,10 @@
+# case: stock_sold_out_func
+# call: shop_en:stock
+# args: ["melon"]
+# state: sold_out
+----- return -----
+{
+  "item": "melon",
+  "count": 0,
+  "available": false
+}

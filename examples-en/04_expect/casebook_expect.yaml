@@ -1,0 +1,37 @@
+# Write the expected results directly in YAML (no golden files). This YAML is all you write.
+# Only the items you write are compared.
+title: Write expected results in YAML
+command_prefix: [python, inventory_en.py]
+
+cases:
+  - group: command
+    cases:
+      - name: in_stock
+        description: Shows the count when in stock (exact match)
+        command: apple
+        expect:
+          exit_code: 0
+          stdout: "apple: 10 in stock"   # the trailing newline does not matter
+          stderr: ""
+
+      - name: out_of_stock
+        description: Out of stock gives exit code 3 and stderr (check only part of it)
+        command: banana
+        expect:
+          exit_code: 3
+          stderr: {contains: out of stock}
+
+      - name: count_pattern
+        description: Check with a regular expression
+        command: apple
+        expect:
+          stdout: {regex: '^apple: \d+ in stock$'}
+
+  - group: call
+    cases:
+      - name: check_subset
+        description: Dicts compare only the keys you write (values that change, like dates, can be left out)
+        call: inventory_en:check
+        args: [apple]
+        expect:
+          return: {item: apple, available: true}

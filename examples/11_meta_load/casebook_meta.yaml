@@ -1,0 +1,22 @@
+# ケースに自分用の情報（meta:）を付け、テストと同じ YAML を pytest の外のスクリプトでも使う。
+#
+#   uv run pytest examples/11_meta_load          # テストとして実行する
+#   uv run python examples/11_meta_load/show_demo.py   # 同じ YAML から demo のケースだけを表示する
+title: meta と load()
+meta: {owner: QA チーム}
+
+cases:
+  - group: 文字列
+    meta: {area: text}              # グループの meta は、中のケースすべてに付く
+    cases:
+      - name: upper
+        description: 大文字にする
+        call: textutil:upper
+        args: [hello]
+        meta: {demo: true}          # ケースの meta は、グループの meta に上書きで重なる
+        expect: {return: HELLO}
+      - name: reverse
+        description: 逆順にする
+        call: textutil:reverse
+        args: [abc]
+        expect: {return: cba}

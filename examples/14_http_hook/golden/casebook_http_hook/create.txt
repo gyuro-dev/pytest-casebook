@@ -1,0 +1,9 @@
+# case: create
+# request: POST /todos
+# status: 201
+----- json -----
+{
+  "id": 1,
+  "title": "牛乳を買う",
+  "done": false
+}

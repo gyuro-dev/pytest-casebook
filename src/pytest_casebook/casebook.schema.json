@@ -1,0 +1,401 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "pytest-casebook のケースファイル",
+  "description": "casebook_*.yaml の書き方。エディタ（VS Code の YAML 拡張など）でキーの補完と検証に使う。",
+  "type": "object",
+  "required": [
+    "cases"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "レポートの見出し（省略時はファイル名）"
+    },
+    "description": {
+      "type": "string",
+      "description": "レポートに出す説明"
+    },
+    "levels": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "階層の呼び名（例: [大項目, 中項目, 小項目]）"
+    },
+    "states": {
+      "type": "object",
+      "description": "状態名 -> 内容（名前を付けた setup:）。ケースやグループの state: で選ぶ",
+      "additionalProperties": {
+        "$ref": "#/$defs/setup"
+      }
+    },
+    "command_prefix": {
+      "description": "どの command にも先頭に付ける引数。{casebook_dir} は YAML のディレクトリになる",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "golden_dir": {
+      "type": "string",
+      "description": "期待出力の置き場所（このファイルからの相対パス）"
+    },
+    "check_orphans": {
+      "type": "boolean",
+      "description": "ケースがない期待出力が残っていたら失敗にする"
+    },
+    "normalize": {
+      "type": "array",
+      "description": "出力に当てる置き換え",
+      "items": {
+        "type": "object",
+        "required": [
+          "pattern"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "description": "正規表現"
+          },
+          "replace": {
+            "type": "string",
+            "description": "置き換え後"
+          }
+        }
+      }
+    },
+    "request_defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "headers": {
+          "$ref": "#/$defs/headers"
+        }
+      },
+      "description": "どの request: にも重ねる既定の値"
+    },
+    "meta": {
+      "type": "object",
+      "description": "自由に使う情報（pytest-casebook は見ない）"
+    },
+    "cases": {
+      "$ref": "#/$defs/items"
+    }
+  },
+  "$defs": {
+    "items": {
+      "type": "array",
+      "description": "ケースまたはグループのリスト",
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/group"
+          },
+          {
+            "$ref": "#/$defs/case"
+          }
+        ]
+      }
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "group": {
+      "type": "object",
+      "required": [
+        "group"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "group": {
+          "type": "string",
+          "minLength": 1,
+          "description": "グループの名前（入れ子の深さが階層になる）"
+        },
+        "description": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "description": "中のケースの既定の状態"
+        },
+        "marks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "meta": {
+          "type": "object"
+        },
+        "skip": {
+          "$ref": "#/$defs/reason",
+          "description": "中のケースすべてを、この理由でスキップする"
+        },
+        "xfail": {
+          "$ref": "#/$defs/reason",
+          "description": "中のケースすべてが、この理由で失敗すると分かっている"
+        },
+        "cases": {
+          "$ref": "#/$defs/items"
+        }
+      }
+    },
+    "case": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "command"
+          ]
+        },
+        {
+          "required": [
+            "call"
+          ]
+        },
+        {
+          "required": [
+            "request"
+          ]
+        }
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[\\w.\\-]+$",
+          "description": "ケース名（期待出力のファイル名になる）"
+        },
+        "description": {
+          "type": "string",
+          "description": "確認する内容"
+        },
+        "command": {
+          "description": "CLI として実行する引数。リストで書くと区切らずにそのまま渡す（Windows のパス向け）",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "stdin": {
+          "type": "string"
+        },
+        "timeout": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "call": {
+          "type": "string",
+          "pattern": "^[^:\\s]+:[^:\\s]+$",
+          "description": "モジュール:関数"
+        },
+        "args": {
+          "type": "array"
+        },
+        "kwargs": {
+          "type": "object"
+        },
+        "request": {
+          "$ref": "#/$defs/request"
+        },
+        "state": {
+          "type": "string"
+        },
+        "setup": {
+          "$ref": "#/$defs/setup"
+        },
+        "observe": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "実行後に取り出す対象（files など）"
+        },
+        "expect": {
+          "$ref": "#/$defs/expect"
+        },
+        "marks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "meta": {
+          "type": "object"
+        },
+        "skip": {
+          "$ref": "#/$defs/reason"
+        },
+        "xfail": {
+          "$ref": "#/$defs/reason"
+        },
+        "golden": {
+          "type": "string",
+          "description": "期待出力のファイル名（省略時は <name>.txt）"
+        }
+      }
+    },
+    "setup": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "前提条件。files は作業ディレクトリに置くファイル、それ以外は pytest_casebook_setup に渡す",
+      "properties": {
+        "files": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "boolean"
+        ]
+      }
+    },
+    "request": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^\\s*(([Gg][Ee][Tt]|[Pp][Oo][Ss][Tt]|[Pp][Uu][Tt]|[Pp][Aa][Tt][Cc][Hh]|[Dd][Ee][Ll][Ee][Tt][Ee]|[Hh][Ee][Aa][Dd]|[Oo][Pp][Tt][Ii][Oo][Nn][Ss])\\s+)?/\\S*\\s*$",
+          "description": "\"メソッド パス\"（メソッドを省くと GET）"
+        },
+        {
+          "type": "object",
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false,
+          "not": {
+            "required": [
+              "json",
+              "body"
+            ]
+          },
+          "properties": {
+            "method": {
+              "type": "string",
+              "pattern": "^([Gg][Ee][Tt]|[Pp][Oo][Ss][Tt]|[Pp][Uu][Tt]|[Pp][Aa][Tt][Cc][Hh]|[Dd][Ee][Ll][Ee][Tt][Ee]|[Hh][Ee][Aa][Dd]|[Oo][Pp][Tt][Ii][Oo][Nn][Ss])$"
+            },
+            "path": {
+              "type": "string",
+              "pattern": "^/"
+            },
+            "query": {
+              "type": "object"
+            },
+            "headers": {
+              "$ref": "#/$defs/headers"
+            },
+            "json": {
+              "description": "JSON の本文"
+            },
+            "body": {
+              "type": "string",
+              "description": "JSON 以外の本文"
+            }
+          }
+        }
+      ]
+    },
+    "text": {
+      "description": "文字列なら完全一致、{contains: ...} なら含む、{regex: ...} なら正規表現",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 1,
+          "additionalProperties": false,
+          "properties": {
+            "contains": {
+              "type": "string"
+            },
+            "regex": {
+              "type": "string"
+            },
+            "$contains": {
+              "type": "string"
+            },
+            "$regex": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "expect": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "期待結果。ここに書いた項目だけを比べる。下の項目以外のキーは observe の対象（db.users など）",
+      "not": {
+        "required": [
+          "return",
+          "raises"
+        ]
+      },
+      "properties": {
+        "exit_code": {
+          "type": "integer"
+        },
+        "stdout": {
+          "$ref": "#/$defs/text"
+        },
+        "stderr": {
+          "$ref": "#/$defs/text"
+        },
+        "return": {
+          "description": "辞書は書いたキーだけ、リストは件数と各要素を比べる。$contains・$regex・$unordered・$includes が使える"
+        },
+        "raises": {
+          "$ref": "#/$defs/text"
+        },
+        "status": {
+          "type": "integer"
+        },
+        "json": {
+          "description": "return と同じ比べ方"
+        },
+        "body": {
+          "$ref": "#/$defs/text"
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/text"
+          }
+        }
+      }
+    }
+  }
+}

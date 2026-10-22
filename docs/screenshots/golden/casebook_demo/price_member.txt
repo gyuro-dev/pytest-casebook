@@ -1,0 +1,6 @@
+# case: price_member
+# command: store price りんご 3 --member
+# state: default
+# exit_code: 0
+----- stdout -----
+りんご x 3 = 405 円（割引 45 円）

@@ -1,0 +1,140 @@
+title: お店のサンプル
+description: 価格計算・在庫確認・明細ファイル・注文（DB）を、CLI と Python 関数の両方から確認する
+levels: [大項目, 中項目, 小項目]
+command_prefix: shop
+
+states:
+  default: {}
+  sold_out:
+    stock: {apple: 0, melon: 0}
+
+cases:
+  - group: 価格計算
+    description: 会員割引とまとめ買い割引
+    cases:
+      - group: 通常の購入
+        cases:
+          - group: CLI
+            cases:
+              - name: price_one
+                description: 1個だけ買うと割引はない
+                command: price apple 1
+              - name: price_member
+                description: 会員は1割引きになる
+                command: price apple 3 --member
+              - name: price_bulk_member
+                description: 会員が5個以上買うと、1割引きに加えて50円引きになる
+                command: price melon 5 --member
+          - group: 関数
+            cases:
+              - name: quote_bulk
+                description: 5個以上で50円引きになる（関数の戻り値で確認）
+                call: shop:quote
+                args: [banana, 5]
+      - group: 入力の誤り
+        cases:
+          - name: price_unknown_item
+            description: 存在しない商品はエラーになる
+            command: price grape 1
+          - name: quote_zero
+            description: 個数0は ValueError になる
+            call: shop:quote
+            args: [apple, 0]
+
+  - group: 在庫確認
+    cases:
+      - group: 通常時
+        cases:
+          - name: stock_available
+            description: 在庫があれば個数を表示する
+            command: stock apple
+          - name: stock_empty
+            description: 在庫0の商品は在庫切れと表示し、終了コード3を返す
+            command: stock banana
+      - group: 売り切れ時
+        state: sold_out
+        cases:
+          - name: stock_sold_out
+            description: 売り切れの状態では在庫切れと表示する
+            command: stock apple
+          - name: stock_sold_out_func
+            description: 売り切れの状態では available が false になる
+            call: shop:stock
+            args: [melon]
+
+  - group: 明細ファイル
+    description: setup.files で入力ファイルを置き、observe で出力ファイルを確かめる
+    cases:
+      - group: 期待出力ファイルで確認
+        cases:
+          - name: receipt_golden
+            description: 注文の CSV から明細を作り、作ったファイルを期待出力に残す
+            setup:
+              files:
+                orders.csv: |
+                  item,quantity
+                  apple,2
+                  melon,5
+            command: receipt orders.csv
+            observe: [files]
+      - group: YAML で確認
+        cases:
+          - name: receipt_expect
+            description: 明細ファイルの合計行と、表示されるメッセージを確かめる
+            setup:
+              files:
+                orders.csv: |
+                  item,quantity
+                  banana,1
+            command: receipt orders.csv --out out.txt
+            expect:
+              exit_code: 0
+              stdout: {contains: 1 件の明細}
+              files:
+                out.txt: |
+                  banana x 1: 80 円
+                  合計: 80 円
+          - name: receipt_missing_file
+            description: 入力ファイルがなければエラーになる
+            command: receipt nothing.csv
+            expect:
+              exit_code: 1
+              stderr: {regex: 'ファイルがありません: nothing\.csv$'}
+
+  - group: 注文（DB）
+    description: setup の db で行を入れ、実行後のテーブルを確かめる
+    cases:
+      - group: 期待出力ファイルで確認
+        cases:
+          - name: order_golden
+            description: 注文すると在庫が減り、注文が1行増える（テーブル全体を期待出力に残す）
+            setup:
+              db:
+                stock: [{item: apple, count: 10}, {item: melon, count: 2}]
+            call: orders:place_order
+            args: [apple, 3]
+            observe: [db.stock, db.orders]
+      - group: YAML で確認
+        cases:
+          - name: order_expect
+            description: 注文すると在庫が減り、注文が1行増える
+            setup:
+              db:
+                stock: [{item: apple, count: 10}]
+            call: orders:place_order
+            args: [apple, 3]
+            expect:
+              return: {item: apple, quantity: 3}
+              db.stock: [{item: apple, count: 7}]
+              db.orders: [{item: apple, quantity: 3}]
+          - name: order_out_of_stock
+            description: 在庫が足りなければ例外になり、DB は変わらない
+            setup:
+              db:
+                stock: [{item: melon, count: 2}]
+            call: orders:place_order
+            args: [melon, 5]
+            expect:
+              raises: OutOfStock
+              db.stock: [{item: melon, count: 2}]
+              db.orders: []

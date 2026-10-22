@@ -1,0 +1,22 @@
+# Attach your own information to cases (meta:), and use the same YAML from a script outside pytest.
+#
+#   uv run pytest examples-en/11_meta_load                 # run as tests
+#   uv run python examples-en/11_meta_load/show_demo_en.py   # show only the demo cases from the same YAML
+title: meta and load()
+meta: {owner: QA team}
+
+cases:
+  - group: Strings
+    meta: {area: text}              # a group's meta is attached to every case inside
+    cases:
+      - name: upper
+        description: Converts to upper case
+        call: textutil_en:upper
+        args: [hello]
+        meta: {demo: true}          # a case's meta is merged over the group's meta
+        expect: {return: HELLO}
+      - name: reverse
+        description: Reverses the string
+        call: textutil_en:reverse
+        args: [abc]
+        expect: {return: cba}

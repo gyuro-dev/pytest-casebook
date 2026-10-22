@@ -1,0 +1,37 @@
+# Insert rows into the DB before the case, and check the DB content after it runs.
+# You write the YAML and a conftest.py (preparing the DB, inserting rows, reading rows).
+title: Use a DB
+
+cases:
+  - name: withdraw_golden
+    description: Keep the whole tables after the run in the golden file (one JSON line per row)
+    setup:
+      db:
+        members: [{id: 1, name: Alice, active: 1}, {id: 2, name: Bob, active: 1}]
+    call: members_en:withdraw
+    args: [2]
+    observe: [db.members, db.history]
+
+  - name: withdraw_expect
+    description: Check only what changed in YAML (only the keys you write are compared)
+    setup:
+      db:
+        members: [{id: 1, name: Alice, active: 1}]
+    call: members_en:withdraw
+    args: [1]
+    expect:
+      return: {withdrawn: true}
+      db.members: [{id: 1, active: 0}]
+      db.history: [{member_id: 1, action: withdraw}]
+
+  - name: withdraw_twice
+    description: An already withdrawn member raises an exception and the DB does not change
+    setup:
+      db:
+        members: [{id: 1, name: Alice, active: 0}]
+    call: members_en:withdraw
+    args: [1]
+    expect:
+      raises: AlreadyWithdrawn
+      db.members: [{id: 1, active: 0}]
+      db.history: []

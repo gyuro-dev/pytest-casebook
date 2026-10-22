@@ -1,0 +1,16 @@
+# 期待出力ファイルを手で書く（実装より先に期待値を決めるときなど）。
+#
+# 期待出力ファイルでは、# case: や # command: などのヘッダーは書かなくてよい（比べない）。
+# 出力が1つだけなら本文だけを書けばよい。golden/casebook_handwritten/ の中を見てください。
+title: 期待出力ファイルを手で書く
+command_prefix: [python, wordcount.py]
+
+cases:
+  - name: count_words
+    description: 単語ごとの数を数える（期待出力ファイルは本文だけ）
+    command: ""
+    stdin: "b a b"
+  - name: no_words
+    description: 単語がなければ終了コード 1（期待出力ファイルに exit_code と stderr を書く）
+    command: ""
+    stdin: ""

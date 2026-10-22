@@ -1,0 +1,55 @@
+# 同じ操作を「通常時」「新料金」「メンテナンス中」のような状態で確かめる。
+# 作るのは YAML と conftest.py（状態を当てる pytest_casebook_setup）。
+#
+# 状態は「名前を付けた setup:」。グループやケースの state: で選ぶと、その内容が
+# pytest_casebook_setup に渡る。グループに書くと、中のケースすべてがその状態になる。
+title: 状態を切り替える
+levels: [状態]
+
+states:
+  default:
+    flags: {new_pricing: false, maintenance: false}
+  new_pricing:
+    flags: {new_pricing: true, maintenance: false}
+  maintenance:
+    flags: {new_pricing: false, maintenance: true}
+
+cases:
+  - group: 通常時
+    description: state を書かないと default
+    cases:
+      - name: normal
+        description: 割引なし
+        call: features:price
+        args: [1000]
+        expect: {return: 1000}
+
+  - group: 新料金
+    state: new_pricing
+    cases:
+      - name: discounted
+        description: 1割引き
+        call: features:price
+        args: [1000]
+        expect: {return: 900}
+      - name: discounted_small
+        description: 端数は切り捨て
+        call: features:price
+        args: [99]
+        expect: {return: 89}
+
+  - group: メンテナンス中
+    state: maintenance
+    cases:
+      - name: maintenance
+        description: 例外になる
+        call: features:price
+        args: [1000]
+        expect: {raises: "RuntimeError: メンテナンス中です"}
+      - name: override_by_setup
+        description: "ケースの setup: で、状態の内容を上書きできる（ここでは新料金に戻す）"
+        setup:
+          flags: {new_pricing: true, maintenance: false}
+        call: features:price
+        args: [1000]
+        expect: {return: 900}

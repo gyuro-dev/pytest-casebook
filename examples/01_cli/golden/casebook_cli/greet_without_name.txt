@@ -1,0 +1,8 @@
+# case: greet_without_name
+# command: python greet.py --polite
+# exit_code: 2
+----- stdout -----
+
+----- stderr -----
+usage: greet [-h] --name NAME [--polite]
+greet: error: the following arguments are required: --name

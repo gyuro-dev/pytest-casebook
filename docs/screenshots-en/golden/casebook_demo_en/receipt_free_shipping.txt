@@ -1,0 +1,10 @@
+# case: receipt_free_shipping
+# command: store receipt melon=2 apple=4
+# state: default
+# exit_code: 0
+----- stdout -----
+melon x 2: $240
+apple x 4: $60
+Subtotal: $300
+Shipping: $0
+Total: $300

@@ -1,0 +1,38 @@
+# Put input files in place, run, and check the files that were created. This YAML is all you write.
+#
+# With setup.files, each case gets its own temporary working directory where the files are
+# written and the command runs. That directory is not the YAML's directory, so point to the
+# script next to the YAML with {casebook_dir} (the directory that holds the YAML).
+title: Run with input files
+command_prefix: [python, "{casebook_dir}/csv2json_en.py"]
+
+cases:
+  - name: convert_golden
+    description: Keep the content of the created file in the golden file (list files in observe)
+    setup:
+      files:
+        users.csv: |
+          id,name
+          1,Alice
+          2,Bob
+    command: users.csv users.json
+    observe: [files]
+
+  - name: convert_expect
+    description: Check the content of the created file in YAML (only the files you write are compared)
+    setup:
+      files:
+        users.csv: |
+          id,name
+          3,Carol
+    command: users.csv out.json
+    expect:
+      stdout: "Wrote 1 row(s) to out.json"
+      files:
+        out.json: |
+          [
+            {
+              "id": "3",
+              "name": "Carol"
+            }
+          ]

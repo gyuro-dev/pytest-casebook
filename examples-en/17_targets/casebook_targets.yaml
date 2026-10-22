@@ -1,0 +1,40 @@
+# Run the same cases against different environments (local and staging).
+#
+#   uv run pytest examples-en/17_targets                                # local
+#   uv run pytest examples-en/17_targets --target staging \
+#       -o casebook_golden_dir=golden_staging -m "not local_only"       # staging
+#
+# - conftest.py's casebook_env switches what to connect to based on --target
+# - golden files go to a separate place per environment (golden/ and golden_staging/).
+#   That is why this YAML has no golden_dir: (if written, the YAML wins over -o)
+# - checks whose answer depends on the environment use golden files; checks that are the
+#   same on every environment use expect:
+title: Switch environments
+levels: [Check]
+
+cases:
+  - group: Answer depends on the environment
+    cases:
+      - name: list_items
+        description: The item list (compared with each environment's golden file)
+        call: catalog_en:list_items
+
+  - group: Same on every environment
+    cases:
+      - name: apple_price
+        description: The price of an apple is the same on every environment
+        call: catalog_en:price
+        args: [apple]
+        expect: {return: 120}
+      - name: unknown_item
+        call: catalog_en:price
+        args: [grape]
+        expect: {raises: LookupError}
+
+  - group: Runs only on local
+    marks: [local_only]
+    cases:
+      - name: reset
+        description: Reset is only allowed locally (excluded with -m on staging)
+        call: catalog_en:reset
+        expect: {return: Reset done}

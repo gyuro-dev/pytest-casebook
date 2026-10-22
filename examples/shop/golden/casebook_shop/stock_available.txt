@@ -1,0 +1,6 @@
+# case: stock_available
+# command: shop stock apple
+# state: default
+# exit_code: 0
+----- stdout -----
+apple: 10 個

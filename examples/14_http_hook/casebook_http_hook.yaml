@@ -1,0 +1,50 @@
+# HTTP の API を確かめる（request:）。フレームワークを使わない最小の例。
+# 作るのは YAML と conftest.py（リクエストを送る pytest_casebook_request）。
+title: request の基本
+
+cases:
+  - group: 書き方
+    cases:
+      - name: list_empty
+        description: '"メソッド パス" の文字列で書ける（メソッドを省くと GET）'
+        request: GET /todos
+        expect:
+          status: 200
+          json: []
+
+      - name: create
+        description: method・path・json のマッピングでも書ける。期待出力ファイルに status と json が残る
+        request:
+          method: POST
+          path: /todos
+          json: {title: 牛乳を買う}
+
+  - group: 期待結果
+    cases:
+      - name: create_expect
+        description: json は書いたキーだけを比べる（id は書かなくてよい）
+        request: {method: POST, path: /todos, json: {title: 牛乳を買う}}
+        expect:
+          status: 201
+          json: {title: 牛乳を買う, done: false}
+
+      - name: create_without_title
+        description: 入力の誤りは 422
+        request: {method: POST, path: /todos, json: {}}
+        expect:
+          status: 422
+          json: {detail: title は必須です}
+
+      - name: get_existing
+        description: "setup: で用意したデータを取得する"
+        setup:
+          todos: [{id: 7, title: 本を返す, done: true}]
+        request: /todos/7
+        expect:
+          status: 200
+          json: {id: 7, done: true}
+
+      - name: get_missing
+        request: /todos/99
+        expect:
+          status: 404

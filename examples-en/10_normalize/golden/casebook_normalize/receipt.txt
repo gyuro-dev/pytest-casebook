@@ -1,0 +1,5 @@
+# case: receipt
+# call: order_ids_en:receipt
+# args: ["melon"]
+----- return -----
+"Order <order-id> (<datetime>): melon"
