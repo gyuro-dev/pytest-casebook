@@ -54,3 +54,10 @@ updates:
       interval: "monthly"
     cooldown:
       default-days: 7
+    ignore:
+      # Stay on PostgreSQL 17 (supported until November 2029) and only take 17.x patch
+      # releases. Move to the next major version when 17 nears its end of life.
+      # PostgreSQL 17（2029 年 11 月までサポート）のままにし、17.x の修正版だけを入れる。
+      # 17 のサポートの終わりが近づいたら、次のメジャーの版に上げる。
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]
