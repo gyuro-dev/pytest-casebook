@@ -338,6 +338,7 @@ check_orphans: true            # fail if golden files without a case are left ov
 normalize:                     # replacements applied to the output
   - {pattern: 'req-[0-9a-f]+', replace: '<request-id>'}
 meta: {owner: qa}              # free-form information (see "meta")
+env: {LANG: C}                 # environment variables for command cases (see "Environment variables")
 cases: [...]                   # list of cases or groups
 ```
 
@@ -349,6 +350,7 @@ cases: [...]                   # list of cases or groups
   state: outage              # default state for the cases inside
   marks: [slow]              # pytest marks for the cases inside
   meta: {area: price}        # meta for the cases inside
+  env: {TZ: UTC}             # environment variables for the command cases inside
   skip: paused until the spec is decided  # skip all cases inside with this reason (xfail: too)
   cases: [...]
 ```
@@ -364,6 +366,7 @@ You can select by group name, e.g. `-k Pricing`. The HTML report only shows as m
 | `command` | Arguments to run as a CLI (split like a shell command), appended to `command_prefix`. May be empty (`""`) if `command_prefix` is set. A list (`[a, 'b c']`) is passed as is without splitting |
 | `stdin` | Standard input for the command |
 | `timeout` | Seconds before the case fails as too slow (`command`, `call` and `request`; [details](#timeouts-timeout)) |
+| `env` | Environment variables for the command, put over the current ones ([how](#environment-variables-env)) |
 | `call` | Function to call (`module:function`, `module:Class.method`). `async def` functions are awaited |
 | `args` / `kwargs` | Arguments for the function |
 | `request` | HTTP request to send (`"POST /users"`, or method, path, query, headers, json, body; [how](#http-apis-request)) |
@@ -377,6 +380,29 @@ You can select by group name, e.g. `-k Pricing`. The HTML report only shows as m
 | `golden` | Expected-output file name (default `<name>.txt`) |
 
 Write exactly one of `command`, `call` and `request`. Keys not in this table are errors, to catch typos. Put your own information under `meta:`.
+
+### Environment variables (env)
+
+`env:` sets environment variables for `command:` cases. Write it at the top of the file, on groups, or on cases.
+
+```yaml
+env: {LANG: C, TZ: UTC}          # every command case in the file
+cases:
+  - group: Debug output
+    env: {MYTOOL_DEBUG: 1}       # numbers become strings ("1")
+    cases:
+      - name: debug_report
+        command: report
+      - name: default_locale
+        command: report
+        env: {LANG: null}        # null removes a value set further out
+```
+
+- When the command runs in a subprocess, these values are put over the environment of the pytest process (`os.environ`). A `PATH` set here is also used to find the program
+- Inner levels override outer ones key by key (file → group → case). Values are strings or numbers; `true` / `false` are errors (write `"true"`). `null` only removes a value from an outer `env:`; it does not unset variables inherited from your shell
+- Only command cases use it: `env:` written on a call / request case is an error, and `env:` inherited from the file or a group is ignored for them
+- Hooks read the merged result as `case.env`. When `pytest_casebook_run_command` runs the command itself, apply it there; `run_in_process` does not change `os.environ`, so wrap it, e.g. in `unittest.mock.patch.dict(os.environ, case.env)`
+- The HTML report shows the variables that differ from the file-level `env:` in the preconditions column. Golden files do not record them
 
 ### meta
 
@@ -408,7 +434,7 @@ for case in doc.cases:
         print(" > ".join(case.path), case.name, case.command)
 ```
 
-`load()` performs the same validation as pytest collection and returns a `CasebookDoc` (`title`, `levels`, `states`, `meta`, `cases`, …). Mistakes raise `pytest_casebook.CasebookError`.
+`load()` performs the same validation as pytest collection and returns a `CasebookDoc` (`title`, `levels`, `states`, `meta`, `env`, `cases`, …). Mistakes raise `pytest_casebook.CasebookError`.
 
 ### Preconditions (setup)
 
@@ -605,7 +631,7 @@ Write them in conftest.py. Each hook only needs the arguments it uses (e.g. `def
 | `pytest_casebook_placeholders(env)` | before comparing | list of `(actual value, replacement)` |
 | `pytest_casebook_patterns(env)` | before comparing | list of `(regex, replacement)` |
 
-Every hook also receives `config` (pytest's Config). A case's state name and content are `case.state` and `case.state_data`. When running in a subprocess and the child is Python, its output encoding is set to `casebook_encoding` (via `PYTHONIOENCODING`).
+Every hook also receives `config` (pytest's Config). A case's state name and content are `case.state` and `case.state_data`, and its environment variables from `env:` are `case.env`. When running in a subprocess and the child is Python, its output encoding is set to `casebook_encoding` (via `PYTHONIOENCODING`).
 
 ### Running against multiple environments
 

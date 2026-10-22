@@ -243,6 +243,10 @@ def _precondition_lines(doc: CasebookDoc, case: Case, texts: dict[str, Any]) -> 
     files = own.pop("files", None) or {}
     if files:
         lines.append(texts["files"].format(files=", ".join(files)))
+    # ファイル全体の env はどのケースにも同じなので、それと違う変数だけを出す
+    env = [f"{k}={v}" for k, v in case.env.items() if doc.env.get(k) != v]
+    if env:
+        lines.append(_shorten(texts["env"].format(env=", ".join(env))))
     for key, value in own.items():
         lines.append(_shorten(f"{key}: {compact(to_jsonable(value))}"))
     return lines
@@ -509,6 +513,7 @@ def _execute_command(
             stdin=case.stdin,
             timeout=case.timeout,
             encoding=config.getini("casebook_encoding"),
+            env=case.env,
         )
     elif not isinstance(result, CommandResult):
         result = CommandResult(*result)

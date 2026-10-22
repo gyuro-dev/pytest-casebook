@@ -88,6 +88,9 @@
       "type": "object",
       "description": "Free-form information (pytest-casebook does not read it) / 自由に使う情報（pytest-casebook は見ない）"
     },
+    "env": {
+      "$ref": "#/$defs/env"
+    },
     "cases": {
       "$ref": "#/$defs/items"
     }
@@ -138,6 +141,9 @@
         },
         "meta": {
           "type": "object"
+        },
+        "env": {
+          "$ref": "#/$defs/env"
         },
         "skip": {
           "$ref": "#/$defs/reason",
@@ -207,6 +213,9 @@
           "exclusiveMinimum": 0,
           "description": "Seconds before the case fails as too slow. A command is stopped; a call / request function keeps running in the background / ケースを時間切れで失敗にするまでの秒数。command は止める。call / request の関数は裏で動き続ける"
         },
+        "env": {
+          "$ref": "#/$defs/env"
+        },
         "call": {
           "type": "string",
           "pattern": "^[^:\\s]+:[^:\\s]+$",
@@ -271,6 +280,20 @@
             "type": "string"
           }
         }
+      }
+    },
+    "env": {
+      "type": "object",
+      "description": "Environment variables for running command: cases, put over the current ones. Inner levels (file, group, case) override outer ones; null removes an outer value / command: のケースを実行するときの環境変数（今の環境変数に重ねる）。内側（ファイル・グループ・ケース）が外側を上書きし、null で外側の値を消す",
+      "propertyNames": {
+        "pattern": "^[^=]+$"
+      },
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "null"
+        ]
       }
     },
     "headers": {

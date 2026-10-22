@@ -14,7 +14,7 @@ import subprocess
 import sys
 import threading
 import traceback as tb_module
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TypeVar, cast
@@ -59,6 +59,7 @@ def run_subprocess(
     stdin: str | None = None,
     timeout: float | None = None,
     encoding: str = "utf-8",
+    env: Mapping[str, str] | None = None,
 ) -> CommandResult:
     """
     コマンドを別プロセスで実行する。
@@ -68,17 +69,18 @@ def run_subprocess(
     :param stdin: 標準入力に渡す文字列（None なら空の入力）
     :param timeout: 打ち切るまでの秒数
     :param encoding: 出力の文字コード
+    :param env: os.environ に上書きで重ねる環境変数（ケースの env:）。プログラムもこの PATH で探す
     :return: 終了コード・stdout・stderr
     :raises CasebookRunError: コマンドが見つからない、または時間内に終わらないとき
     """
     # 子プロセスが Python のとき、Windows でもコンソールの文字コード（cp932 など）ではなく
     # 読み取る側と同じ文字コードで出力させる（利用者が設定していればそれを使う）
-    env = {"PYTHONIOENCODING": encoding, **os.environ}
+    child_env = _overlay_env({"PYTHONIOENCODING": encoding, **os.environ}, env or {})
     try:
         proc = subprocess.run(
-            [_find_program(argv[0], env), *argv[1:]],
+            [_find_program(argv[0], child_env), *argv[1:]],
             cwd=cwd,
-            env=env,
+            env=child_env,
             input=stdin,
             # 入力を渡さないときは空にし、子プロセスが端末の入力を待って止まらないようにする
             stdin=subprocess.DEVNULL if stdin is None else None,
@@ -96,6 +98,26 @@ def run_subprocess(
     return CommandResult(proc.returncode, proc.stdout or "", proc.stderr or "")
 
 
+def _same_name(a: str, b: str) -> bool:
+    """同じ環境変数の名前か（Windows は大文字小文字を区別しない）。"""
+    return a.upper() == b.upper() if os.name == "nt" else a == b
+
+
+def _overlay_env(base: dict[str, str], extra: Mapping[str, str]) -> dict[str, str]:
+    """
+    base に extra を上書きで重ねる。
+
+    Windows では `Path` と `PATH` が同じ変数なので、extra と同じ名前とみなすものを先に除く
+    （両方を子プロセスに渡すと、どちらが使われるか分からなくなる）。
+    """
+    merged = dict(base)
+    for name, value in extra.items():
+        for key in [k for k in merged if _same_name(k, name)]:
+            del merged[key]
+        merged[name] = value
+    return merged
+
+
 def _find_program(name: str, env: dict[str, str]) -> str:
     """
     パスを含まないプログラム名を、PATH から探したフルパスにする（見つからなければそのまま）。
@@ -107,7 +129,8 @@ def _find_program(name: str, env: dict[str, str]) -> str:
     """
     if os.sep in name or (os.altsep and os.altsep in name):
         return name
-    return shutil.which(name, path=env.get("PATH")) or name
+    path = next((v for k, v in env.items() if _same_name(k, "PATH")), None)
+    return shutil.which(name, path=path) or name
 
 
 @contextlib.contextmanager
@@ -142,6 +165,9 @@ def run_in_process(
     - any other exception is caught; the exit code becomes 1 and the exception is written to
       stderr
 
+    It does not change `os.environ`: to apply the case's `env:`, wrap the call, e.g. in
+    `unittest.mock.patch.dict(os.environ, case.env)`.
+
     :param main: a function callable as `main(argv)` (its return value or SystemExit is the
         exit code)
     :param argv: arguments passed to main (without the program name)
@@ -159,6 +185,9 @@ def run_in_process(
 
     - `sys.exit()` は、その値を終了コードにする
     - それ以外の例外は受け止めて、終了コードを 1 にし、例外を stderr に書く
+
+    `os.environ` は変えない。ケースの `env:` を当てるときは、
+    `unittest.mock.patch.dict(os.environ, case.env)` などで囲んで呼ぶ。
 
     :param main: `main(argv)` の形で呼べる関数（戻り値または SystemExit が終了コード）
     :param argv: main に渡す引数（プログラム名を含まない）

@@ -44,3 +44,34 @@ def test_unknown_program_is_reported(tmp_path: Path) -> None:
         pytest.raises(runner.CasebookRunError, match="コマンドが見つかりません: no-such-casebook"),
     ):
         runner.run_subprocess(["no-such-casebook-command"], cwd=tmp_path)
+
+
+def test_env_is_put_over_os_environ(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CASEBOOK_X", "outer")
+    monkeypatch.setenv("CASEBOOK_Y", "kept")
+    code = "import os; print(os.environ['CASEBOOK_X'], os.environ['CASEBOOK_Y'])"
+    result = runner.run_subprocess(
+        [sys.executable, "-c", code], cwd=tmp_path, env={"CASEBOOK_X": "inner"}
+    )
+    assert result.stdout.split() == ["inner", "kept"]
+    # このプロセスの os.environ は変えない
+    assert os.environ["CASEBOOK_X"] == "outer"
+
+
+def test_program_is_found_on_path_from_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """env: で PATH を変えると、その PATH でプログラムを探す。"""
+    seen: list[str | None] = []
+
+    def which(name: str, path: str | None = None) -> None:
+        seen.append(path)
+
+    monkeypatch.setattr(runner.shutil, "which", which)
+    with pytest.raises(runner.CasebookRunError):
+        runner.run_subprocess(["no-such-casebook-command"], cwd=tmp_path, env={"PATH": "x"})
+    assert seen == ["x"]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows だけ環境変数の名前の大文字小文字を区別しない")
+def test_env_names_are_case_insensitive_on_windows() -> None:
+    merged = runner._overlay_env({"PATH": "a", "X": "1"}, {"Path": "b"})
+    assert merged == {"X": "1", "Path": "b"}

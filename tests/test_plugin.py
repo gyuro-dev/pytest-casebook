@@ -140,6 +140,42 @@ def test_command_stdin(project: pytest.Pytester) -> None:
     assert golden(project, "upper").endswith("----- stdout -----\nABC\n")
 
 
+def test_command_env(project: pytest.Pytester) -> None:
+    write_casebook(
+        project,
+        f"""
+        env: {{CASEBOOK_X: file, CASEBOOK_Y: file}}
+        command_prefix:
+          - {PY}
+          - -c
+          - "import os; print(os.environ['CASEBOOK_X'], os.environ.get('CASEBOOK_Y'))"
+        cases:
+          - group: g
+            env: {{CASEBOOK_X: group}}
+            cases:
+              - name: from_group
+                command: ""
+                expect: {{stdout: {{contains: group file}}}}
+              - name: from_case
+                command: ""
+                env: {{CASEBOOK_Y: null, CASEBOOK_X: case}}
+                expect: {{stdout: {{contains: case None}}}}
+          - name: from_file
+            command: ""
+        """,
+    )
+    report = project.path / "report.html"
+    project.runpytest("--casebook-update", f"--casebook-html={report}").assert_outcomes(passed=4)
+    # 期待出力の見出しには env を書かない（環境変数を足しても期待出力が変わらないように）
+    assert golden(project, "from_file").endswith("----- stdout -----\nfile file\n")
+    assert not any(line.startswith("# env") for line in golden(project, "from_file").splitlines())
+    # レポートの前提条件には、ファイル全体の env と違う変数だけを出す
+    page = report.read_text(encoding="utf-8")
+    assert "<div class='line'>環境変数: CASEBOOK_X=group</div>" in page
+    assert "<div class='line'>環境変数: CASEBOOK_X=case</div>" in page
+    assert "CASEBOOK_X=file" not in page
+
+
 def test_missing_command_fails_with_message(project: pytest.Pytester) -> None:
     write_casebook(project, "cases:\n  - name: x\n    command: no-such-command-xyz\n")
     result = project.runpytest("--casebook-update")
@@ -401,6 +437,8 @@ def test_groups_can_be_selected_with_k(project: pytest.Pytester) -> None:
             "states に x",
         ),
         ("cases:\n  - name: a b\n    call: m:f\n", "name に使えるのは"),
+        ("cases:\n  - name: a\n    request: /x\n    env: {A: x}\n", "env は command のケース"),
+        ("env: [A]\ncases:\n  - name: a\n    call: m:f\n", "env は 変数名 -> 値"),
         ("cases:\n  - name: a\n    call: f\n", "'モジュール:関数' の形"),
         ("cases: [\n", "YAML として読めません"),
     ],
