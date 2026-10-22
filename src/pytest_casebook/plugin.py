@@ -337,9 +337,11 @@ def _sibling_docs(config: pytest.Config, doc: CasebookDoc) -> list[CasebookDoc]:
 
 def _find_orphans(doc: CasebookDoc, others: list[CasebookDoc]) -> list[str]:
     """
-    置き場所にある .txt のうち、どのケースも使っていない期待出力を探す
-    （golden: で別の拡張子にしたものは見ない）。
+    置き場所にあるのに、どのケースも使っていない期待出力を探す。
 
+    - 調べるのは、期待出力に使われている拡張子のファイルだけ（.txt と、golden: out.json の
+      ように書いた拡張子）。置き場所に人が置いたほかのファイル（説明の .md や、.gitkeep の
+      ような . で始まるファイル）を消し忘れと間違えないように
     - 同じ置き場所を使うほかの YAML（同じディレクトリのケースファイル）の期待出力も、
       使われているものとして数える（golden_dir: を共有しても、互いの期待出力を消し忘れと
       間違えない）
@@ -348,9 +350,9 @@ def _find_orphans(doc: CasebookDoc, others: list[CasebookDoc]) -> list[str]:
     - golden: sub/a.txt のようにサブディレクトリに置いたものも見る
     """
     root = doc.golden_dir.resolve()
-    expected = {
-        d.golden_path(c).resolve() for d in [doc, *others] for c in d.cases if c.uses_golden
-    }
+    golden_paths = [d.golden_path(c) for d in [doc, *others] for c in d.cases if c.uses_golden]
+    expected = {p.resolve() for p in golden_paths}
+    suffixes = {".txt"} | {p.suffix for p in golden_paths}
     nested = [
         d.golden_dir.resolve()
         for d in others
@@ -358,8 +360,12 @@ def _find_orphans(doc: CasebookDoc, others: list[CasebookDoc]) -> list[str]:
     ]
     return sorted(
         p.relative_to(doc.golden_dir).as_posix()
-        for p in doc.golden_dir.rglob("*.txt")
-        if p.resolve() not in expected and not any(p.resolve().is_relative_to(n) for n in nested)
+        for p in doc.golden_dir.rglob("*")
+        if p.is_file()
+        and not p.name.startswith(".")
+        and p.suffix in suffixes
+        and p.resolve() not in expected
+        and not any(p.resolve().is_relative_to(n) for n in nested)
     )
 
 

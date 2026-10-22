@@ -76,6 +76,26 @@ def test_orphan_golden_is_reported(project: pytest.Pytester) -> None:
     result.stdout.fnmatch_lines(["*にない期待出力が*['old.txt']*"])
 
 
+def test_orphan_check_follows_golden_extensions(project: pytest.Pytester) -> None:
+    """golden: で使った拡張子（.json）の消し忘れも見つけ、関係のないファイルは見ない。"""
+    write_casebook(
+        project,
+        "cases:\n"
+        "  - {name: add, call: calc:add, args: [1, 2], golden: add.json}\n"
+        "  - {name: sub, call: calc:add, args: [1, -1]}\n",
+    )
+    project.runpytest("--casebook-update")
+    golden_dir = project.path / "golden" / "casebook_calc"
+    assert (golden_dir / "add.json").exists()
+    (golden_dir / "old.json").write_text("{}", encoding="utf-8")
+    (golden_dir / "NOTES.md").write_text("期待出力のメモ", encoding="utf-8")
+    (golden_dir / ".gitkeep").write_text("", encoding="utf-8")
+
+    result = project.runpytest()
+    result.assert_outcomes(passed=2, failed=1)
+    result.stdout.fnmatch_lines(["*にない期待出力が*[[]'old.json'[]]*"])
+
+
 # =============================================================================
 # CLI のケース
 # =============================================================================
