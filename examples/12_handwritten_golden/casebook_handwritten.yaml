@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # 期待出力ファイルを手で書く（実装より先に期待値を決めるときなど）。
 #
 # 期待出力ファイルでは、# case: や # command: などのヘッダーは書かなくてよい（比べない）。

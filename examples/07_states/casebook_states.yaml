@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # 同じ操作を「通常時」「新料金」「メンテナンス中」のような状態で確かめる。
 # 作るのは YAML と conftest.py（状態を当てる pytest_casebook_setup）。
 #

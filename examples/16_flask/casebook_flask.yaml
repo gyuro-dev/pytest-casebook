@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # Flask の API を呼び、レスポンスと DB の変化を確かめる。
 # YAML の書き方は 15_fastapi と同じ（違うのは conftest.py のリクエストの送り方だけ）。
 title: Flask のメモ API

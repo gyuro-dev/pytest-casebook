@@ -1,7 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "pytest-casebook のケースファイル",
-  "description": "casebook_*.yaml の書き方。エディタ（VS Code の YAML 拡張など）でキーの補完と検証に使う。",
+  "$id": "https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json",
+  "title": "pytest-casebook case file / pytest-casebook のケースファイル",
+  "description": "How to write casebook_*.yaml. Used by editors (e.g. the YAML extension for VS Code) for key completion and validation. / casebook_*.yaml の書き方。エディタ（VS Code の YAML 拡張など）でキーの補完と検証に使う。",
   "type": "object",
   "required": [
     "cases"
@@ -10,28 +11,28 @@
   "properties": {
     "title": {
       "type": "string",
-      "description": "レポートの見出し（省略時はファイル名）"
+      "description": "Heading in the report (defaults to the file name) / レポートの見出し（省略時はファイル名）"
     },
     "description": {
       "type": "string",
-      "description": "レポートに出す説明"
+      "description": "Description shown in the report / レポートに出す説明"
     },
     "levels": {
       "type": "array",
       "items": {
         "type": "string"
       },
-      "description": "階層の呼び名（例: [大項目, 中項目, 小項目]）"
+      "description": "Names of the hierarchy levels (e.g. [Category, Subcategory, Item]) / 階層の呼び名（例: [大項目, 中項目, 小項目]）"
     },
     "states": {
       "type": "object",
-      "description": "状態名 -> 内容（名前を付けた setup:）。ケースやグループの state: で選ぶ",
+      "description": "State name -> contents (a named setup:). Selected with state: on a case or group / 状態名 -> 内容（名前を付けた setup:）。ケースやグループの state: で選ぶ",
       "additionalProperties": {
         "$ref": "#/$defs/setup"
       }
     },
     "command_prefix": {
-      "description": "どの command にも先頭に付ける引数。{casebook_dir} は YAML のディレクトリになる",
+      "description": "Arguments put before every command. {casebook_dir} becomes the directory of the YAML / どの command にも先頭に付ける引数。{casebook_dir} は YAML のディレクトリになる",
       "oneOf": [
         {
           "type": "string"
@@ -46,15 +47,15 @@
     },
     "golden_dir": {
       "type": "string",
-      "description": "期待出力の置き場所（このファイルからの相対パス）"
+      "description": "Where golden files are stored (relative to this file) / 期待出力の置き場所（このファイルからの相対パス）"
     },
     "check_orphans": {
       "type": "boolean",
-      "description": "ケースがない期待出力が残っていたら失敗にする"
+      "description": "Fail if golden files without a case are left over / ケースがない期待出力が残っていたら失敗にする"
     },
     "normalize": {
       "type": "array",
-      "description": "出力に当てる置き換え",
+      "description": "Replacements applied to the output / 出力に当てる置き換え",
       "items": {
         "type": "object",
         "required": [
@@ -64,11 +65,11 @@
         "properties": {
           "pattern": {
             "type": "string",
-            "description": "正規表現"
+            "description": "Regular expression / 正規表現"
           },
           "replace": {
             "type": "string",
-            "description": "置き換え後"
+            "description": "Replacement / 置き換え後"
           }
         }
       }
@@ -81,11 +82,11 @@
           "$ref": "#/$defs/headers"
         }
       },
-      "description": "どの request: にも重ねる既定の値"
+      "description": "Defaults merged into every request: / どの request: にも重ねる既定の値"
     },
     "meta": {
       "type": "object",
-      "description": "自由に使う情報（pytest-casebook は見ない）"
+      "description": "Free-form information (pytest-casebook does not read it) / 自由に使う情報（pytest-casebook は見ない）"
     },
     "cases": {
       "$ref": "#/$defs/items"
@@ -94,7 +95,7 @@
   "$defs": {
     "items": {
       "type": "array",
-      "description": "ケースまたはグループのリスト",
+      "description": "A list of cases or groups / ケースまたはグループのリスト",
       "items": {
         "oneOf": [
           {
@@ -120,14 +121,14 @@
         "group": {
           "type": "string",
           "minLength": 1,
-          "description": "グループの名前（入れ子の深さが階層になる）"
+          "description": "Group name (the nesting depth becomes the hierarchy level) / グループの名前（入れ子の深さが階層になる）"
         },
         "description": {
           "type": "string"
         },
         "state": {
           "type": "string",
-          "description": "中のケースの既定の状態"
+          "description": "Default state of the cases inside / 中のケースの既定の状態"
         },
         "marks": {
           "type": "array",
@@ -140,11 +141,11 @@
         },
         "skip": {
           "$ref": "#/$defs/reason",
-          "description": "中のケースすべてを、この理由でスキップする"
+          "description": "Skip every case inside, for this reason / 中のケースすべてを、この理由でスキップする"
         },
         "xfail": {
           "$ref": "#/$defs/reason",
-          "description": "中のケースすべてが、この理由で失敗すると分かっている"
+          "description": "Every case inside is expected to fail, for this reason / 中のケースすべてが、この理由で失敗すると分かっている"
         },
         "cases": {
           "$ref": "#/$defs/items"
@@ -178,14 +179,14 @@
         "name": {
           "type": "string",
           "pattern": "^[\\w.\\-]+$",
-          "description": "ケース名（期待出力のファイル名になる）"
+          "description": "Case name (becomes the golden file name) / ケース名（期待出力のファイル名になる）"
         },
         "description": {
           "type": "string",
-          "description": "確認する内容"
+          "description": "What is checked / 確認する内容"
         },
         "command": {
-          "description": "CLI として実行する引数。リストで書くと区切らずにそのまま渡す（Windows のパス向け）",
+          "description": "Arguments to run as a CLI. A list is passed as is, without splitting (useful for Windows paths) / CLI として実行する引数。リストで書くと区切らずにそのまま渡す（Windows のパス向け）",
           "oneOf": [
             {
               "type": "string"
@@ -208,7 +209,7 @@
         "call": {
           "type": "string",
           "pattern": "^[^:\\s]+:[^:\\s]+$",
-          "description": "モジュール:関数"
+          "description": "module:function / モジュール:関数"
         },
         "args": {
           "type": "array"
@@ -230,7 +231,7 @@
           "items": {
             "type": "string"
           },
-          "description": "実行後に取り出す対象（files など）"
+          "description": "Targets fetched after the run (files, etc.) / 実行後に取り出す対象（files など）"
         },
         "expect": {
           "$ref": "#/$defs/expect"
@@ -252,7 +253,7 @@
         },
         "golden": {
           "type": "string",
-          "description": "期待出力のファイル名（省略時は <name>.txt）"
+          "description": "Golden file name (defaults to <name>.txt) / 期待出力のファイル名（省略時は <name>.txt）"
         }
       }
     },
@@ -261,7 +262,7 @@
         "object",
         "null"
       ],
-      "description": "前提条件。files は作業ディレクトリに置くファイル、それ以外は pytest_casebook_setup に渡す",
+      "description": "Preconditions. files are put in the working directory; everything else is passed to pytest_casebook_setup / 前提条件。files は作業ディレクトリに置くファイル、それ以外は pytest_casebook_setup に渡す",
       "properties": {
         "files": {
           "type": "object",
@@ -286,7 +287,7 @@
         {
           "type": "string",
           "pattern": "^\\s*(([Gg][Ee][Tt]|[Pp][Oo][Ss][Tt]|[Pp][Uu][Tt]|[Pp][Aa][Tt][Cc][Hh]|[Dd][Ee][Ll][Ee][Tt][Ee]|[Hh][Ee][Aa][Dd]|[Oo][Pp][Tt][Ii][Oo][Nn][Ss])\\s+)?/\\S*\\s*$",
-          "description": "\"メソッド パス\"（メソッドを省くと GET）"
+          "description": "\"METHOD PATH\" (GET if the method is omitted) / \"メソッド パス\"（メソッドを省くと GET）"
         },
         {
           "type": "object",
@@ -316,18 +317,18 @@
               "$ref": "#/$defs/headers"
             },
             "json": {
-              "description": "JSON の本文"
+              "description": "JSON body / JSON の本文"
             },
             "body": {
               "type": "string",
-              "description": "JSON 以外の本文"
+              "description": "Non-JSON body / JSON 以外の本文"
             }
           }
         }
       ]
     },
     "text": {
-      "description": "文字列なら完全一致、{contains: ...} なら含む、{regex: ...} なら正規表現",
+      "description": "A string matches exactly, {contains: ...} matches a substring, {regex: ...} matches a regular expression / 文字列なら完全一致、{contains: ...} なら含む、{regex: ...} なら正規表現",
       "oneOf": [
         {
           "type": "string"
@@ -357,7 +358,7 @@
     "expect": {
       "type": "object",
       "minProperties": 1,
-      "description": "期待結果。ここに書いた項目だけを比べる。下の項目以外のキーは observe の対象（db.users など）",
+      "description": "Expected results. Only the items written here are compared. Other keys are observe targets (db.users, etc.) / 期待結果。ここに書いた項目だけを比べる。下の項目以外のキーは observe の対象（db.users など）",
       "not": {
         "required": [
           "return",
@@ -375,7 +376,7 @@
           "$ref": "#/$defs/text"
         },
         "return": {
-          "description": "辞書は書いたキーだけ、リストは件数と各要素を比べる。$contains・$regex・$unordered・$includes が使える"
+          "description": "Dicts compare only the keys written, lists compare the count and each item. $contains, $regex, $unordered and $includes can be used / 辞書は書いたキーだけ、リストは件数と各要素を比べる。$contains・$regex・$unordered・$includes が使える"
         },
         "raises": {
           "$ref": "#/$defs/text"
@@ -384,7 +385,7 @@
           "type": "integer"
         },
         "json": {
-          "description": "return と同じ比べ方"
+          "description": "Compared the same way as return / return と同じ比べ方"
         },
         "body": {
           "$ref": "#/$defs/text"

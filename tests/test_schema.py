@@ -72,6 +72,43 @@ def test_schema_path_is_packaged() -> None:
 
 
 @pytest.mark.parametrize(
+    "path",
+    [
+        *sorted((ROOT / "examples").glob("*/casebook_*.yaml")),
+        *sorted((ROOT / "examples-en").glob("*/casebook_*.yaml")),
+    ],
+    ids=lambda p: p.relative_to(ROOT).as_posix(),
+)
+def test_samples_point_to_the_published_schema(path: Path) -> None:
+    """サンプルの1行目のスキーマの URL が、スキーマの $id（公開している URL）と同じ。"""
+    first = path.read_text(encoding="utf-8").splitlines()[0]
+    assert first == f"# yaml-language-server: $schema={SCHEMA['$id']}"
+
+
+def test_schema_descriptions_have_english() -> None:
+    """エディタで出る説明は、英語のあとに日本語を書く（「English / 日本語」）。"""
+    texts: list[str] = []
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key in ("title", "description") and isinstance(value, str):
+                    texts.append(value)
+                else:
+                    walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(SCHEMA)
+    assert texts
+    for text in texts:
+        english, _, japanese = text.partition(" / ")
+        assert english.isascii(), text
+        assert japanese, text
+
+
+@pytest.mark.parametrize(
     "request_text",
     [
         "/users",

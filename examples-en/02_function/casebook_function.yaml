@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # Call a Python function and check its return value. This YAML is all you write.
 # The return value is kept in the golden file as JSON (a dataclass becomes __type__ plus its fields).
 title: Call a function

@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # Run the same cases against different environments (local and staging).
 #
 #   uv run pytest examples-en/17_targets                                # local

@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 title: お店のサンプル
 description: 価格計算・在庫確認・明細ファイル・注文（DB）を、CLI と Python 関数の両方から確認する
 levels: [大項目, 中項目, 小項目]

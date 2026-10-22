@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # Write the expected results directly in YAML (no golden files). This YAML is all you write.
 # Only the items you write are compared.
 title: Write expected results in YAML

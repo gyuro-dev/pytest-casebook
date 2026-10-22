@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # Organize cases into categories, subcategories and items. Nesting group: sets the depth of the hierarchy.
 #
 #   uv run pytest examples-en/05_groups --casebook-html=reports/groups.html   # see the results as a table

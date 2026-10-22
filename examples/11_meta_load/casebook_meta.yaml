@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # ケースに自分用の情報（meta:）を付け、テストと同じ YAML を pytest の外のスクリプトでも使う。
 #
 #   uv run pytest examples/11_meta_load          # テストとして実行する

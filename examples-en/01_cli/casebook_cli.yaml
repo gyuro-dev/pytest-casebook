@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # Run a CLI and compare its output with a golden file. This YAML is all you write (no conftest.py).
 #
 #   uv run pytest examples-en/01_cli --casebook-update   # create the golden files (first run only)

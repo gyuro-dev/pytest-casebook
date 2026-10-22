@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # ケースを大項目・中項目・小項目に分ける。group: を入れ子にすると、その深さが階層になる。
 #
 #   uv run pytest examples/05_groups -o casebook_lang=ja --casebook-html=reports/groups.html   # 階層の表で結果を見る

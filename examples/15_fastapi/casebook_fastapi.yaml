@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # FastAPI の API を呼び、レスポンスと DB の変化を確かめる。
 # 作るのは YAML と conftest.py（TestClient と DB の用意・リクエストの送信・行の投入と取り出し）。
 title: FastAPI の TODO API
