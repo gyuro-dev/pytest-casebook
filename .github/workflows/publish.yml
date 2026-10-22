@@ -1,0 +1,90 @@
+# Publish to TestPyPI and then PyPI when a v* tag is pushed (Trusted Publishing; no tokens).
+# v* のタグを push したら、TestPyPI に上げてから PyPI に上げる（Trusted Publishing。トークンは置かない）。
+#
+# Security / 安全のために:
+# - only the owner can create v* tags (ruleset "release tags")
+#   v* のタグを作れるのは本人だけ（ruleset「release tags」）
+# - the environments testpypi / pypi require the owner's approval and accept only v* tags
+#   environment testpypi / pypi は本人の承認が要り、v* のタグからだけ動く
+# - id-token: write is given only to the upload jobs; the build job has no cache
+#   (a poisoned cache could otherwise end up in the package)
+#   id-token: write は上げるジョブだけに付け、作るジョブではキャッシュを使わない
+#   （汚染されたキャッシュがパッケージに入らないように）
+name: Publish
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+# Never run two releases at the same time / 公開を同時に2つ動かさない
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+env:
+  UV_VERSION: "0.13.4"
+
+jobs:
+  build:
+    name: Build the distributions
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+          enable-cache: false
+      # The tag must match __version__ / タグと __version__ がそろっていることを確かめる
+      - env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(uv run --no-project python -c "import re, pathlib; print(re.search(r'__version__ = \"(.+)\"', pathlib.Path('src/pytest_casebook/__init__.py').read_text()).group(1))")
+          echo "tag: $TAG / version: $version"
+          test "$TAG" = "v$version"
+      - run: uv build
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  testpypi:
+    name: Publish to TestPyPI
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/pytest-casebook
+    permissions:
+      id-token: write # Trusted Publishing: get a short-lived token from PyPI / PyPI から短い期限のトークンを受け取る
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  pypi:
+    name: Publish to PyPI
+    needs: testpypi
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+      url: https://pypi.org/p/pytest-casebook
+    permissions:
+      id-token: write # Trusted Publishing: get a short-lived token from PyPI / PyPI から短い期限のトークンを受け取る
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3

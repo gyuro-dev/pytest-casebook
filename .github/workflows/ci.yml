@@ -1,0 +1,133 @@
+# CI: lint, type check, workflow security check, tests on Linux / Windows / macOS, and the
+# end-to-end test with Docker. "CI result" is the single check required by the main ruleset.
+# CI: lint・型の検査・ワークフローの安全性の検査・Linux / Windows / macOS のテスト・Docker を
+# 使う実起動の試験。main のルールで必須にするのは「CI result」の1つだけ。
+#
+# Security / 安全のために:
+# - every action is pinned to a commit SHA (tags can be moved) / Actions は commit の SHA で固定する
+# - the token is read-only by default; each job gets only what it needs
+#   トークンの既定の権限は空にし、ジョブごとに必要なものだけを付ける
+# - no pull_request_target, and checkout does not keep credentials
+#   pull_request_target は使わず、checkout で認証情報を残さない
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.13.4"
+  PYTHONIOENCODING: utf-8
+  # PyYAML has no wheel for Python 3.15 yet; build it without the C extension
+  # PyYAML に 3.15 の wheel がまだないので、C 拡張なしで作る
+  PYYAML_FORCE_LIBYAML: "0"
+
+jobs:
+  lint:
+    name: Lint (ruff, mypy)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+      - run: uv sync --frozen
+      - run: uv run --no-sync ruff check .
+      - run: uv run --no-sync ruff format --check .
+      - run: uv run --no-sync mypy
+
+  zizmor:
+    name: Workflow security (zizmor)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read # zizmor reads workflow runs for its online audits / zizmor がオンラインの検査で読む
+      security-events: write # upload the findings to code scanning / 結果を code scanning に送る
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@85b2b9fb8e3325e7a23d7d0a9d7ba5ae0f999e3e # v0.7.1
+
+  test:
+    name: Test (${{ matrix.os }}, Python ${{ matrix.python }}, pytest ${{ matrix.pytest }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04]
+        python: ["3.11", "3.12", "3.13", "3.14", "3.15"]
+        pytest: ["8", "9"]
+        include:
+          - {os: windows-2025, python: "3.11", pytest: "9"}
+          - {os: windows-2025, python: "3.15", pytest: "9"}
+          - {os: macos-15, python: "3.11", pytest: "9"}
+          - {os: macos-15, python: "3.15", pytest: "9"}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ matrix.python }}
+      - run: uv sync --frozen
+      # uv.lock has pytest 9; replace it with the latest pytest 8 for the pytest 8 jobs
+      # uv.lock は pytest 9 なので、pytest 8 の組だけ pytest 8 の最新に入れ替える
+      - if: matrix.pytest == '8'
+        run: uv pip install "pytest>=8,<9"
+      - run: uv run --no-sync python -c "import sys, pytest; print(sys.version, pytest.__version__)"
+      - run: uv run --no-sync pytest -p no:cacheprovider
+
+  integration:
+    name: End-to-end test (PostgreSQL + API with Docker)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+      - run: bash scripts/integration.sh
+      - if: failure()
+        run: tail -n 100 reports/integration/*.txt reports/integration/*.log 2>/dev/null || true
+
+  result:
+    name: CI result
+    if: always()
+    needs: [lint, zizmor, test, integration]
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for r in $RESULTS; do
+            if [ "$r" != "success" ]; then
+              echo "a required job did not succeed: $r"
+              exit 1
+            fi
+          done
