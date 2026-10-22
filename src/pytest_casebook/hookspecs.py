@@ -85,7 +85,9 @@ def pytest_casebook_request(
     pytest-casebook does not send HTTP itself, so this hook is required when using request:.
     With your framework's test client and an adapter from `pytest_casebook.http`, it takes
     only a few lines. For cases with a per-case working directory, this hook is called with
-    the current directory changed to it.
+    the current directory changed to it. If the case has `timeout:`, this hook is called in a
+    separate thread, and the case fails if it does not return in time (the hook is not
+    stopped and keeps running in the background).
 
     ```python
     from pytest_casebook.http import send_with_httpx_client
@@ -102,6 +104,8 @@ def pytest_casebook_request(
     pytest-casebook は HTTP を送らないので、request: を使うときはこの hook が必要。
     フレームワークのテスト用クライアントと、`pytest_casebook.http` のアダプターを使えば
     数行で書ける。作業ディレクトリがあるケースでは、そのディレクトリに移動した状態で呼ばれる。
+    ケースに `timeout:` があると、この hook は別のスレッドで呼ばれ、時間内に返らなければケースは
+    失敗する（hook は止まらず、裏で動き続ける）。
 
     ```python
     from pytest_casebook.http import send_with_httpx_client

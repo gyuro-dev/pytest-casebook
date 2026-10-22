@@ -204,7 +204,8 @@
         },
         "timeout": {
           "type": "number",
-          "exclusiveMinimum": 0
+          "exclusiveMinimum": 0,
+          "description": "Seconds before the case fails as too slow. A command is stopped; a call / request function keeps running in the background / ケースを時間切れで失敗にするまでの秒数。command は止める。call / request の関数は裏で動き続ける"
         },
         "call": {
           "type": "string",

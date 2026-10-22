@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import contextvars
 import importlib
 import inspect
 import io
@@ -11,14 +12,17 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import traceback as tb_module
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, TypeVar, cast
 
 from .messages import error
 from .serialize import describe_exception
+
+_T = TypeVar("_T")
 
 
 class CasebookRunError(Exception):
@@ -208,14 +212,40 @@ def import_callable(spec: str) -> Callable[..., Any]:
     return cast("Callable[..., Any]", obj)
 
 
-def invoke(func: Callable[..., Any], args: list[Any], kwargs: dict[str, Any]) -> CallResult:
+def invoke(
+    func: Callable[..., Any],
+    args: list[Any],
+    kwargs: dict[str, Any],
+    *,
+    timeout: float | None = None,
+) -> CallResult:
     """
     関数を呼び、戻り値または例外と、その間に出た stdout / stderr を返す。
 
     `async def` の関数（戻り値が coroutine）は、終わるまで待ってから結果を返す。
     受け止めるのは Exception だけ（SystemExit などはそのまま上げる）。
+    timeout を渡すと、別スレッドで呼び、timeout 秒たっても終わらなければ WorkerTimeout を上げる
+    （関数は止められないので、裏で動き続ける。WorkerTimeout を上げる前に、取り込みは外す）。
+    timeout が None なら、スレッドを使わずにこのスレッドで呼ぶ。
     """
-    with _capture() as (out, err):
+    if timeout is None:
+        return _call_captured(func, args, kwargs, _capture())
+    capture = _ThreadCapture()
+    try:
+        return run_with_timeout(lambda: _call_captured(func, args, kwargs, capture), timeout)
+    except WorkerTimeout:
+        capture.detach()
+        raise
+
+
+def _call_captured(
+    func: Callable[..., Any],
+    args: list[Any],
+    kwargs: dict[str, Any],
+    capture: contextlib.AbstractContextManager[tuple[io.StringIO, io.StringIO]],
+) -> CallResult:
+    """capture で stdout / stderr を取り込みながら関数を呼ぶ（invoke の中身）。"""
+    with capture as (out, err):
         try:
             value = func(*args, **kwargs)
             if inspect.iscoroutine(value):
@@ -224,3 +254,79 @@ def invoke(func: Callable[..., Any], args: list[Any], kwargs: dict[str, Any]) ->
         except Exception as e:  # noqa: BLE001
             return CallResult(error=e, stdout=out.getvalue(), stderr=err.getvalue())
     return CallResult(value=value, stdout=out.getvalue(), stderr=err.getvalue())
+
+
+class WorkerTimeout(Exception):
+    """run_with_timeout で、時間内に終わらなかった（メッセージは呼んだ側が作る）。"""
+
+
+def run_with_timeout(fn: Callable[[], _T], timeout: float) -> _T:
+    """
+    fn を別スレッド（daemon）で呼び、終わるまで最大 timeout 秒待って、その戻り値を返す。
+
+    - fn が上げた例外（SystemExit なども）は、このスレッドで上げ直す
+    - 時間内に終わらなければ WorkerTimeout を上げる。Python ではスレッドを安全に止められない
+      ので、fn は裏で動き続ける（daemon なので、プロセスの終わりは妨げない）
+    - contextvars（ケースの言語など）は、スレッドに引き継がれないので、複製して渡す
+    """
+    result: list[_T] = []
+    errors: list[BaseException] = []
+    context = contextvars.copy_context()
+
+    def target() -> None:
+        try:
+            result.append(context.run(fn))
+        # どんな例外も、待っている側で上げ直す
+        except BaseException as e:  # noqa: BLE001
+            errors.append(e)
+
+    worker = threading.Thread(target=target, name="casebook-worker", daemon=True)
+    worker.start()
+    worker.join(timeout)
+    if worker.is_alive():
+        raise WorkerTimeout
+    if errors:
+        raise errors[0]
+    return result[0]
+
+
+class _ThreadCapture:
+    """
+    別スレッドで呼ぶ関数の stdout / stderr を取り込む（invoke に timeout を渡したときに使う）。
+
+    sys.stdout はプロセスで1つなので、取り込みはスレッドではなくプロセス全体に効く（待っている
+    スレッドは何も出さないので、取り込むのは関数の出力だけになる）。_capture との違いは、時間内に
+    終わらなかったとき、待っている側が detach() で先に取り込みを外せること。そのあとで関数が
+    終わっても、sys.stdout / sys.stderr を書き戻さない（書き戻すと、そのとき動いているあとの
+    ケースの取り込みや、pytest の取り込みを壊してしまう）。
+    """
+
+    def __init__(self) -> None:
+        self.out, self.err = io.StringIO(), io.StringIO()
+        self._lock = threading.Lock()
+        self._saved: tuple[Any, Any] | None = None
+        self._detached = False
+
+    def __enter__(self) -> tuple[io.StringIO, io.StringIO]:
+        with self._lock:
+            # 関数を呼ぶ前に時間切れになっていたら、取り込まない
+            if not self._detached:
+                self._saved = (sys.stdout, sys.stderr)
+                sys.stdout, sys.stderr = self.out, self.err
+        return self.out, self.err
+
+    def __exit__(self, *exc_info: object) -> None:
+        with self._lock:
+            self._restore()
+
+    def detach(self) -> None:
+        """取り込みを外し、このあと関数が終わっても sys.stdout / sys.stderr を変えない。"""
+        with self._lock:
+            self._detached = True
+            self._restore()
+
+    def _restore(self) -> None:
+        """取り込む前のものに戻す（1回だけ。_lock を持って呼ぶ）。"""
+        if self._saved is not None:
+            sys.stdout, sys.stderr = self._saved
+            self._saved = None

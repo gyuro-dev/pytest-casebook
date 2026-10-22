@@ -227,6 +227,14 @@ ERRORS: dict[str, dict[str, str]] = {
         "matcher_list": "{where}: {name} にはリストを書いてください",
         "command_not_found": "コマンドが見つかりません: {program}",
         "command_timeout": "{timeout} 秒以内に終わりませんでした: {argv}",
+        "call_timeout": (
+            "call: {call} が {timeout} 秒以内に終わりませんでした"
+            "（関数は止められないため、裏で動き続けます）"
+        ),
+        "request_timeout": (
+            "request: {request} が {timeout} 秒以内に終わりませんでした"
+            "（pytest_casebook_request hook は止められないため、裏で動き続けます）"
+        ),
         "import_failed": "call: モジュール {module} を import できません: {error}",
         "attr_missing": "call: {spec} が見つかりません（{attr} がありません）",
         "not_callable": "call: {spec} は呼び出せません",
@@ -304,6 +312,15 @@ ERRORS: dict[str, dict[str, str]] = {
         "matcher_list": "{where}: {name} needs a list",
         "command_not_found": "command not found: {program}",
         "command_timeout": "did not finish within {timeout} seconds: {argv}",
+        "call_timeout": (
+            "call: {call} did not finish within {timeout} seconds "
+            "(the function cannot be stopped and keeps running in the background)"
+        ),
+        "request_timeout": (
+            "request: {request} did not finish within {timeout} seconds "
+            "(the pytest_casebook_request hook cannot be stopped and keeps running in the "
+            "background)"
+        ),
         "import_failed": "call: cannot import module {module}: {error}",
         "attr_missing": "call: {spec} not found (no {attr})",
         "not_callable": "call: {spec} is not callable",

@@ -395,7 +395,8 @@ HTML レポートの階層の列は、実際に使われているグループの
 | `name` | ケース名。期待出力のファイル名になるので、英数字・`_`・`-`・`.` で書く |
 | `description` | 確認する内容 |
 | `command` | CLI として実行する引数（shell と同じ書き方で区切る）。`command_prefix` の後ろに付く。`command_prefix` があれば空文字（`""`）でもよい。リスト（`[a, 'b c']`）で書くと区切らずにそのまま渡す |
-| `stdin` / `timeout` | command の標準入力 / 打ち切るまでの秒数 |
+| `stdin` | command の標準入力 |
+| `timeout` | ケースを時間切れで失敗にするまでの秒数（`command`・`call`・`request`。[詳しく](#時間の上限-timeout)） |
 | `call` | 呼び出す関数（`モジュール:関数`、`モジュール:クラス.メソッド`）。`async def` の関数は終わるまで待つ |
 | `args` / `kwargs` | 関数に渡す引数 |
 | `request` | 送る HTTP のリクエスト（`"POST /users"` か、method・path・query・headers・json・body。[書き方](#http-の-api-request)） |
@@ -636,6 +637,23 @@ expect:
 - **command（`run_in_process`）**: `sys.exit()` は終了コードに、それ以外の例外は終了コード 1 と stderr の `型名: メッセージ` にします。\
   `run_in_process(main, argv, traceback=True)` ならトレースバック全体を stderr に書きます（行番号やパスが入るため、期待出力は変わりやすくなります）
 - `setup` や `observe` の hook の中で出た例外は、比べる対象ではなくテストのエラーになります
+
+### 時間の上限 (timeout)
+
+`timeout:` は、ケースの実行にかけてよい秒数です。\
+ケースごとに書きます（ファイル全体やグループに既定の値を書くことはできません）。
+
+- **command（別プロセス）**: プロセスを止めて、ケースを失敗にします
+- **call / request**: 関数（request では `pytest_casebook_request` hook）を別のスレッドで動かし、時間内に終わらなければケースを失敗にします。\
+  Python ではスレッドを止められないため、**関数は止まりません**。\
+  終わるまで裏で動き続けます。\
+  時間切れのあとの出力は取り込まず、pytest の終了も妨げません。\
+  止まったテストを本当に打ち切りたいときは、[pytest-timeout](https://pypi.org/project/pytest-timeout/) を使ってください
+- **command（`run_in_process`）**: `pytest_casebook_run_command` hook に任せます（`case.timeout` で秒数を読めます）
+
+`timeout:` がなければ、関数と hook は今までどおりテストと同じスレッドで動きます。\
+書いたときは別のスレッドで動くので、作ったスレッドでしか使えないもの（`pytest_casebook_setup` で作った `sqlite3` の接続など）は使えません。\
+呼ぶ前に設定したコンテキスト変数（`contextvars`）は、関数からも読めます（複製を渡します）。
 
 ### hook と fixture
 

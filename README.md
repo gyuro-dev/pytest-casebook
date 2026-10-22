@@ -362,7 +362,8 @@ You can select by group name, e.g. `-k Pricing`. The HTML report only shows as m
 | `name` | Case name. It becomes the golden file name, so use letters, digits, `_`, `-`, `.` |
 | `description` | What is checked |
 | `command` | Arguments to run as a CLI (split like a shell command), appended to `command_prefix`. May be empty (`""`) if `command_prefix` is set. A list (`[a, 'b c']`) is passed as is without splitting |
-| `stdin` / `timeout` | Standard input for the command / seconds before it is stopped |
+| `stdin` | Standard input for the command |
+| `timeout` | Seconds before the case fails as too slow (`command`, `call` and `request`; [details](#timeouts-timeout)) |
 | `call` | Function to call (`module:function`, `module:Class.method`). `async def` functions are awaited |
 | `args` / `kwargs` | Arguments for the function |
 | `request` | HTTP request to send (`"POST /users"`, or method, path, query, headers, json, body; [how](#http-apis-request)) |
@@ -578,6 +579,16 @@ When to use which:
 - **command (subprocess)**: an exception inside the CLI is compared as the exit code (1 for Python) and the traceback on stderr
 - **command (`run_in_process`)**: `sys.exit()` becomes the exit code, other exceptions become exit code 1 and `TypeName: message` on stderr. With `run_in_process(main, argv, traceback=True)` the full traceback goes to stderr (it contains line numbers and paths, so golden files change more easily)
 - Exceptions in the `setup` or `observe` hooks are not compared; they are test errors
+
+### Timeouts (timeout)
+
+`timeout:` is the number of seconds a case may take to run. It is written per case (there is no default for a whole file or group).
+
+- **command (subprocess)**: the process is stopped and the case fails
+- **call / request**: the function (for request, the `pytest_casebook_request` hook) runs in a separate thread, and the case fails if it has not finished in time. Python cannot stop a thread, so **the function is not stopped**: it keeps running in the background until it returns. Its output after the timeout is not captured, and it does not keep pytest from exiting. To stop a hanging test for real, use [pytest-timeout](https://pypi.org/project/pytest-timeout/)
+- **command (`run_in_process`)**: up to the `pytest_casebook_run_command` hook (it can read `case.timeout`)
+
+Without `timeout:`, the function and the hook run in the test's own thread, as before. With it, they run in another thread, so objects that can only be used from the thread that created them (e.g. an `sqlite3` connection made in `pytest_casebook_setup`) cannot be used. Context variables (`contextvars`) set before the call are visible to the function (it receives a copy).
 
 ### Hooks and fixtures
 
