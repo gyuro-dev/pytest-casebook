@@ -210,7 +210,7 @@ def test_request_without_hook_fails(pytester: pytest.Pytester) -> None:
     write_casebook(pytester, "cases:\n  - name: a\n    request: /x\n    expect: {status: 200}\n")
     result = pytester.runpytest()
     result.assert_outcomes(failed=1, passed=1)
-    result.stdout.fnmatch_lines(["*pytest_casebook_request hook を書いてください*"])
+    result.stdout.fnmatch_lines(["*write a pytest_casebook_request hook in conftest.py*"])
 
 
 def test_request_hook_must_return_http_response(pytester: pytest.Pytester) -> None:
@@ -218,7 +218,7 @@ def test_request_hook_must_return_http_response(pytester: pytest.Pytester) -> No
     write_casebook(pytester, "cases:\n  - name: a\n    request: /x\n    expect: {status: 200}\n")
     result = pytester.runpytest()
     result.assert_outcomes(failed=1, passed=1)
-    result.stdout.fnmatch_lines(["*HttpResponse を返してください（返したもの: int）*"])
+    result.stdout.fnmatch_lines(["*must return an HttpResponse (returned: int)*"])
 
 
 @pytest.mark.parametrize(
@@ -236,6 +236,7 @@ def test_request_hook_must_return_http_response(pytester: pytest.Pytester) -> No
     ],
 )
 def test_invalid_request(pytester: pytest.Pytester, case: str, message: str) -> None:
+    pytester.makeini("[pytest]\ncasebook_lang = ja\n")
     write_casebook(pytester, f"cases:\n  - name: a\n    {case}\n")
     result = pytester.runpytest()
     result.assert_outcomes(errors=1)

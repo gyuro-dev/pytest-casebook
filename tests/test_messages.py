@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 from helpers import CALC_MODULE, golden, write_casebook
 
-from pytest_casebook.messages import LANGS, MESSAGES, TEXTS
+from pytest_casebook.messages import ERRORS, LANGS, MESSAGES, TEXTS
 
 JAPANESE = re.compile("[぀-ヿ一-鿿]")
 
@@ -23,14 +23,14 @@ def _shape(value: Any) -> Any:
     return sorted({name for _, name, _, _ in string.Formatter().parse(value) if name})
 
 
-@pytest.mark.parametrize("table", [TEXTS, MESSAGES], ids=["TEXTS", "MESSAGES"])
+@pytest.mark.parametrize("table", [TEXTS, MESSAGES, ERRORS], ids=["TEXTS", "MESSAGES", "ERRORS"])
 def test_languages_have_same_keys_and_placeholders(table: dict[str, Any]) -> None:
     assert tuple(table) == LANGS
     shapes = {lang: _shape(texts) for lang, texts in table.items()}
     assert shapes["en"] == shapes["ja"]
 
 
-@pytest.mark.parametrize("table", [TEXTS, MESSAGES], ids=["TEXTS", "MESSAGES"])
+@pytest.mark.parametrize("table", [TEXTS, MESSAGES, ERRORS], ids=["TEXTS", "MESSAGES", "ERRORS"])
 def test_english_has_no_japanese(table: dict[str, Any]) -> None:
     assert not JAPANESE.search(repr(table["en"]))
 

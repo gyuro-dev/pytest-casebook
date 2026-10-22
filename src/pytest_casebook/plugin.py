@@ -36,7 +36,7 @@ from .golden import (
     write_golden,
 )
 from .http import HttpResponse
-from .messages import LANGS, MESSAGES, TEXTS
+from .messages import LANGS, MESSAGES, TEXTS, error, language
 from .model import (
     DEFAULT_GOLDEN_DIR,
     DEFAULT_STATE,
@@ -121,7 +121,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addini(
         "casebook_lang",
         default="en",
-        help=f"HTML レポートと、比較の失敗のメッセージの言語（{' / '.join(LANGS)}）",
+        help=f"HTML レポートとメッセージの言語（{' / '.join(LANGS)}）",
     )
 
 
@@ -129,9 +129,7 @@ def _texts(config: pytest.Config) -> dict[str, Any]:
     """ini の casebook_lang の言語の、レポートの文言。"""
     lang = config.getini("casebook_lang")
     if lang not in TEXTS:
-        raise pytest.UsageError(
-            f"casebook_lang は {' / '.join(LANGS)} のどれかにしてください: {lang}"
-        )
+        raise pytest.UsageError(f"casebook_lang must be one of {' / '.join(LANGS)}: {lang}")
     return TEXTS[lang]
 
 
@@ -301,18 +299,22 @@ def _make_test(doc: CasebookDoc, case: Case) -> Callable[..., None]:
         tmp_path_factory: pytest.TempPathFactory,
         request: pytest.FixtureRequest,
     ) -> None:
-        _run_case(request, doc, case, casebook_env, tmp_path_factory)
+        # 実行の誤り（コマンドが見つからないなど）のメッセージを、ini の言語で出す
+        with language(request.config.getini("casebook_lang")):
+            _run_case(request, doc, case, casebook_env, tmp_path_factory)
 
     return casebook_test
 
 
 def _load_doc(config: pytest.Config, path: Path) -> CasebookDoc:
     """ini の設定を当てて、ケースファイルを読む。"""
+    _texts(config)  # casebook_lang を確かめる
     return load(
         path,
         golden_dir=path.parent / config.getini("casebook_golden_dir") / path.stem,
-        levels=tuple(config.getini("casebook_levels") or _texts(config)["levels"]),
+        levels=tuple(config.getini("casebook_levels")) or None,
         command_prefix=tuple(shlex.split(config.getini("casebook_command_prefix"))),
+        lang=config.getini("casebook_lang"),
     )
 
 
@@ -544,14 +546,9 @@ def _execute_request(
             case=case, request=case.request, env=env, workdir=workdir, config=config
         )
     if response is None:
-        raise CasebookRunError(
-            "request: を送れません（conftest.py に pytest_casebook_request hook を書いてください）"
-        )
+        raise CasebookRunError(error("no_request_hook"))
     if not isinstance(response, HttpResponse):
-        raise CasebookRunError(
-            "pytest_casebook_request hook は HttpResponse を返してください"
-            f"（返したもの: {type(response).__name__}）"
-        )
+        raise CasebookRunError(error("bad_response", type=type(response).__name__))
     return _Outcome(
         header=[("request", case.request.display), ("status", str(response.status))],
         response=response,
@@ -573,10 +570,7 @@ def _observe(
         target=target, case=case, env=env, workdir=workdir, config=config
     )
     if value is None:
-        raise CasebookRunError(
-            f"observe: {target} を取り出せません"
-            "（pytest_casebook_observe hook がないか、None を返しました）"
-        )
+        raise CasebookRunError(error("observe_failed", target=target))
     return value
 
 

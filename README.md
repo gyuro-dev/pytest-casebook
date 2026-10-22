@@ -46,7 +46,7 @@ cases:
                   return: {discount: 5, total: 45}
 ```
 
-> **Note**: the HTML report and the messages of failed comparisons (golden files and `expect:`) are in English by default; set `casebook_lang = "ja"` for Japanese. Other error messages, such as mistakes in the YAML, are currently in Japanese. The YAML keys, options and the Python API are in English.
+> **Note**: the HTML report and the messages (failed comparisons, mistakes in the YAML, errors while running a case) are in English by default; set `casebook_lang = "ja"` for Japanese. The YAML keys, options and the Python API are in English.
 
 ## When to use it
 
@@ -719,7 +719,7 @@ Results are one of: passed, updated (rewritten by `--casebook-update`), skipped,
 | `casebook_encoding` | `utf-8` | encoding of command output |
 | `casebook_builtin_patterns` | `true` | replace timestamps and UUIDs with `<datetime>` / `<uuid>` |
 | `casebook_html_title` | depends on `casebook_lang` (`en`: `Test Specification`, `ja`: `試験項目表`) | title of the HTML report |
-| `casebook_lang` | `en` | language of the HTML report and of the messages of failed comparisons (golden files and `expect:`): `en` or `ja`. Other error messages stay in Japanese |
+| `casebook_lang` | `en` | language of the HTML report and the messages (failed comparisons, mistakes in the YAML, errors while running a case): `en` or `ja` |
 
 ## Development (for people working on this repository)
 

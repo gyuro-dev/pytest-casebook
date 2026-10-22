@@ -52,6 +52,7 @@ import yaml
 
 from .expect import find_matcher_errors
 from .http import HttpRequest
+from .messages import TEXTS, error, language
 
 # ケース名は期待出力のファイル名になるため、ファイル名に使える文字だけにする
 NAME_RE = re.compile(r"^[\w.\-]+$")
@@ -92,7 +93,6 @@ _CASE_KEYS = {
 }
 
 DEFAULT_STATE = "default"
-DEFAULT_LEVELS = ("大項目", "中項目", "小項目")
 DEFAULT_GOLDEN_DIR = "golden"
 
 # expect に書ける、実行結果そのものの項目（それ以外のキーは observe の対象として扱う）
@@ -294,7 +294,7 @@ def one_line(text: Any) -> str:
 def _check_keys(obj: dict[str, Any], allowed: set[str], where: str) -> None:
     unknown = sorted(set(obj) - allowed)
     if unknown:
-        raise CasebookError(f"{where}: 知らないキーがあります: {', '.join(unknown)}")
+        raise CasebookError(error("unknown_keys", where=where, keys=", ".join(unknown)))
 
 
 def _str(value: Any, where: str, key: str, *, required: bool = False) -> str:
@@ -302,14 +302,14 @@ def _str(value: Any, where: str, key: str, *, required: bool = False) -> str:
     if value is None and not required:
         return ""
     if not isinstance(value, str) or (required and not value.strip()):
-        raise CasebookError(f"{where}: {key} は文字列で書いてください")
+        raise CasebookError(error("not_string", where=where, key=key))
     return value
 
 
 def _bool(value: Any, where: str, key: str) -> bool:
     """真偽値を確かめる（"false" のような文字列を True と取り違えないように）。"""
     if not isinstance(value, bool):
-        raise CasebookError(f"{where}: {key} は true か false で書いてください")
+        raise CasebookError(error("not_bool", where=where, key=key))
     return value
 
 
@@ -317,7 +317,7 @@ def _str_list(value: Any, where: str, key: str) -> tuple[str, ...]:
     if value is None:
         return ()
     if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
-        raise CasebookError(f"{where}: {key} は文字列のリストで書いてください")
+        raise CasebookError(error("not_string_list", where=where, key=key))
     return tuple(value)
 
 
@@ -332,18 +332,18 @@ def _normalize_rules(value: Any, where: str) -> list[tuple[re.Pattern[str], str]
     if value is None:
         return []
     if not isinstance(value, list):
-        raise CasebookError(f"{where}: normalize は {{pattern, replace}} のリストで書いてください")
+        raise CasebookError(error("normalize_list", where=where))
     rules: list[tuple[re.Pattern[str], str]] = []
     for i, rule in enumerate(value):
         loc = f"{where}: normalize[{i}]"
         if not isinstance(rule, dict):
-            raise CasebookError(f"{loc}: {{pattern, replace}} の形で書いてください")
+            raise CasebookError(error("normalize_item", where=loc))
         _check_keys(rule, {"pattern", "replace"}, loc)
         pattern = _str(rule.get("pattern"), loc, "pattern", required=True)
         try:
             rules.append((re.compile(pattern), _str(rule.get("replace"), loc, "replace")))
         except re.error as e:
-            raise CasebookError(f"{loc}: 正規表現の誤りです: {e}") from None
+            raise CasebookError(error("bad_regex", where=loc, error=e)) from None
     return rules
 
 
@@ -351,8 +351,9 @@ def load(
     path: str | Path,
     *,
     golden_dir: str | Path | None = None,
-    levels: tuple[str, ...] = DEFAULT_LEVELS,
+    levels: tuple[str, ...] | None = None,
     command_prefix: tuple[str, ...] = (),
+    lang: str = "en",
 ) -> CasebookDoc:
     """
     Load a case file. Call this to use the same YAML as the tests from outside pytest
@@ -371,12 +372,14 @@ def load(
     :param golden_dir: where golden files are stored when the YAML has no `golden_dir`
         (defaults to `<file's directory>/golden/<file name without extension>`, the same as
         the pytest default)
-    :param levels: names of the hierarchy levels when the YAML has no `levels`
+    :param levels: names of the hierarchy levels when the YAML has no `levels` (defaults to
+        those of `lang`: `Category / Subcategory / Item` for `en`)
     :param command_prefix: arguments put before the command when the YAML has no
         `command_prefix`
     :return: the validated contents of the case file
     :raises CasebookError: when the file cannot be read as YAML or is written incorrectly
     :raises OSError: when the file cannot be read
+    :param lang: language of the error messages and the default `levels`: `en` or `ja`
     :raises UnicodeDecodeError: when the file is not UTF-8
 
     ケースファイルを読み込む。pytest の外（デモ用のスクリプトなど）から、
@@ -395,36 +398,40 @@ def load(
     :param golden_dir: YAML に `golden_dir` がないときの期待出力の置き場所
         （省略時は pytest の既定と同じ
         `<ファイルのディレクトリ>/golden/<拡張子を除いたファイル名>`）
-    :param levels: YAML に `levels` がないときの階層の呼び名
+    :param levels: YAML に `levels` がないときの階層の呼び名（省略時は `lang` の言語の既定。
+        `en` なら `Category / Subcategory / Item`）
     :param command_prefix: YAML に `command_prefix` がないときに command の前に付ける引数
+    :param lang: 書き方の誤りのメッセージと、`levels` の既定の言語。`en` か `ja`
     :return: 検証済みのケースファイルの内容
     :raises CasebookError: YAML として読めない、または書き方に誤りがあるとき
     :raises OSError: ファイルを読めないとき
     :raises UnicodeDecodeError: UTF-8 でないとき
     """
+    if lang not in TEXTS:
+        raise ValueError(f"lang must be one of {' / '.join(TEXTS)}: {lang}")
     path = Path(path)
-    loader = _LineLoader(path.read_text(encoding="utf-8"))
-    try:
-        data = loader.get_single_data()
-    except yaml.YAMLError as e:
-        hint = ""
-        if "mapping values are not allowed" in str(e):
-            # 一番よくある書き間違い（description: setup: の説明 など）
-            hint = (
-                "\nヒント: 値の途中に「: 」（コロンと空白）があると区切りとして読まれます。"
-                '値全体を " で囲んでください（例: description: "setup: の説明"）'
-            )
-        raise CasebookError(f"{path.name}: YAML として読めません: {e}{hint}") from None
-    finally:
-        loader.dispose()
-    return parse_document(
-        data,
-        path,
-        golden_dir=Path(golden_dir) if golden_dir else path.parent / DEFAULT_GOLDEN_DIR / path.stem,
-        levels=levels,
-        command_prefix=command_prefix,
-        source_lines=loader.lines,
-    )
+    with language(lang):
+        loader = _LineLoader(path.read_text(encoding="utf-8"))
+        try:
+            data = loader.get_single_data()
+        except yaml.YAMLError as e:
+            hint = ""
+            if "mapping values are not allowed" in str(e):
+                # 一番よくある書き間違い（description: setup: の説明 など）
+                hint = error("yaml_hint")
+            raise CasebookError(error("yaml_error", where=path.name, error=e, hint=hint)) from None
+        finally:
+            loader.dispose()
+        return parse_document(
+            data,
+            path,
+            golden_dir=(
+                Path(golden_dir) if golden_dir else path.parent / DEFAULT_GOLDEN_DIR / path.stem
+            ),
+            levels=levels if levels is not None else TEXTS[lang]["levels"],
+            command_prefix=command_prefix,
+            source_lines=loader.lines,
+        )
 
 
 class _LineLoader(yaml.SafeLoader):
@@ -471,14 +478,14 @@ def parse_document(
     """
     where = path.name
     if not isinstance(data, dict):
-        raise CasebookError(f"{where}: 先頭は title や cases を持つマッピングで書いてください")
+        raise CasebookError(error("top_mapping", where=where))
     _check_keys(data, _TOP_KEYS, where)
 
     states = data.get("states")
     if states is not None and not (
         isinstance(states, dict) and all(isinstance(k, str) for k in states)
     ):
-        raise CasebookError(f"{where}: states は 状態名 -> 内容 のマッピングで書いてください")
+        raise CasebookError(error("states_mapping", where=where))
     # 状態は「名前を付けた setup:」なので、setup: と同じ書き方であることを確かめる
     for name, value in (states or {}).items():
         _parse_setup(value, f"{where}: states.{name}")
@@ -508,7 +515,7 @@ def parse_document(
     )
 
     if "cases" not in data:
-        raise CasebookError(f"{where}: cases がありません")
+        raise CasebookError(error("no_cases", where=where))
     _walk(data["cases"], doc, (), DEFAULT_STATE, (), {}, {}, f"{where}: cases")
 
     seen: dict[str, int] = {}
@@ -516,7 +523,7 @@ def parse_document(
         seen[case.name] = seen.get(case.name, 0) + 1
     duplicates = sorted(name for name, count in seen.items() if count > 1)
     if duplicates:
-        raise CasebookError(f"{where}: ケース名が重複しています: {', '.join(duplicates)}")
+        raise CasebookError(error("duplicate_names", where=where, names=", ".join(duplicates)))
     doc._source_lines = {}
     return doc
 
@@ -533,13 +540,13 @@ def _walk(
 ) -> None:
     """グループを再帰的にたどり、ケースを `doc.cases` に順に追加する。"""
     if not isinstance(items, list):
-        raise CasebookError(f"{where}: ケースまたはグループのリストで書いてください")
+        raise CasebookError(error("items_list", where=where))
     for i, item in enumerate(items):
         # 書き方の誤りを知らせるときに、YAML の何行目かも出す
         line = doc._source_lines.get(id(item)) if isinstance(item, dict) else None
-        loc = f"{where}[{i}]" + (f"（{line + 1} 行目）" if line is not None else "")
+        loc = f"{where}[{i}]" + (error("line", line=line + 1) if line is not None else "")
         if not isinstance(item, dict):
-            raise CasebookError(f"{loc}: ケースまたはグループをマッピングで書いてください")
+            raise CasebookError(error("item_mapping", where=loc))
         if "group" in item:
             _check_keys(item, _GROUP_KEYS, loc)
             group = Group(
@@ -554,7 +561,7 @@ def _walk(
                 (*marks, *_str_list(item.get("marks"), loc, "marks")),
                 {**meta, **_meta(item.get("meta"), loc)},
                 {**flags, **_flags(item, loc)},
-                f"{loc}（グループ {group.name}）.cases",
+                f"{loc}{error('in_group', name=group.name)}.cases",
             )
         else:
             doc.cases.append(_parse_case(item, doc, groups, state, marks, meta, flags, loc))
@@ -573,11 +580,11 @@ def _parse_case(
     _check_keys(item, _CASE_KEYS, loc)
     name = _str(item.get("name"), loc, "name", required=True)
     if not NAME_RE.match(name):
-        raise CasebookError(f"{loc}: name に使えるのは英数字・_・-・. だけです: {name!r}")
-    loc = f"{loc}（ケース {name}）"
+        raise CasebookError(error("bad_name", where=loc, name=repr(name)))
+    loc = f"{loc}{error('in_case', name=name)}"
 
     if sum(key in item for key in ("command", "call", "request")) != 1:
-        raise CasebookError(f"{loc}: command・call・request のどれか1つだけを書いてください")
+        raise CasebookError(error("one_action", where=loc))
     command = None
     command_argv = None
     if isinstance(item.get("command"), list):
@@ -585,19 +592,19 @@ def _parse_case(
         command_argv = _str_list(item["command"], loc, "command")
         command = shlex.join(command_argv)
         if not command_argv and not doc.command_prefix:
-            raise CasebookError(f"{loc}: command が空です（command_prefix もありません）")
+            raise CasebookError(error("empty_command", where=loc))
     elif "command" in item:
         # 空文字も書ける（command_prefix だけで実行するとき）
         command = _str(item["command"], loc, "command")
         if not command and not doc.command_prefix:
-            raise CasebookError(f"{loc}: command が空です（command_prefix もありません）")
+            raise CasebookError(error("empty_command", where=loc))
     call = _str(item["call"], loc, "call", required=True) if "call" in item else None
     if call is not None and ":" not in call:
-        raise CasebookError(f"{loc}: call は 'モジュール:関数' の形で書いてください: {call!r}")
+        raise CasebookError(error("bad_call", where=loc, call=repr(call)))
     if call is None and ("args" in item or "kwargs" in item):
-        raise CasebookError(f"{loc}: args / kwargs は call のケースにだけ書けます")
+        raise CasebookError(error("args_only_call", where=loc))
     if command is None and "stdin" in item:
-        raise CasebookError(f"{loc}: stdin は command のケースにだけ書けます")
+        raise CasebookError(error("stdin_only_command", where=loc))
     request = (
         _parse_request(item["request"], doc.request_headers, loc) if "request" in item else None
     )
@@ -605,23 +612,23 @@ def _parse_case(
 
     args = item.get("args", [])
     if not isinstance(args, list):
-        raise CasebookError(f"{loc}: args はリストで書いてください")
+        raise CasebookError(error("args_list", where=loc))
     kwargs = item.get("kwargs", {})
     if not (isinstance(kwargs, dict) and all(isinstance(k, str) for k in kwargs)):
-        raise CasebookError(f"{loc}: kwargs は 引数名 -> 値 のマッピングで書いてください")
+        raise CasebookError(error("kwargs_mapping", where=loc))
     timeout = item.get("timeout")
     if timeout is not None and (isinstance(timeout, bool) or not isinstance(timeout, int | float)):
-        raise CasebookError(f"{loc}: timeout は秒数（数値）で書いてください")
+        raise CasebookError(error("timeout_number", where=loc))
 
     state = _str(item.get("state"), loc, "state") or state
     if doc.states is None:
         if state != DEFAULT_STATE:
-            raise CasebookError(f"{loc}: states がないのに state: {state} を指定しています")
+            raise CasebookError(error("state_without_states", where=loc, state=state))
         state_data = None
     elif state in doc.states:
         state_data = doc.states[state]
     else:
-        raise CasebookError(f"{loc}: states に {state} がありません")
+        raise CasebookError(error("unknown_state", where=loc, state=state))
 
     # 状態の内容に、ケースの setup: を上書きで重ねる（files はファイル名ごとに重ねる）
     base, base_files = _parse_setup(state_data, loc)
@@ -670,7 +677,7 @@ def _meta(value: Any, loc: str) -> dict[str, Any]:
     if value is None:
         return {}
     if not (isinstance(value, dict) and all(isinstance(k, str) for k in value)):
-        raise CasebookError(f"{loc}: meta は キー -> 値 のマッピングで書いてください")
+        raise CasebookError(error("meta_mapping", where=loc))
     return dict(value)
 
 
@@ -679,20 +686,17 @@ def _parse_setup(value: Any, loc: str) -> tuple[dict[str, Any] | None, dict[str,
     if value is None:
         return None, {}
     if not (isinstance(value, dict) and all(isinstance(k, str) for k in value)):
-        raise CasebookError(f"{loc}: setup は マッピングで書いてください")
+        raise CasebookError(error("setup_mapping", where=loc))
     data = dict(value)
     files = data.pop("files", None) or {}
     if not (
         isinstance(files, dict)
         and all(isinstance(k, str) and isinstance(v, str) for k, v in files.items())
     ):
-        raise CasebookError(f"{loc}: setup.files は ファイル名 -> 内容（文字列）で書いてください")
+        raise CasebookError(error("setup_files", where=loc))
     for name in files:
         if not _is_inside(name):
-            raise CasebookError(
-                f"{loc}: setup.files のファイル名は作業ディレクトリからの相対パスで書いてください: "
-                f"{name!r}"
-            )
+            raise CasebookError(error("setup_file_path", where=loc, name=repr(name)))
     return data, files
 
 
@@ -700,9 +704,7 @@ def _golden_name(value: Any, loc: str) -> str | None:
     """golden:（期待出力のファイル名）を確かめる。期待出力の置き場所の外は指せない。"""
     name = _str(value, loc, "golden") or None
     if name is not None and not _is_inside(name):
-        raise CasebookError(
-            f"{loc}: golden は期待出力の置き場所からの相対パスで書いてください: {name!r}"
-        )
+        raise CasebookError(error("golden_path", where=loc, name=repr(name)))
     return name
 
 
@@ -729,42 +731,39 @@ def _check_text_expect(value: Any, loc: str, key: str) -> None:
                 try:
                     re.compile(pattern)
                 except re.error as e:
-                    raise CasebookError(f"{loc}: expect.{key} の正規表現の誤りです: {e}") from None
+                    raise CasebookError(
+                        error("expect_regex", where=loc, key=key, error=e)
+                    ) from None
             return
-    raise CasebookError(
-        f"{loc}: expect.{key} は文字列か、{{contains: ...}} / {{regex: ...}} の"
-        "どれかで書いてください"
-    )
+    raise CasebookError(error("expect_text", where=loc, key=key))
 
 
 def _parse_expect(value: Any, kind: str, loc: str) -> dict[str, Any]:
     """expect: を確かめる（ケースの種類に合う項目か、比べ方の書き方が正しいか）。"""
     if not (isinstance(value, dict) and value and all(isinstance(k, str) for k in value)):
-        raise CasebookError(f"{loc}: expect は 項目 -> 期待値 のマッピングで書いてください")
+        raise CasebookError(error("expect_mapping", where=loc))
     allowed = EXPECT_KEYS_BY_KIND[kind]
     for key in value:
         if key in RESULT_EXPECT_KEYS and key not in allowed:
             kinds = " / ".join(k for k, keys in EXPECT_KEYS_BY_KIND.items() if key in keys)
-            raise CasebookError(f"{loc}: expect.{key} は {kinds} のケースにだけ書けます")
+            raise CasebookError(error("expect_kind", where=loc, key=key, kinds=kinds))
     if "return" in value and "raises" in value:
-        raise CasebookError(
-            f"{loc}: expect には return と raises のどちらか一方だけを書いてください"
-        )
+        raise CasebookError(error("return_and_raises", where=loc))
     if "exit_code" in value and (
         isinstance(value["exit_code"], bool) or not isinstance(value["exit_code"], int)
     ):
-        raise CasebookError(f"{loc}: expect.exit_code は整数で書いてください")
+        raise CasebookError(error("exit_code_int", where=loc))
     if "status" in value and (
         isinstance(value["status"], bool) or not isinstance(value["status"], int)
     ):
-        raise CasebookError(f"{loc}: expect.status は整数で書いてください")
+        raise CasebookError(error("status_int", where=loc))
     for key in TEXT_EXPECT_KEYS:
         if key in value:
             _check_text_expect(value[key], loc, key)
     if "headers" in value:
         headers = value["headers"]
         if not (isinstance(headers, dict) and all(isinstance(k, str) for k in headers)):
-            raise CasebookError(f"{loc}: expect.headers は ヘッダー名 -> 値 で書いてください")
+            raise CasebookError(error("headers_mapping", where=loc))
         for name, expected in headers.items():
             _check_text_expect(expected, loc, f"headers.{name}")
     # return・json・observe の対象の値の中にある $contains などの書き間違いを探す
@@ -782,7 +781,7 @@ def _str_mapping(value: Any, loc: str, key: str) -> dict[str, str]:
     if value is None:
         return {}
     if not (isinstance(value, dict) and all(isinstance(k, str) for k in value)):
-        raise CasebookError(f"{loc}: {key} は 名前 -> 値 のマッピングで書いてください")
+        raise CasebookError(error("name_value_mapping", where=loc, key=key))
     return {k: str(v) for k, v in value.items()}
 
 
@@ -791,7 +790,7 @@ def _request_defaults(value: Any, where: str) -> dict[str, str]:
     if value is None:
         return {}
     if not isinstance(value, dict):
-        raise CasebookError(f"{where}: request_defaults は マッピングで書いてください")
+        raise CasebookError(error("request_defaults_mapping", where=where))
     _check_keys(value, {"headers"}, f"{where}: request_defaults")
     return _str_mapping(value.get("headers"), where, "request_defaults.headers")
 
@@ -809,24 +808,22 @@ def _parse_request(value: Any, default_headers: dict[str, str], loc: str) -> Htt
         if len(parts) == 1:
             parts = ["GET", *parts]
         if len(parts) != 2:
-            raise CasebookError(
-                f"{loc}: request は 'メソッド パス'（例: 'POST /users'）の形で書いてください"
-            )
+            raise CasebookError(error("request_form", where=loc))
         value = {"method": parts[0], "path": parts[1]}
     if not isinstance(value, dict):
-        raise CasebookError(f"{loc}: request は 文字列かマッピングで書いてください")
+        raise CasebookError(error("request_type", where=loc))
     _check_keys(value, _REQUEST_KEYS, f"{loc}: request")
     method = _str(value.get("method", "GET"), loc, "request.method", required=True).upper()
     if method not in _HTTP_METHODS:
-        raise CasebookError(f"{loc}: request.method が HTTP のメソッドではありません: {method}")
+        raise CasebookError(error("request_method", where=loc, method=method))
     path = _str(value.get("path"), loc, "request.path", required=True)
     if not path.startswith("/"):
-        raise CasebookError(f"{loc}: request.path は / で始めてください: {path!r}")
+        raise CasebookError(error("request_path", where=loc, path=repr(path)))
     query = value.get("query") or {}
     if not (isinstance(query, dict) and all(isinstance(k, str) for k in query)):
-        raise CasebookError(f"{loc}: request.query は 名前 -> 値 のマッピングで書いてください")
+        raise CasebookError(error("query_mapping", where=loc))
     if "json" in value and "body" in value:
-        raise CasebookError(f"{loc}: request には json と body のどちらか一方だけを書いてください")
+        raise CasebookError(error("json_and_body", where=loc))
     return HttpRequest(
         method=method,
         path=path,
