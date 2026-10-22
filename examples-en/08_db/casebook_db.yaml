@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # Insert rows into the DB before the case, and check the DB content after it runs.
 # You write the YAML and a conftest.py (preparing the DB, inserting rows, reading rows).
 title: Use a DB

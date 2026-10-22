@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # Check an HTTP API (request:). The smallest example, without a framework.
 # You write the YAML and a conftest.py (pytest_casebook_request, which sends the request).
 title: request basics

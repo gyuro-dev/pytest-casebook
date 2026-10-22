@@ -108,6 +108,7 @@ myproject/
 ファイル名は `casebook_` で始めます（`*.casebook.yaml` でも構いません）。
 
 ```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 title: hello コマンド
 command_prefix: [hello]              # どのケースでも先頭に付ける部分（確かめたいコマンド）
 
@@ -715,21 +716,32 @@ patch = ["subprocess"]
 
 ### エディタでの補完と検証
 
-YAML の書き方の JSON Schema を同梱しています（`pytest_casebook.SCHEMA_PATH`）。\
-VS Code の YAML 拡張（Red Hat）で、キーの補完と、入力中の検証が効きます。
+YAML の書き方の JSON Schema を、GitHub で公開し、パッケージにも同梱しています（`pytest_casebook.SCHEMA_PATH`）。\
+VS Code の YAML 拡張（Red Hat）など yaml-language-server を使うエディタで、キーの補完、カーソルを合わせたときの説明、入力中の検証が効きます。
 
-```bash
-uv run python -c "import pytest_casebook; print(pytest_casebook.SCHEMA_PATH.as_uri())"
+いちばん簡単なのは、ケースファイルの1行目に次のコメントを書くことです（examples/ のサンプルにも書いてあります）。
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 ```
 
-表示されたパスを、VS Code の設定（settings.json）に書きます。
+`main` は開発中の最新の版を指します。\
+入れた版に合わせるときは、`main` の代わりにその版のタグを使います（例: `https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/v0.2.0/src/pytest_casebook/casebook.schema.json`）。
+
+コメントを書かずにすべてのケースファイルに当てるときは、VS Code の設定（settings.json）に書きます。
 
 ```json
 {
   "yaml.schemas": {
-    "file:///.../pytest_casebook/casebook.schema.json": ["casebook_*.yaml", "*.casebook.yaml"]
+    "https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json": ["casebook_*.yaml", "*.casebook.yaml"]
   }
 }
+```
+
+ネットワークにつながらないときは、パッケージに同梱したスキーマを使います（表示された `file:///...` のパスを、URL の代わりに書きます）。
+
+```bash
+uv run python -c "import pytest_casebook; print(pytest_casebook.SCHEMA_PATH.as_uri())"
 ```
 
 失敗したケースは、YAML の何行目に書いたものかを出します（`[wrong]（8 行目）`）。\

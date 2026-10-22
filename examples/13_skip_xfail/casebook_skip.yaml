@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # 理由を付けてケースを止める（skip:）、または失敗すると分かっていることを書く（xfail:）。
 # 理由はターミナル（pytest -rsx）と HTML レポートの結果の列に出る。作るのはこの YAML だけ。
 title: スキップと既知の不具合

@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # Call a FastAPI API and check the response and the change in the DB.
 # You write the YAML and a conftest.py (preparing the TestClient and DB, sending requests, inserting and reading rows).
 title: FastAPI TODO API

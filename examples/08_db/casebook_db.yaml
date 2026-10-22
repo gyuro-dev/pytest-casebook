@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # ケースの前に DB に行を入れ、実行後の DB の中身を確かめる。
 # 作るのは YAML と conftest.py（DB の用意・行の投入・行の取り出し）。
 title: DB を使う

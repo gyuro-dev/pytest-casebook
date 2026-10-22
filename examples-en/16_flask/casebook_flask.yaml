@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # Call a Flask API and check the response and the change in the DB.
 # The YAML is written the same way as 15_fastapi (only how conftest.py sends requests differs).
 title: Flask notes API

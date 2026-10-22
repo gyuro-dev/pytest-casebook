@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # Python の関数を呼んで、戻り値を確かめる。作るのはこの YAML だけ。
 # 戻り値は JSON にして期待出力ファイルに残る（dataclass は __type__ とフィールドになる）。
 title: 関数を呼ぶ

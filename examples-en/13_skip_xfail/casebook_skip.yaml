@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # Stop a case with a reason (skip:), or record that it is known to fail (xfail:).
 # The reason appears in the terminal (pytest -rsx) and in the result column of the HTML report.
 # This YAML is all you write.

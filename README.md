@@ -90,6 +90,7 @@ myproject/
 The file name starts with `casebook_` (`*.casebook.yaml` also works).
 
 ```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 title: hello command
 command_prefix: [hello]              # prepended to every case (the command under test)
 
@@ -650,20 +651,30 @@ patch = ["subprocess"]
 
 ### Editor completion and validation
 
-A JSON Schema for the YAML is bundled (`pytest_casebook.SCHEMA_PATH`). With the YAML extension for VS Code (Red Hat) you get key completion and validation as you type.
+A JSON Schema for the YAML is published on GitHub and bundled with the package (`pytest_casebook.SCHEMA_PATH`). Editors that use yaml-language-server, such as VS Code with the YAML extension (Red Hat), then give you key completion, descriptions on hover and validation as you type.
 
-```bash
-uv run python -c "import pytest_casebook; print(pytest_casebook.SCHEMA_PATH.as_uri())"
+The easiest way is to put this comment on the first line of a case file (the samples in examples-en/ have it):
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 ```
 
-Put the printed path into your VS Code settings (settings.json):
+`main` follows the latest development version. To match the version you installed, use its tag instead (e.g. `https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/v0.2.0/src/pytest_casebook/casebook.schema.json`).
+
+To apply the schema to every case file without the comment, map it in your VS Code settings (settings.json):
 
 ```json
 {
   "yaml.schemas": {
-    "file:///.../pytest_casebook/casebook.schema.json": ["casebook_*.yaml", "*.casebook.yaml"]
+    "https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json": ["casebook_*.yaml", "*.casebook.yaml"]
   }
 }
+```
+
+Without network access, use the schema bundled with the package instead (put the printed `file:///...` path in place of the URL):
+
+```bash
+uv run python -c "import pytest_casebook; print(pytest_casebook.SCHEMA_PATH.as_uri())"
 ```
 
 A failed case shows the line in the YAML where it is written (`[wrong] (line 8)`). pytest receives it as the test location, so JUnit XML (xunit1) and IDEs can jump to that line.

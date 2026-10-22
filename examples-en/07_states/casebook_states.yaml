@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # Check the same operation under states such as "normal", "new pricing" and "maintenance".
 # You write the YAML and a conftest.py (pytest_casebook_setup, which applies the state).
 #

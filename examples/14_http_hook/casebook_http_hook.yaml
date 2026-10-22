@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # HTTP の API を確かめる（request:）。フレームワークを使わない最小の例。
 # 作るのは YAML と conftest.py（リクエストを送る pytest_casebook_request）。
 title: request の基本

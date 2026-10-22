@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # CLI を実行して、出力を期待出力ファイルと比べる。作るのはこの YAML だけ（conftest.py は要らない）。
 #
 #   uv run pytest examples/01_cli --casebook-update   # 期待出力ファイルを作る（最初の1回）

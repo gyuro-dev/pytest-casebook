@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # Replace values that change on every run with fixed placeholders before comparing. This YAML is all you write.
 #
 # - Date-times (such as 2026-10-19T12:34:56+00:00) and UUIDs become <datetime> / <uuid> out of the box

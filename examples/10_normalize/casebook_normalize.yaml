@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 # 実行のたびに変わる値を、決まった表記に置き換えてから比べる。作るのはこの YAML だけ。
 #
 # - 日時（2026-10-19T12:34:56+00:00 など）と UUID は、何もしなくても <datetime> / <uuid> になる
