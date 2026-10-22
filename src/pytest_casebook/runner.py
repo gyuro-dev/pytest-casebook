@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
+from .messages import error
 from .serialize import describe_exception
 
 
@@ -85,9 +86,9 @@ def run_subprocess(
             check=False,
         )
     except FileNotFoundError:
-        raise CasebookRunError(f"コマンドが見つかりません: {argv[0]}") from None
+        raise CasebookRunError(error("command_not_found", program=argv[0])) from None
     except subprocess.TimeoutExpired:
-        raise CasebookRunError(f"{timeout} 秒以内に終わりませんでした: {list(argv)}") from None
+        raise CasebookRunError(error("command_timeout", timeout=timeout, argv=list(argv))) from None
     return CommandResult(proc.returncode, proc.stdout or "", proc.stderr or "")
 
 
@@ -196,16 +197,14 @@ def import_callable(spec: str) -> Callable[..., Any]:
     try:
         obj: Any = importlib.import_module(module_name)
     except ImportError as e:
-        raise CasebookRunError(f"call: モジュール {module_name} を import できません: {e}") from e
+        raise CasebookRunError(error("import_failed", module=module_name, error=e)) from e
     for attr in attr_path.split("."):
         try:
             obj = getattr(obj, attr)
         except AttributeError:
-            raise CasebookRunError(
-                f"call: {spec} が見つかりません（{attr} がありません）"
-            ) from None
+            raise CasebookRunError(error("attr_missing", spec=spec, attr=attr)) from None
     if not callable(obj):
-        raise CasebookRunError(f"call: {spec} は呼び出せません")
+        raise CasebookRunError(error("not_callable", spec=spec))
     return cast("Callable[..., Any]", obj)
 
 

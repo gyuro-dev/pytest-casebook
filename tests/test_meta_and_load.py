@@ -75,17 +75,31 @@ def test_load_reads_the_same_yaml_outside_pytest(tmp_path: Path) -> None:
 def test_load_reports_errors(tmp_path: Path) -> None:
     broken = tmp_path / "broken.yaml"
     broken.write_text("cases: [\n", encoding="utf-8")
-    with pytest.raises(pytest_casebook.CasebookError, match="YAML として読めません"):
+    with pytest.raises(pytest_casebook.CasebookError, match="cannot read as YAML"):
         pytest_casebook.load(broken)
     wrong = tmp_path / "wrong.yaml"
     wrong.write_text("cases:\n  - name: a\n", encoding="utf-8")
-    with pytest.raises(pytest_casebook.CasebookError, match="command・call・request のどれか1つ"):
+    with pytest.raises(pytest_casebook.CasebookError, match="exactly one of command, call"):
         pytest_casebook.load(wrong)
+    # lang で日本語のメッセージにできる
+    with pytest.raises(pytest_casebook.CasebookError, match="command・call・request のどれか1つ"):
+        pytest_casebook.load(wrong, lang="ja")
     # "false" のような文字列を True と取り違えない
     quoted = tmp_path / "quoted.yaml"
     quoted.write_text("check_orphans: 'false'\ncases: []\n", encoding="utf-8")
-    with pytest.raises(pytest_casebook.CasebookError, match="check_orphans は true か false"):
+    with pytest.raises(pytest_casebook.CasebookError, match="check_orphans must be true or false"):
         pytest_casebook.load(quoted)
+    with pytest.raises(ValueError, match="lang must be one of"):
+        pytest_casebook.load(quoted, lang="fr")
+
+
+def test_load_levels_follow_lang(tmp_path: Path) -> None:
+    """levels を書かなければ、階層の呼び名は lang の言語の既定になる。"""
+    path = tmp_path / "casebook_x.yaml"
+    path.write_text("cases:\n  - {name: a, call: 'm:f'}\n", encoding="utf-8")
+    assert pytest_casebook.load(path).levels == ("Category", "Subcategory", "Item")
+    assert pytest_casebook.load(path, lang="ja").levels == ("大項目", "中項目", "小項目")
+    assert pytest_casebook.load(path, levels=("A",)).levels == ("A",)
 
 
 def test_project_can_keep_its_own_update_golden_option(project: pytest.Pytester) -> None:

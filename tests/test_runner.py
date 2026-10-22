@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from pytest_casebook import runner
+from pytest_casebook.messages import language
 
 
 def test_program_name_is_found_on_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -36,5 +37,10 @@ def test_program_with_path_is_used_as_is(tmp_path: Path, monkeypatch: pytest.Mon
 
 
 def test_unknown_program_is_reported(tmp_path: Path) -> None:
-    with pytest.raises(runner.CasebookRunError, match="コマンドが見つかりません: no-such-casebook"):
+    with pytest.raises(runner.CasebookRunError, match="command not found: no-such-casebook"):
+        runner.run_subprocess(["no-such-casebook-command"], cwd=tmp_path)
+    with (
+        language("ja"),
+        pytest.raises(runner.CasebookRunError, match="コマンドが見つかりません: no-such-casebook"),
+    ):
         runner.run_subprocess(["no-such-casebook-command"], cwd=tmp_path)

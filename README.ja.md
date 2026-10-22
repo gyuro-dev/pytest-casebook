@@ -20,7 +20,7 @@ Excel の試験項目表と自動テストを別々に管理して、内容が�
 
 ![試験項目表の HTML レポート](docs/images/report-top.png)
 
-> **レポートを日本語にする**: HTML レポートと、比較の失敗（期待出力・`expect:`）のメッセージの既定は英語です。\
+> **レポートを日本語にする**: HTML レポートとメッセージ（比較の失敗、YAML の書き方の誤りなど）の既定は英語です。\
 > 日本語にするときは、`pyproject.toml` に一度だけ書きます（[ini の設定](#ini-の設定)）。
 >
 > ```toml
@@ -792,7 +792,7 @@ pytest-html は要りません（一緒に使うこともできます）。
 | `casebook_encoding` | `utf-8` | command の出力の文字コード |
 | `casebook_builtin_patterns` | `true` | 日時と UUID を `<datetime>` / `<uuid>` に置き換える |
 | `casebook_html_title` | `Test Specification`（`casebook_lang` が `ja` なら `試験項目表`） | HTML レポートの題名 |
-| `casebook_lang` | `en` | HTML レポートと、比較の失敗（期待出力・`expect:`）のメッセージの言語。`en` か `ja`（YAML の書き方の誤りなど、ほかのエラーメッセージは日本語のまま） |
+| `casebook_lang` | `en` | HTML レポートと、メッセージ（比較の失敗、YAML の書き方の誤り、ケースを実行するときの誤り）の言語。`en` か `ja` |
 
 ## 開発（このリポジトリで作業する人向け）
 

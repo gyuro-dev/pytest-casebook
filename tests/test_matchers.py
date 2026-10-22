@@ -9,6 +9,7 @@ import pytest
 from helpers import write_casebook
 
 from pytest_casebook.expect import find_matcher_errors, match_value
+from pytest_casebook.messages import language
 
 ROWS = [{"id": 1, "msg": "在庫が足りません（残り 0）"}, {"id": 2, "msg": "OK"}]
 
@@ -50,6 +51,12 @@ def test_data_without_dollar_is_still_data() -> None:
 
 
 def test_find_matcher_errors() -> None:
+    assert find_matcher_errors({"$contains": 1}, "json") == ["json: $contains needs a string"]
+    with language("ja"):
+        _check_find_matcher_errors_in_japanese()
+
+
+def _check_find_matcher_errors_in_japanese() -> None:
     assert find_matcher_errors({"a": [{"$nope": 1}]}, "json")[0].startswith(
         "json.a[0]: 知らない比べ方です: $nope"
     )

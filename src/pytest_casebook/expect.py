@@ -19,7 +19,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-from .messages import MESSAGES
+from .messages import MESSAGES, error
 from .serialize import compact
 
 # 値の中に書ける比べ方
@@ -175,17 +175,17 @@ def find_matcher_errors(value: Any, label: str) -> list[str]:
         name, body = matcher
         if name not in VALUE_MATCHERS:
             known = " / ".join(VALUE_MATCHERS)
-            return [f"{label}: 知らない比べ方です: {name}（使えるのは {known}）"]
+            return [error("unknown_matcher", where=label, name=name, known=known)]
         if name in ("$contains", "$regex") and not isinstance(body, str):
-            return [f"{label}: {name} には文字列を書いてください"]
+            return [error("matcher_string", where=label, name=name)]
         if name == "$regex":
             try:
                 re.compile(body)
             except re.error as e:
-                return [f"{label}: 正規表現の誤りです: {e}"]
+                return [error("bad_regex", where=label, error=e)]
         if name in ("$unordered", "$includes"):
             if not isinstance(body, list):
-                return [f"{label}: {name} にはリストを書いてください"]
+                return [error("matcher_list", where=label, name=name)]
             return [
                 err for i, v in enumerate(body) for err in find_matcher_errors(v, f"{label}[{i}]")
             ]

@@ -78,7 +78,7 @@ def test_empty_command_needs_prefix(pytester: pytest.Pytester) -> None:
     pytester.makefile(".yaml", casebook_x="cases:\n  - name: a\n    command: ''\n")
     result = pytester.runpytest()
     result.assert_outcomes(errors=1)
-    result.stdout.fnmatch_lines(["*command が空です*"])
+    result.stdout.fnmatch_lines(["*command is empty (and there is no command_prefix)*"])
 
 
 def test_update_keeps_handwritten_golden(pytester: pytest.Pytester) -> None:
