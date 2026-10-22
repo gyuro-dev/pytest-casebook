@@ -38,7 +38,7 @@ def test_value_matchers_match(expected: object) -> None:
     ],
 )
 def test_value_matchers_mismatch(expected: object, message: str) -> None:
-    problems = match_value(expected, ROWS, "rows")
+    problems = match_value(expected, ROWS, "rows", lang="ja")
     assert problems
     assert message in problems[0]
 
@@ -144,7 +144,7 @@ def test_list_matchers_do_not_depend_on_order(name: str) -> None:
 
 def test_list_matchers_report_only_unmatchable_items() -> None:
     actual = [{"type": "A"}, {"type": "B"}]
-    problems = match_value({"$includes": [{"type": "A"}, {"type": "C"}]}, actual, "rows")
+    problems = match_value({"$includes": [{"type": "A"}, {"type": "C"}]}, actual, "rows", lang="ja")
     assert problems == ['rows: {"type": "C"} に合う要素がありません（期待の [1]）']
 
 

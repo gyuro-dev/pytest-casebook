@@ -1,7 +1,6 @@
 # Organize cases into categories, subcategories and items. Nesting group: sets the depth of the hierarchy.
 #
-#   uv run pytest examples-en/05_groups -o casebook_lang=en --casebook-html=reports/groups.html
-#   (see the results as a hierarchical table)
+#   uv run pytest examples-en/05_groups --casebook-html=reports/groups.html   # see the results as a table
 #   uv run pytest examples-en/05_groups -k Okinawa   # filter by group name
 title: Shipping fees
 levels: [Category, Subcategory, Item]   # names of the hierarchy levels (as many as you like)

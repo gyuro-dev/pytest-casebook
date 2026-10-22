@@ -81,7 +81,7 @@ for py in "${PYTHONS[@]}"; do
     uv run --no-sync pytest -p no:cacheprovider -q \
       --junitxml="$dir/junit.xml" > "$dir/tests.txt" 2>&1
     tests=$?
-    uv run --no-sync pytest examples -p no:cacheprovider -q \
+    uv run --no-sync pytest examples -p no:cacheprovider -q -o casebook_lang=ja \
       --casebook-html="$dir/examples.html" > "$dir/examples.txt" 2>&1
     examples=$?
 

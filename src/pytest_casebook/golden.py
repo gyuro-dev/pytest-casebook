@@ -160,7 +160,7 @@ def write_golden(path: Path, text: str) -> bool:
     return True
 
 
-def unified_diff(expected: str, actual: str, label: str, lang: str = "ja") -> str:
+def unified_diff(expected: str, actual: str, label: str, lang: str = "en") -> str:
     """期待出力と実際の出力の unified diff（label は差分の見出しに出す期待出力のパス）。"""
     m = MESSAGES[lang]
     return "".join(

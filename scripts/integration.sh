@@ -53,7 +53,7 @@ uv sync --frozen --group integration > "$OUT/setup.txt" 2>&1 || { tail -20 "$OUT
 echo "== 試験を実行する"
 update=()
 [ "${UPDATE:-0}" = "1" ] && update=(--casebook-update)
-uv run --no-sync pytest integration -p no:cacheprovider -v "${update[@]}" \
+uv run --no-sync pytest integration -p no:cacheprovider -v -o casebook_lang=ja "${update[@]}" \
   --casebook-html="$OUT/report.html" --junitxml="$OUT/junit.xml" > "$OUT/tests.txt" 2>&1
 status=$?
 "${COMPOSE[@]}" logs api > "$OUT/api.log" 2>&1

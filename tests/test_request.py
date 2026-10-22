@@ -52,6 +52,7 @@ def pytest_casebook_request(request):
 @pytest.fixture
 def app(pytester: pytest.Pytester) -> pytest.Pytester:
     pytester.makeconftest(APP_CONFTEST)
+    pytester.makeini("[pytest]\ncasebook_lang = ja\n")
     return pytester
 
 

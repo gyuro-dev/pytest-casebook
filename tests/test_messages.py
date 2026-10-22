@@ -7,7 +7,7 @@ import string
 from typing import Any
 
 import pytest
-from helpers import write_casebook
+from helpers import CALC_MODULE, golden, write_casebook
 
 from pytest_casebook.messages import LANGS, MESSAGES, TEXTS
 
@@ -68,3 +68,39 @@ def test_golden_orphans_in_english(project: pytest.Pytester) -> None:
     result.stdout.fnmatch_lines(
         ["*golden files not used by casebook_calc.yaml are left in *: [[]'removed.txt'[]]"]
     )
+
+
+def test_english_is_the_default(pytester: pytest.Pytester) -> None:
+    """casebook_lang を書かなければ、レポートと比較の失敗のメッセージは英語になる。"""
+    pytester.makepyfile(calc=CALC_MODULE)
+    pytester.makeini("[pytest]\npythonpath = .\n")
+    write_casebook(
+        pytester,
+        """
+        cases:
+          - group: Arithmetic
+            cases:
+              - {name: wrong, call: "calc:add", args: [1, 2], expect: {return: 4}}
+        """,
+    )
+    report = pytester.path / "report.html"
+    result = pytester.runpytest(f"--casebook-html={report}")
+    result.assert_outcomes(failed=1, passed=1)  # passed は golden_orphans
+    result.stdout.fnmatch_lines(
+        ["*Differs from the expected result:", "*return: expected 4 / actual 3"]
+    )
+    page = report.read_text(encoding="utf-8")
+    assert '<html lang="en">' in page
+    assert "<title>Test Specification</title>" in page
+    assert "<th class='level'>Category</th>" in page
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_golden_no_files_does_not_depend_on_language(project: pytest.Pytester, lang: str) -> None:
+    """期待出力ファイルの「ファイルなし」の表記は、言語を変えても変わらない。"""
+    write_casebook(
+        project,
+        "cases:\n  - {name: empty, call: calc:add, args: [1, 2], observe: [files]}\n",
+    )
+    project.runpytest("--casebook-update", "-o", f"casebook_lang={lang}")
+    assert "----- observe: files -----\n(no files)\n" in golden(project, "empty")
