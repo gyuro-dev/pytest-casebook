@@ -48,6 +48,7 @@ TEXTS: dict[str, dict[str, Any]] = {
         "written": "試験項目表（HTML）: {path}",
         "state": "状態: {state}",
         "files": "ファイル: {files}",
+        "env": "環境変数: {env}",
         "golden": "期待出力ファイル（{name}）",
         "observe": "観察: {targets}",
         "contains": "{label} が「{pattern}」を含む",
@@ -93,6 +94,7 @@ TEXTS: dict[str, dict[str, Any]] = {
         "written": "Test specification (HTML): {path}",
         "state": "State: {state}",
         "files": "Files: {files}",
+        "env": "Environment: {env}",
         "golden": "Golden file ({name})",
         "observe": "Observe: {targets}",
         "contains": '{label} contains "{pattern}"',
@@ -196,6 +198,11 @@ ERRORS: dict[str, dict[str, str]] = {
         "bad_call": "{where}: call は 'モジュール:関数' の形で書いてください: {call}",
         "args_only_call": "{where}: args / kwargs は call のケースにだけ書けます",
         "stdin_only_command": "{where}: stdin は command のケースにだけ書けます",
+        "env_only_command": "{where}: env は command のケースにだけ書けます",
+        "env_mapping": (
+            "{where}: env は 変数名 -> 値（文字列か数値。null で外側の値を消す）の"
+            "マッピングで書いてください"
+        ),
         "args_list": "{where}: args はリストで書いてください",
         "kwargs_mapping": "{where}: kwargs は 引数名 -> 値 のマッピングで書いてください",
         "timeout_number": "{where}: timeout は秒数（数値）で書いてください",
@@ -287,6 +294,11 @@ ERRORS: dict[str, dict[str, str]] = {
         "bad_call": "{where}: call must be 'module:function': {call}",
         "args_only_call": "{where}: args / kwargs can only be used in call cases",
         "stdin_only_command": "{where}: stdin can only be used in command cases",
+        "env_only_command": "{where}: env can only be used in command cases",
+        "env_mapping": (
+            "{where}: env must be a mapping of variable name -> value "
+            "(a string or a number; null removes an outer value)"
+        ),
         "args_list": "{where}: args must be a list",
         "kwargs_mapping": "{where}: kwargs must be a mapping of argument name -> value",
         "timeout_number": "{where}: timeout must be a number of seconds",

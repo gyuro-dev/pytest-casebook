@@ -1,4 +1,6 @@
-"""meta:（利用する側が自由に使う情報）・load()・オプション名の衝突の確認。"""
+"""
+meta:（利用する側が自由に使う情報）・env:（環境変数）の受け継ぎ・load()・オプション名の衝突の確認。
+"""
 
 from __future__ import annotations
 
@@ -57,6 +59,55 @@ def test_invalid_meta(project: pytest.Pytester) -> None:
     result = project.runpytest()
     result.assert_outcomes(errors=1)
     result.stdout.fnmatch_lines(["*meta は キー -> 値 のマッピングで書いてください*"])
+
+
+ENV_CASEBOOK = """
+env: {A: file, B: file, C: file}
+cases:
+  - group: g
+    env: {B: group, C: null}
+    cases:
+      - name: inner
+        command: x
+        env: {A: case, N: 1, R: 0.5}
+      - name: func
+        call: calc:add
+  - name: top
+    command: x
+"""
+
+
+def test_env_is_merged_from_file_groups_and_cases(tmp_path: Path) -> None:
+    path = tmp_path / "casebook_env.yaml"
+    path.write_text(textwrap.dedent(ENV_CASEBOOK), encoding="utf-8")
+    doc = pytest_casebook.load(path)
+    env = {c.name: c.env for c in doc.cases}
+    assert doc.env == {"A": "file", "B": "file", "C": "file"}
+    # 内側が外側を上書きし、null で外側の変数を消す。数値は文字列にする
+    assert env["inner"] == {"A": "case", "B": "group", "N": "1", "R": "0.5"}
+    assert env["top"] == {"A": "file", "B": "file", "C": "file"}
+    # 受け継いだ env は command 以外のケースでは使わない（誤りにもしない）
+    assert env["func"] == {}
+
+
+@pytest.mark.parametrize(
+    "env",
+    ["[A=1]", "{A: true}", "{A: [1]}", "{A: {b: 1}}", "{'A=B': x}", "{'': x}", "x"],
+)
+def test_invalid_env(project: pytest.Pytester, env: str) -> None:
+    write_casebook(project, f"cases:\n  - name: a\n    command: x\n    env: {env}\n")
+    result = project.runpytest()
+    result.assert_outcomes(errors=1)
+    result.stdout.fnmatch_lines(
+        ["*env は 変数名 -> 値（文字列か数値*のマッピングで書いてください*"]
+    )
+
+
+def test_env_on_call_case_is_an_error(project: pytest.Pytester) -> None:
+    write_casebook(project, "cases:\n  - name: a\n    call: calc:add\n    env: {A: x}\n")
+    result = project.runpytest()
+    result.assert_outcomes(errors=1)
+    result.stdout.fnmatch_lines(["*env は command のケースにだけ書けます*"])
 
 
 def test_load_reads_the_same_yaml_outside_pytest(tmp_path: Path) -> None:

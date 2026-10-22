@@ -370,6 +370,7 @@ check_orphans: true            # ケースのない期待出力ファイルが�
 normalize:                     # 出力に当てる置き換え
   - {pattern: 'req-[0-9a-f]+', replace: '<request-id>'}
 meta: {owner: qa}              # 自由に使う情報（下の「meta」を参照）
+env: {LANG: C}                 # command のケースの環境変数（下の「環境変数」を参照）
 cases: [...]                   # ケースまたはグループのリスト
 ```
 
@@ -381,6 +382,7 @@ cases: [...]                   # ケースまたはグループのリスト
   state: outage            # 中のケースの既定の状態
   marks: [slow]            # 中のケースに付ける pytest のマーク
   meta: {area: price}      # 中のケースに付ける meta
+  env: {TZ: UTC}           # 中の command のケースに付ける環境変数
   skip: 仕様が決まるまで止める  # 中のケースすべてを、この理由でスキップする（xfail: も書ける）
   cases: [...]
 ```
@@ -397,6 +399,7 @@ HTML レポートの階層の列は、実際に使われているグループの
 | `command` | CLI として実行する引数（shell と同じ書き方で区切る）。`command_prefix` の後ろに付く。`command_prefix` があれば空文字（`""`）でもよい。リスト（`[a, 'b c']`）で書くと区切らずにそのまま渡す |
 | `stdin` | command の標準入力 |
 | `timeout` | ケースを時間切れで失敗にするまでの秒数（`command`・`call`・`request`。[詳しく](#時間の上限-timeout)） |
+| `env` | command を実行するときの環境変数。今の環境変数に重ねる（[書き方](#環境変数-env)） |
 | `call` | 呼び出す関数（`モジュール:関数`、`モジュール:クラス.メソッド`）。`async def` の関数は終わるまで待つ |
 | `args` / `kwargs` | 関数に渡す引数 |
 | `request` | 送る HTTP のリクエスト（`"POST /users"` か、method・path・query・headers・json・body。[書き方](#http-の-api-request)） |
@@ -412,6 +415,38 @@ HTML レポートの階層の列は、実際に使われているグループの
 `command`・`call`・`request` は、どれか1つだけを書きます。\
 上の表にないキーは、打ち間違いを見つけるためにエラーにします。\
 自分で使う情報は `meta:` の中に書きます。
+
+### 環境変数 (env)
+
+`env:` で、`command:` のケースを実行するときの環境変数を設定します。\
+ファイルの先頭・グループ・ケースのどこにでも書けます。
+
+```yaml
+env: {LANG: C, TZ: UTC}          # ファイルのすべての command のケース
+cases:
+  - group: デバッグ出力
+    env: {MYTOOL_DEBUG: 1}       # 数値は文字列（"1"）にする
+    cases:
+      - name: debug_report
+        command: report
+      - name: default_locale
+        command: report
+        env: {LANG: null}        # null で、外側に書いた値を消す
+```
+
+- 別プロセスで実行するとき、pytest のプロセスの環境変数（`os.environ`）に上書きで重ねます。\
+  ここで `PATH` を変えると、プログラムもその `PATH` で探します
+- 内側が外側を、変数ごとに上書きします（ファイル → グループ → ケース）。\
+  値は文字列か数値で書きます。\
+  `true` / `false` は誤りにします（`"true"` と書きます）。\
+  `null` は外側の `env:` の値を消すだけで、シェルから受け継いだ環境変数は消しません
+- command のケースだけが使います。\
+  call / request のケースに `env:` を書くと誤りにし、ファイルやグループから受け継いだ `env:` は使いません
+- hook では、重ねた結果を `case.env` で読めます。\
+  `pytest_casebook_run_command` で自分でコマンドを実行するときは、そこで当ててください。\
+  `run_in_process` は `os.environ` を変えないので、`unittest.mock.patch.dict(os.environ, case.env)` などで囲みます
+- HTML レポートの前提条件の列には、ファイル全体の `env:` と違う変数だけを出します。\
+  期待出力ファイルには書きません
 
 ### meta
 
@@ -444,7 +479,7 @@ for case in doc.cases:
         print(" > ".join(case.path), case.name, case.command)
 ```
 
-`load()` は pytest で集めるときと同じ検証をして、`CasebookDoc`（`title`・`levels`・`states`・`meta`・`cases` など）を返します。\
+`load()` は pytest で集めるときと同じ検証をして、`CasebookDoc`（`title`・`levels`・`states`・`meta`・`env`・`cases` など）を返します。\
 書き方に誤りがあれば `pytest_casebook.CasebookError` を出します。
 
 ### 前提条件 (setup)
@@ -674,6 +709,7 @@ hook は、その conftest.py があるディレクトリより下の YAML の�
 
 どの hook にも、`config`（pytest の Config）が渡ります。\
 ケースの状態の名前と内容は、`case.state` と `case.state_data` で読めます。\
+ケースの `env:` の環境変数は、`case.env` で読めます。\
 別プロセスで実行するときは、子プロセスが Python なら出力の文字コードを `casebook_encoding` にそろえます（`PYTHONIOENCODING` を設定します）。
 
 ### 複数の環境に流す

@@ -22,6 +22,7 @@ cases:
       - name: add_cli             # ケース名（＝期待出力のファイル名）
         description: 説明
         command: add 1 2          # CLI として実行する
+        env: {LANG: C}            # 実行するときの環境変数（省略可。ファイル・グループにも書ける）
       - name: add_func
         call: calc:add            # "モジュール:関数" を呼ぶ
         args: [1, 2]
@@ -68,9 +69,20 @@ _TOP_KEYS = {
     "check_orphans",
     "normalize",
     "meta",
+    "env",
     "cases",
 }
-_GROUP_KEYS = {"group", "description", "state", "marks", "meta", "skip", "xfail", "cases"}
+_GROUP_KEYS = {
+    "group",
+    "description",
+    "state",
+    "marks",
+    "meta",
+    "env",
+    "skip",
+    "xfail",
+    "cases",
+}
 _CASE_KEYS = {
     "request",
     "meta",
@@ -84,6 +96,7 @@ _CASE_KEYS = {
     "kwargs",
     "stdin",
     "timeout",
+    "env",
     "state",
     "marks",
     "golden",
@@ -157,6 +170,9 @@ class Case:
     kwargs: dict[str, Any] = field(default_factory=dict)
     stdin: str | None = None
     timeout: float | None = None
+    # command を実行するときに os.environ に重ねる環境変数。ファイル・グループ・ケースの env: を
+    # 外側から上書きで重ねたもの（null で外側の変数を消す）。command 以外のケースでは空
+    env: dict[str, str] = field(default_factory=dict)
     state: str = DEFAULT_STATE
     # states: のうち、このケースの状態の内容（files を含む、書いたままのもの）
     state_data: Any = None
@@ -267,6 +283,8 @@ class CasebookDoc:
     request_headers: dict[str, str] = field(default_factory=dict)
     # ファイル全体の meta（利用する側が自由に使う）
     meta: dict[str, Any] = field(default_factory=dict)
+    # ファイル全体の env（どの command のケースにも重ねる環境変数）
+    env: dict[str, str] = field(default_factory=dict)
     # YAML のマッピング（id）-> 始まる行。ケースの行番号を求めるのに、読み込み中だけ使う
     # （id は読み終えると別のオブジェクトに使われうるので、読み終えたら空にする）
     _source_lines: dict[int, int] = field(default_factory=dict, repr=False, compare=False)
@@ -511,12 +529,13 @@ def parse_document(
         request_headers=_request_defaults(data.get("request_defaults"), where),
         cases=[],
         meta=_meta(data.get("meta"), where),
+        env=_merge_env({}, _env(data.get("env"), where)),
         _source_lines=source_lines or {},
     )
 
     if "cases" not in data:
         raise CasebookError(error("no_cases", where=where))
-    _walk(data["cases"], doc, (), DEFAULT_STATE, (), {}, {}, f"{where}: cases")
+    _walk(data["cases"], doc, (), DEFAULT_STATE, (), {}, doc.env, {}, f"{where}: cases")
 
     seen: dict[str, int] = {}
     for case in doc.cases:
@@ -535,6 +554,7 @@ def _walk(
     state: str,
     marks: tuple[str, ...],
     meta: dict[str, Any],
+    env: dict[str, str],
     flags: dict[str, str],
     where: str,
 ) -> None:
@@ -560,11 +580,12 @@ def _walk(
                 _str(item.get("state"), loc, "state") or state,
                 (*marks, *_str_list(item.get("marks"), loc, "marks")),
                 {**meta, **_meta(item.get("meta"), loc)},
+                _merge_env(env, _env(item.get("env"), loc)),
                 {**flags, **_flags(item, loc)},
                 f"{loc}{error('in_group', name=group.name)}.cases",
             )
         else:
-            doc.cases.append(_parse_case(item, doc, groups, state, marks, meta, flags, loc))
+            doc.cases.append(_parse_case(item, doc, groups, state, marks, meta, env, flags, loc))
 
 
 def _parse_case(
@@ -574,6 +595,7 @@ def _parse_case(
     state: str,
     marks: tuple[str, ...],
     meta: dict[str, Any],
+    env: dict[str, str],
     flags: dict[str, str],
     loc: str,
 ) -> Case:
@@ -605,6 +627,11 @@ def _parse_case(
         raise CasebookError(error("args_only_call", where=loc))
     if command is None and "stdin" in item:
         raise CasebookError(error("stdin_only_command", where=loc))
+    # ケースに env: を書けるのは command だけ（ファイルやグループから受け継いだ env は、
+    # command 以外のケースでは使わないだけで、誤りにはしない）
+    if command is None and "env" in item:
+        raise CasebookError(error("env_only_command", where=loc))
+    own_env = _env(item.get("env"), loc)
     request = (
         _parse_request(item["request"], doc.request_headers, loc) if "request" in item else None
     )
@@ -648,6 +675,7 @@ def _parse_case(
         kwargs=kwargs,
         stdin=_str(item.get("stdin"), loc, "stdin") if "stdin" in item else None,
         timeout=timeout,
+        env=_merge_env(env, own_env) if command is not None else {},
         state=state,
         state_data=state_data,
         marks=(*marks, *_str_list(item.get("marks"), loc, "marks")),
@@ -679,6 +707,38 @@ def _meta(value: Any, loc: str) -> dict[str, Any]:
     if not (isinstance(value, dict) and all(isinstance(k, str) for k in value)):
         raise CasebookError(error("meta_mapping", where=loc))
     return dict(value)
+
+
+def _env(value: Any, loc: str) -> dict[str, str | None]:
+    """
+    env: を確かめ、変数名 -> 値 にする。
+
+    値は文字列か数値（`DEBUG: 1` のように書けるよう、数値は文字列にする）。null は外側の
+    値を消す印として None のまま返す。true / false は "True" などに変わって紛らわしいため
+    誤りにする（文字列で "true" と書く）。
+    """
+    if value is None:
+        return {}
+    if not isinstance(value, dict) or not all(
+        isinstance(k, str)
+        and k
+        and "=" not in k
+        and (v is None or (isinstance(v, str | int | float) and not isinstance(v, bool)))
+        for k, v in value.items()
+    ):
+        raise CasebookError(error("env_mapping", where=loc))
+    return {k: None if v is None else str(v) for k, v in value.items()}
+
+
+def _merge_env(outer: dict[str, str], inner: dict[str, str | None]) -> dict[str, str]:
+    """外側の env に内側の env を上書きで重ねる（内側で null にした変数は消す）。"""
+    merged = dict(outer)
+    for name, value in inner.items():
+        if value is None:
+            merged.pop(name, None)
+        else:
+            merged[name] = value
+    return merged
 
 
 def _parse_setup(value: Any, loc: str) -> tuple[dict[str, Any] | None, dict[str, str]]:

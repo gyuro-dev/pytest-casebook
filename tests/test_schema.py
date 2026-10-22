@@ -61,10 +61,27 @@ def test_examples_follow_schema(path: Path) -> None:
         {"cases": [{"name": "a", "call": "m:f", "expect": {"stdout": {"starts": "x"}}}]},
         {"cases": [{"group": "g", "cases": [], "colour": "red"}]},
         {"title": "no cases"},
+        {"env": ["A=1"], "cases": []},  # env がマッピングでない
+        {"cases": [{"name": "a", "command": "x", "env": {"A": True}}]},
+        {"cases": [{"name": "a", "command": "x", "env": {"A=B": "x"}}]},
     ],
 )
 def test_schema_rejects_mistakes(doc: Any) -> None:
     assert errors(doc)
+
+
+def test_schema_accepts_env() -> None:
+    doc = {
+        "env": {"LANG": "C"},
+        "cases": [
+            {
+                "group": "g",
+                "env": {"DEBUG": 1, "LANG": None},
+                "cases": [{"name": "a", "command": "x", "env": {"TZ": "UTC", "RATE": 0.5}}],
+            }
+        ],
+    }
+    assert errors(doc) == []
 
 
 def test_schema_path_is_packaged() -> None:
