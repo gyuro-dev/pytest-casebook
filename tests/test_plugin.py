@@ -578,3 +578,48 @@ def test_html_report_marks_updated(project: pytest.Pytester) -> None:
     assert '<span class="badge updated">更新 1</span>' in report.read_text(encoding="utf-8")
     project.runpytest("--casebook-update", f"--casebook-html={report}")
     assert '<span class="badge passed">成功 1</span>' in report.read_text(encoding="utf-8")
+
+
+PLAN_CASES = """
+cases:
+  - group: 足し算
+    cases:
+      - {name: add, call: "calc:add", args: [1, 2], expect: {return: 3}, description: 1+2}
+      - {name: wrong, call: "calc:add", args: [1, 2], expect: {return: 4}}
+      - {name: later, call: "calc:add", args: [2, 2], expect: {return: 4}}
+"""
+
+
+def test_collect_only_writes_a_plan(project: pytest.Pytester) -> None:
+    """--collect-only でも、実行せずに試験項目表を出せる（結果は「未実施」）。"""
+    write_casebook(project, PLAN_CASES)
+    report = project.path / "plan.html"
+    result = project.runpytest("--collect-only", f"--casebook-html={report}")
+    assert result.ret == pytest.ExitCode.OK
+    page = report.read_text(encoding="utf-8")
+    assert "全 3 件" in page
+    assert '<span class="badge notrun">未実施 3</span>' in page
+    assert "<div class='name'>add</div>" in page
+    assert "return = 3" in page  # 期待結果の列は、実行しなくても出る
+    assert "<td class='num'>—</td>" in page
+    assert not (project.path / "golden").exists()  # 何も実行していない
+
+
+def test_cases_not_run_stay_in_the_report(project: pytest.Pytester) -> None:
+    """-x で止まったときも、実行しなかったケースは「未実施」として表に残る。"""
+    write_casebook(project, PLAN_CASES)
+    report = project.path / "report.html"
+    project.runpytest("-x", f"--casebook-html={report}").assert_outcomes(passed=1, failed=1)
+    page = report.read_text(encoding="utf-8")
+    assert "全 3 件" in page
+    assert '<span class="badge notrun">未実施 1</span>' in page
+    assert re.search(r"<tr id='case-\d+' class='notrun'>.*?later", page)
+
+
+def test_deselected_cases_are_not_in_the_report(project: pytest.Pytester) -> None:
+    write_casebook(project, PLAN_CASES)
+    report = project.path / "report.html"
+    project.runpytest("-k", "add", f"--casebook-html={report}").assert_outcomes(passed=1)
+    page = report.read_text(encoding="utf-8")
+    assert "全 1 件" in page
+    assert "notrun" not in page.split("<style>")[0] + page.split("</style>")[1]
