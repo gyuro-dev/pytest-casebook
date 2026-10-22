@@ -10,6 +10,8 @@ import textwrap
 import pytest
 from helpers import PY, golden, write_casebook
 
+from pytest_casebook.messages import LANGS, TEXTS
+
 # =============================================================================
 # 期待出力の作成と比較
 # =============================================================================
@@ -481,7 +483,8 @@ def test_html_report_has_levels_and_merged_cells(project: pytest.Pytester) -> No
     )
     # グループのないケースは階層の列が空になる
     empty = "<td class='level empty' rowspan='1'></td>"
-    assert re.search(rf"<tr id='case-\d+' class='passed'>({empty}){{3}}", page)
+    # 行の属性のあと（data-outcome・data-text は絞り込み用）に、空の階層のセルが3つ続く
+    assert re.search(rf"<tr id='case-\d+' class='passed'[^>]*>({empty}){{3}}", page)
     # 失敗の一覧と、表の幅いっぱいの詳細の行
     assert "確認が必要なケース" in page
     assert "計算 &gt; 割り算 &gt; div" in page
@@ -524,6 +527,67 @@ def test_html_report_in_english(project: pytest.Pytester) -> None:
     assert '<span class="badge passed">Passed 2</span>' in page
     assert "3 cases in total" not in page  # golden_orphans はレポートに出ない
     assert "2 cases in total" in page
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_html_report_has_filter(project: pytest.Pytester, lang: str) -> None:
+    """ページ上部に、結果と文字での絞り込みが出る（文言は casebook_lang に合わせる）。"""
+    write_casebook(
+        project,
+        """
+        cases:
+          - group: Arithmetic
+            description: four operations
+            cases:
+              - {name: add, call: "calc:add", args: [1, 2], description: one plus two}
+              - {name: wrong, call: "calc:add", args: [1, 2], expect: {return: 4}}
+          - {name: plain, call: "calc:add", args: [0, 0], skip: not yet}
+        """,
+    )
+    project.runpytest("--casebook-update")
+    report = project.path / "report.html"
+    project.runpytest("-o", f"casebook_lang={lang}", f"--casebook-html={report}")
+    page = report.read_text(encoding="utf-8")
+    texts = TEXTS[lang]
+
+    # JavaScript が動かなければ、絞り込みは隠れたまま（今までどおりの件数と表が出る）
+    assert '<div class="filter" hidden>' in page
+    assert f'<span class="badge failed">{texts["outcomes"]["failed"]} 1</span>' in page
+    # 「すべて」と、実際にある結果だけの切り替え
+    assert f'data-outcome="" aria-pressed="true">{texts["filter_all"]}</button>' in page
+    for outcome in ("passed", "skipped", "failed"):
+        label = texts["outcomes"][outcome]
+        assert f'data-outcome="{outcome}" aria-pressed="false">{label} 1</button>' in page
+    assert 'data-outcome="error"' not in page
+    assert f'aria-label="{texts["filter"]}"' in page
+    assert f'placeholder="{texts["filter_placeholder"]}"' in page
+    assert f'data-template="{texts["filter_shown"]}"' in page
+    assert f'data-none="{texts["filter_none"]}"' in page
+    assert "<script>" in page
+    if lang == "en":
+        assert not JAPANESE.search(page)
+
+    # 行には、結果と、絞り込みの対象の文字（縦に結合したグループの名前と説明も）を持たせる
+    rows = dict(re.findall(r"data-outcome='(\w+)' data-text='([^']*)'", page))
+    assert set(rows) == {"passed", "failed", "skipped"}
+    assert rows["passed"].split("\n")[:4] == ["Arithmetic", "four operations", "add", "calc:add"]
+    assert "one plus two" in rows["passed"]
+    assert "return = 4" in rows["failed"]
+    assert "not yet" in rows["skipped"]  # スキップの理由も探せる
+    # 失敗の詳細の行は今までどおり（JavaScript がケースの行と一緒に出し入れする）
+    assert page.count("<tr class='detail failed'><td colspan='6'>") == 1
+
+
+def test_html_report_is_self_contained(project: pytest.Pytester) -> None:
+    """HTML は1つのファイルで完結する（外部のスクリプト・スタイルを読まない）。"""
+    write_casebook(project, "cases:\n  - {name: add, call: calc:add, args: [1, 2]}\n")
+    project.runpytest("--casebook-update")
+    report = project.path / "report.html"
+    project.runpytest(f"--casebook-html={report}")
+    page = report.read_text(encoding="utf-8")
+    assert not re.search(r"<(script|link|img|iframe)\b[^>]*\b(src|href)\s*=", page, re.I)
+    assert not re.search(r"https?://", page)
+    assert "@import" not in page
 
 
 JAPANESE = re.compile("[぀-ヿ一-鿿]")
@@ -633,7 +697,7 @@ def test_cases_not_run_stay_in_the_report(project: pytest.Pytester) -> None:
     page = report.read_text(encoding="utf-8")
     assert "全 3 件" in page
     assert '<span class="badge notrun">未実施 1</span>' in page
-    assert re.search(r"<tr id='case-\d+' class='notrun'>.*?later", page)
+    assert re.search(r"<tr id='case-\d+' class='notrun'[^>]*>.*?later", page)
 
 
 def test_deselected_cases_are_not_in_the_report(project: pytest.Pytester) -> None:

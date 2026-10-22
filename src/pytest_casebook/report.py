@@ -8,6 +8,8 @@
 - 階層の列を縦に結合した表（ケース名・実行内容・確認内容・前提条件・期待結果・結果・時間）
 
 を1つの HTML ファイルに出力する（外部のファイルを読まない）。
+ページの上部には、結果と文字で表を絞り込む欄を出す（埋め込みの JavaScript で動かし、
+JavaScript が動かなければ表の全体を出す）。
 """
 
 from __future__ import annotations
@@ -242,7 +244,11 @@ def _case_table(texts: dict[str, Any], rows: list[CaseRow], labels: list[str]) -
         cells.append(f"<td class='result'>{_badge(texts, row.outcome)}{note}</td>")
         duration = "—" if row.outcome == "notrun" else f"{row.duration * 1000:.0f} ms"
         cells.append(f"<td class='num'>{duration}</td>")
-        lines.append(f"<tr id='{_row_id(row)}' class='{row.outcome}'>{''.join(cells)}</tr>")
+        # data-outcome と data-text は、ページ上部の絞り込み（_JS）が使う
+        lines.append(
+            f"<tr id='{_row_id(row)}' class='{row.outcome}' data-outcome='{row.outcome}'"
+            f" data-text='{_e(_search_text(row))}'>{''.join(cells)}</tr>"
+        )
         if row.details:
             # 詳細は表の幅いっぱいの行に出す（差分の長い行で列の幅が広がらないように）
             details = "".join(
@@ -256,6 +262,58 @@ def _case_table(texts: dict[str, Any], rows: list[CaseRow], labels: list[str]) -
     return (
         "<div class='scroll'><table class='cases'><thead><tr>"
         f"{head}</tr></thead><tbody>{''.join(lines)}</tbody></table></div>"
+    )
+
+
+def _search_text(row: CaseRow) -> str:
+    """
+    文字での絞り込みの対象にする、1件のケースの文字。
+
+    グループの列は縦に結合していて、2件目以降の行にはセルがないので、
+    グループの名前と説明もここに入れる。
+    """
+    meta = row.meta
+    parts = [
+        *meta["path"],
+        *meta["path_descriptions"],
+        meta["name"],
+        meta["run"],
+        meta["description"],
+        *meta["precondition"],
+        *meta["expected"],
+        row.note,
+    ]
+    return "\n".join(str(part) for part in parts if part)
+
+
+def _filter_bar(texts: dict[str, Any], rows: list[CaseRow]) -> str:
+    """
+    ページ上部の絞り込み（結果の切り替えと、文字の入力欄）。
+
+    JavaScript が動くときだけ出す（hidden を外す）。JavaScript が動かなければ、
+    今までどおり件数だけを出し、表は全部見える。
+    """
+    counts = Counter(r.outcome for r in rows)
+    all_button = (
+        '<button type="button" class="badge all" data-outcome="" aria-pressed="true">'
+        f"{_e(texts['filter_all'])}</button>"
+    )
+    buttons = [all_button]
+    buttons += [
+        f'<button type="button" class="badge {o}" data-outcome="{o}" aria-pressed="false">'
+        f"{_e(texts['outcomes'][o])} {counts[o]}</button>"
+        for o in OUTCOMES
+        if counts[o]
+    ]
+    return (
+        '<div class="filter" hidden>'
+        f'<div class="toggles" role="group" aria-label="{_e(texts["result"])}">'
+        f"{''.join(buttons)}</div>"
+        f'<input type="search" aria-label="{_e(texts["filter"])}"'
+        f' placeholder="{_e(texts["filter_placeholder"])}">'
+        f'<span class="shown muted" aria-live="polite"'
+        f' data-template="{_e(texts["filter_shown"])}" data-none="{_e(texts["filter_none"])}">'
+        "</span></div>"
     )
 
 
@@ -332,8 +390,10 @@ def build_html(
 <h1>{_e(title)}</h1>
 <div class="muted">{_e(generated)}</div>
 <div class="counts">{_e(texts["total"].format(n=len(rows)))} {_counts(texts, rows)}</div>
+{_filter_bar(texts, rows)}
 </header>
 <main>{sections}</main>
+<script>{_JS}</script>
 </body>
 </html>
 """
@@ -345,7 +405,7 @@ _CSS = """
   --group: #f6f8fa; --code: #eff1f3;
   --ok: #1a7f37; --ok-bg: #dafbe1; --ng: #cf222e; --ng-bg: #ffebe9;
   --warn: #9a6700; --warn-bg: #fff8c5; --info: #0969da; --info-bg: #ddf4ff;
-  --skip: #57606a; --skip-bg: #eaeef2;
+  --skip: #57606a; --skip-bg: #eaeef2; color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -353,7 +413,7 @@ _CSS = """
     --group: #161b22; --code: #1f242c;
     --ok: #3fb950; --ok-bg: #12261e; --ng: #f85149; --ng-bg: #2d1416;
     --warn: #d29922; --warn-bg: #2b2111; --info: #58a6ff; --info-bg: #121d2f;
-    --skip: #8d96a0; --skip-bg: #21262d;
+    --skip: #8d96a0; --skip-bg: #21262d; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
@@ -361,7 +421,7 @@ _CSS = """
   --group: #161b22; --code: #1f242c;
   --ok: #3fb950; --ok-bg: #12261e; --ng: #f85149; --ng-bg: #2d1416;
   --warn: #d29922; --warn-bg: #2b2111; --info: #58a6ff; --info-bg: #121d2f;
-  --skip: #8d96a0; --skip-bg: #21262d;
+  --skip: #8d96a0; --skip-bg: #21262d; color-scheme: dark;
 }
 * { box-sizing: border-box; }
 body {
@@ -424,4 +484,127 @@ pre .diff-file { color: var(--muted); }
 .problems { margin: 8px 0 12px; }
 .problems ul { margin: 0; padding-left: 20px; }
 a { color: var(--info); }
+[hidden] { display: none !important; }
+.filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 8px 0; }
+.filter .toggles { display: flex; flex-wrap: wrap; gap: 4px; }
+.filter button.badge {
+  font-family: inherit; line-height: 1.6; cursor: pointer; border: 1px solid transparent;
+}
+.filter button.badge.notrun { border: 1px dashed var(--line); }
+.filter button.badge.all { color: var(--fg); background: var(--bg); border-color: var(--line); }
+.filter button.badge.all[aria-pressed="true"] {
+  color: var(--bg); background: var(--fg); border-color: var(--fg);
+}
+.filter button.badge[aria-pressed="true"]:not(.all) { border: 1px solid currentColor; }
+.filter.active button.badge[aria-pressed="false"]:not(.all) { opacity: .4; }
+.filter button.badge:focus-visible { outline: 2px solid var(--info); outline-offset: 1px; }
+.filter input {
+  flex: 1 1 240px; max-width: 420px; padding: 3px 8px; border: 1px solid var(--line);
+  border-radius: 6px; background: var(--bg); color: var(--fg); font: inherit; font-size: 13px;
+}
+.filter input:focus { outline: 2px solid var(--info); outline-offset: -1px; }
+"""
+
+# ページ上部の絞り込み。外部のファイルを読まず、HTML に埋め込む。
+#
+# 階層の列は rowspan で縦に結合しているので、行を display: none で隠すだけでは表が崩れる
+# （結合したセルを持つ行を隠すと、そのセルごと消えて、下の行の列がずれる）。そこで、
+# 1. 最初に、各ケースの行がどの階層のセルに覆われているかを、rowspan をたどって覚える
+# 2. 絞り込むたびに、階層のセルをすべて外し、条件に合う行だけを tbody に並べ直す
+# 3. 同じセルに覆われた行が続くところ（同じグループ）は、その最初の行にセルを戻し、
+#    rowspan を見えている行の数（失敗の詳細の行も数える）にする
+# 元のセルをそのまま使い回すので、絞り込みを外すと最初の表とまったく同じになる。
+# 失敗の詳細の行は、ケースの行と一緒に出し入れする。
+_JS = r"""
+(() => {
+  const bar = document.querySelector("header .filter");
+  if (!bar) return;
+  const input = bar.querySelector("input");
+  const buttons = Array.from(bar.querySelectorAll("button"));
+  const shown = bar.querySelector(".shown");
+  const selected = new Set();
+  const tables = Array.from(document.querySelectorAll("table.cases")).map((table) => {
+    const depth = table.tHead.querySelectorAll("th.level").length;
+    const body = table.tBodies[0];
+    const cover = [];
+    const cases = [];
+    for (const tr of Array.from(body.rows)) {
+      if (tr.classList.contains("detail")) {
+        cases[cases.length - 1].detail = tr;
+      } else {
+        let next = 0;
+        const cells = [];
+        for (let level = 0; level < depth; level++) {
+          if (!cover[level] || cover[level].left === 0) {
+            const cell = tr.cells[next++];
+            cover[level] = { cell, left: cell.rowSpan };
+          }
+          cells.push(cover[level].cell);
+        }
+        const text = (tr.dataset.text || "").toLowerCase();
+        cases.push({ tr, detail: null, cells, outcome: tr.dataset.outcome, text });
+      }
+      cover.forEach((c) => c.left--);
+    }
+    const cells = new Set(cases.flatMap((c) => c.cells));
+    return { section: table.closest("section"), body, cases, cells };
+  });
+
+  const apply = () => {
+    const words = input.value.toLowerCase().split(/\s+/).filter(Boolean);
+    const match = (c) =>
+      (selected.size === 0 || selected.has(c.outcome)) && words.every((w) => c.text.includes(w));
+    let count = 0;
+    let total = 0;
+    for (const t of tables) {
+      t.cells.forEach((cell) => cell.remove());
+      const rows = [];
+      const last = [];
+      const visible = t.cases.filter(match);
+      for (const c of visible) {
+        const height = c.detail ? 2 : 1;
+        const starts = [];
+        c.cells.forEach((cell, level) => {
+          if (last[level] === cell) {
+            cell.rowSpan += height;
+          } else {
+            last[level] = cell;
+            cell.rowSpan = height;
+            starts.push(cell);
+          }
+        });
+        c.tr.prepend(...starts);
+        rows.push(c.tr);
+        if (c.detail) rows.push(c.detail);
+      }
+      t.body.replaceChildren(...rows);
+      if (t.section) t.section.hidden = rows.length === 0;
+      count += visible.length;
+      total += t.cases.length;
+    }
+    shown.textContent =
+      count === 0
+        ? shown.dataset.none
+        : shown.dataset.template.replace("{shown}", count).replace("{total}", total);
+    bar.classList.toggle("active", selected.size > 0);
+    for (const b of buttons) {
+      const o = b.dataset.outcome;
+      b.setAttribute("aria-pressed", String(o ? selected.has(o) : selected.size === 0));
+    }
+  };
+
+  bar.addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    const o = button.dataset.outcome;
+    if (!o) selected.clear();
+    else if (selected.has(o)) selected.delete(o);
+    else selected.add(o);
+    apply();
+  });
+  input.addEventListener("input", apply);
+  document.querySelector("header > .counts").hidden = true;
+  bar.hidden = false;
+  apply();
+})();
 """

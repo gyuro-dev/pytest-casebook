@@ -710,6 +710,8 @@ For each case file the report contains:
 - preconditions show non-default state names and the case's own `setup:`. Skip and known-bug reasons are shown under the result
 - the time only counts running the case (not session fixtures that build the environment)
 
+At the top of the page you can narrow the table down. Click a result (e.g. Failed) to show only those cases (click more results to add them, "All" to reset), and type in the box to keep only the cases whose group, case name, command, description, preconditions or expected results contain the text (case-insensitive; several words must all match). The merged group cells are rebuilt for the rows that remain, and files with no matching case are hidden. The per-file counts always describe the whole run. The report stays a single HTML file; without JavaScript the full table is shown.
+
 To submit "what will be checked" before testing, use it with `--collect-only`. The cases are not run, and every result is "Not run" (the precondition and expected result columns come from the YAML).
 
 ```bash
