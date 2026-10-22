@@ -24,8 +24,10 @@ import pytest
 from .messages import TEXTS
 
 # 結果の種類 -> 優先度。
-# 1件のケースで複数の段階（setup / call / teardown）の結果があるときは、優先度の高いほうを使う
+# 1件のケースで複数の段階（setup / call / teardown）の結果があるときは、優先度の高いほうを使う。
+# notrun は、集めたが実行していないケース（--collect-only や、-x で途中で止まったとき）
 OUTCOMES: dict[str, int] = {
+    "notrun": -1,
     "passed": 0,
     "updated": 1,
     "skipped": 2,
@@ -42,7 +44,7 @@ class CaseRow:
     """表の1行（1件のケース）。"""
 
     meta: dict[str, Any]
-    outcome: str = "passed"
+    outcome: str = "notrun"
     duration: float = 0.0
     details: list[str] = field(default_factory=list)
     # スキップや想定どおりの失敗の理由（結果の下に出す）
@@ -76,6 +78,13 @@ class CasebookHtmlReport:
         self.title = title
         self.lang = lang
         self.rows: dict[str, CaseRow] = {}
+
+    def pytest_collection_finish(self, session: pytest.Session) -> None:
+        """集めたケースを、まず「未実施」の行として入れる（実行したものは結果で上書きする）。"""
+        for item in session.items:
+            meta = dict(item.user_properties).get("casebook")
+            if isinstance(meta, dict):
+                self.rows.setdefault(item.nodeid, CaseRow(meta=meta))
 
     def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
         props = dict(report.user_properties)
@@ -231,7 +240,8 @@ def _case_table(texts: dict[str, Any], rows: list[CaseRow], labels: list[str]) -
         cells.append(f"<td class='cond'>{_list(meta['expected'])}</td>")
         note = f"<div class='muted note'>{_e(row.note)}</div>" if row.note else ""
         cells.append(f"<td class='result'>{_badge(texts, row.outcome)}{note}</td>")
-        cells.append(f"<td class='num'>{row.duration * 1000:.0f} ms</td>")
+        duration = "—" if row.outcome == "notrun" else f"{row.duration * 1000:.0f} ms"
+        cells.append(f"<td class='num'>{duration}</td>")
         lines.append(f"<tr id='{_row_id(row)}' class='{row.outcome}'>{''.join(cells)}</tr>")
         if row.details:
             # 詳細は表の幅いっぱいの行に出す（差分の長い行で列の幅が広がらないように）
@@ -370,6 +380,7 @@ h3 { font-size: 14px; margin: 16px 0 6px; }
   display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px;
   font-weight: 600; white-space: nowrap;
 }
+.badge.notrun { color: var(--muted); border: 1px dashed var(--line); }
 .badge.passed { color: var(--ok); background: var(--ok-bg); }
 .badge.updated { color: var(--info); background: var(--info-bg); }
 .badge.skipped, .badge.xfailed { color: var(--skip); background: var(--skip-bg); }

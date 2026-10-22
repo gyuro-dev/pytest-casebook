@@ -17,6 +17,7 @@ from typing import Any
 TEXTS: dict[str, dict[str, Any]] = {
     "ja": {
         "outcomes": {
+            "notrun": "未実施",
             "passed": "成功",
             "updated": "更新",
             "skipped": "スキップ",
@@ -49,6 +50,7 @@ TEXTS: dict[str, dict[str, Any]] = {
     },
     "en": {
         "outcomes": {
+            "notrun": "Not run",
             "passed": "Passed",
             "updated": "Updated",
             "skipped": "Skipped",

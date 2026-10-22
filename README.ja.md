@@ -214,6 +214,7 @@ DB を使うときや、テスト用の環境を渡したいときだけ、conft
 | FastAPI の API と DB を確かめたい | YAML ＋ conftest.py | `request:`・`setup:`・`expect:` ＋ TestClient | [15_fastapi](examples/15_fastapi) |
 | Flask の API と DB を確かめたい | YAML ＋ conftest.py | `request:`・`setup:`・`expect:` ＋ test_client | [16_flask](examples/16_flask) |
 | 同じケースを別々の環境（ローカルとステージング、モックと本物など）に流したい | conftest.py ＋ コマンドライン | `casebook_env` で切り替え、`-o casebook_golden_dir=…` と `-m`（[やり方](#複数の環境に流す)） | [17_targets](examples/17_targets) |
+| 試験の前に、これから確かめる項目の表を出したい | コマンドライン | `pytest --collect-only --casebook-html=plan.html`（結果は「未実施」。[やり方](#html-レポート)） | — |
 | HTML レポートを出しながら、カバレッジも測りたい | pyproject.toml ＋ コマンドライン | pytest-cov と、coverage.py の `patch = ["subprocess"]`（[やり方](#カバレッジを測る)） | — |
 
 全部を組み合わせた例は [examples/shop](examples/shop) にあります。
@@ -770,6 +771,13 @@ pytest がテストの場所として受け取るので、JUnit XML（xunit1）�
   スキップや既知の不具合の理由は、結果の下に出します
 - 時間はケースの実行だけを数えます（session の fixture で環境を作る時間は含みません）
 
+試験の前に「これから何を確かめるか」を提出するときは、`--collect-only` と一緒に使います。\
+ケースを実行せずに、結果の列がすべて「未実施」の表を出します（前提条件と期待結果の列は、YAML から出ます）。
+
+```bash
+uv run pytest --collect-only --casebook-html=reports/plan.html
+```
+
 表の全体はこのようになります（[docs/screenshots](docs/screenshots) のケースから作ったもの）。
 
 ![試験項目表の HTML レポートの全体](docs/images/report-overview.png)
@@ -778,7 +786,8 @@ pytest がテストの場所として受け取るので、JUnit XML（xunit1）�
 
 ![失敗したケースの差分](docs/images/report-failure.png)
 
-結果は「成功・更新（`--casebook-update` で書き直した）・スキップ・想定どおり失敗・想定外に成功・失敗・エラー」のどれかで表示します。\
+結果は「成功・更新（`--casebook-update` で書き直した）・スキップ・想定どおり失敗・想定外に成功・失敗・エラー・未実施」のどれかで表示します。\
+「未実施」は、集めたが実行していないケースです（`-x` で途中で止まったときなど）。\
 pytest-html は要りません（一緒に使うこともできます）。
 
 ### ini の設定

@@ -187,6 +187,7 @@ Every row has a ready-to-run sample in [examples-en](https://github.com/gyuro-de
 | Test a FastAPI API together with its DB | YAML + conftest.py | `request:`, `setup:`, `expect:` + TestClient | [15_fastapi](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/15_fastapi) |
 | Test a Flask API together with its DB | YAML + conftest.py | `request:`, `setup:`, `expect:` + test_client | [16_flask](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/16_flask) |
 | Run the same cases against different environments (local and staging, mock and real, …) | conftest.py + command line | switch in `casebook_env`, `-o casebook_golden_dir=…` and `-m` ([how](#running-against-multiple-environments)) | [17_targets](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/17_targets) |
+| Write the sheet of what will be checked, before testing | command line | `pytest --collect-only --casebook-html=plan.html` (results are "Not run"; [how](#html-report)) | — |
 | Measure coverage while writing the HTML report | pyproject.toml + command line | pytest-cov and coverage.py's `patch = ["subprocess"]` ([how](#measuring-coverage)) | — |
 
 A sample combining everything is in [examples-en/shop](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/shop).
@@ -698,6 +699,12 @@ For each case file the report contains:
 - preconditions show non-default state names and the case's own `setup:`. Skip and known-bug reasons are shown under the result
 - the time only counts running the case (not session fixtures that build the environment)
 
+To submit "what will be checked" before testing, use it with `--collect-only`. The cases are not run, and every result is "Not run" (the precondition and expected result columns come from the YAML).
+
+```bash
+uv run pytest --collect-only --casebook-html=reports/plan.html
+```
+
 The whole report looks like this (made from the cases in [docs/screenshots-en](https://github.com/gyuro-dev/pytest-casebook/tree/main/docs/screenshots-en)).
 
 ![The whole HTML report](https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/docs/images/report-overview-en.png)
@@ -706,7 +713,7 @@ A failed case can be expanded below its row to show the diff.
 
 ![Diff of a failed case](https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/docs/images/report-failure-en.png)
 
-Results are one of: passed, updated (rewritten by `--casebook-update`), skipped, expected failure, unexpected pass, failed, error (labels follow `casebook_lang`). pytest-html is not required (they can be used together).
+Results are one of: passed, updated (rewritten by `--casebook-update`), skipped, expected failure, unexpected pass, failed, error, not run (labels follow `casebook_lang`). "Not run" is a case that was collected but not run (e.g. after `-x` stopped the session). pytest-html is not required (they can be used together).
 
 ### ini options
 
