@@ -215,7 +215,7 @@ DB を使うときや、テスト用の環境を渡したいときだけ、conft
 | FastAPI の API と DB を確かめたい | YAML ＋ conftest.py | `request:`・`setup:`・`expect:` ＋ TestClient | [15_fastapi](examples/15_fastapi) |
 | Flask の API と DB を確かめたい | YAML ＋ conftest.py | `request:`・`setup:`・`expect:` ＋ test_client | [16_flask](examples/16_flask) |
 | 同じケースを別々の環境（ローカルとステージング、モックと本物など）に流したい | conftest.py ＋ コマンドライン | `casebook_env` で切り替え、`-o casebook_golden_dir=…` と `-m`（[やり方](#複数の環境に流す)） | [17_targets](examples/17_targets) |
-| AWS を確かめたい（S3 にファイル、DynamoDB に行を入れ、実行後の DynamoDB・SQS・S3 を見る） | YAML ＋ conftest.py | `setup:`・`expect:` ＋ `pytest_casebook_setup` / `pytest_casebook_observe` で boto3（moto のモック） | [19_aws](examples/19_aws) |
+| AWS を確かめたい（S3 にファイル、DynamoDB に行を入れ、実行後の DynamoDB・SQS・S3 を見る） | YAML ＋ conftest.py | `setup:`・`expect:` ＋ `pytest_casebook_setup` / `pytest_casebook_observe` で boto3（moto のモック。[書き方](#aws-moto-と実-aws)） | [19_aws](examples/19_aws) |
 | 手動の確認（目視・帳票など）も同じ表に載せたい | YAML | `manual:` と `result:`（[書き方](#手動のケース-manual)） | [18_manual](examples/18_manual) |
 | 試験の前に、これから確かめる項目の表を出したい | コマンドライン | `pytest --collect-only --casebook-html=plan.html`（結果は「未実施」。[やり方](#html-レポート)） | — |
 | HTML レポートを出しながら、カバレッジも測りたい | pyproject.toml ＋ コマンドライン | pytest-cov と、coverage.py の `patch = ["subprocess"]`（[やり方](#カバレッジを測る)） | — |
@@ -785,6 +785,55 @@ uv run pytest --target staging -o casebook_golden_dir=golden_staging -m "not loc
   環境で置き場所を替えるときは、YAML には書かないでください
 - 環境によって答えが変わる確認は期待出力ファイルで、どの環境でも同じになる確認は `expect:` で書くと、期待値の重複が減ります
 - 例は [examples/17_targets](examples/17_targets) にあります
+
+### AWS (moto と実 AWS)
+
+pytest-casebook は、自分では AWS に繋ぎません。\
+入力は `pytest_casebook_setup` で入れ、結果は `pytest_casebook_observe` で取り出します（どちらも boto3 で書きます。[19_aws](examples/19_aws)）。
+
+- `setup: {s3: {バケット/キー: 中身}, dynamodb: {テーブル: [行]}}` で、S3 にファイルを置き、DynamoDB に行を入れる
+- `expect:` / `observe:` の `dynamodb.<テーブル>`・`sqs.<キュー>`・`s3.<バケット>` で、実行後の中身を取り出す
+
+moto（AWS のモック）での注意です。
+
+- moto の `mock_aws()` は、pytest のプロセスの中でしか効きません。\
+  `call:` と `request:`（と `run_in_process` を使う `command:`）はモックになりますが、`command:` で別プロセスとして動かす CLI はモックになりません。\
+  そのときは、moto のサーバーか LocalStack を立て、`env:` で `AWS_ENDPOINT_URL` を渡します
+- DynamoDB は数を `Decimal` で返します。\
+  observe の hook で `int` / `float` にしないと、`price: 300` と一致しません
+- DynamoDB の scan と SQS の受信は、順番が決まっていません。\
+  hook で並べるか、`expect:` に `$unordered` を使います
+- SQS は1回で 10 件までしか受け取れません。\
+  空になるまで受け取り、受け取ったものは消します（消さないと、見えない時間が過ぎたあとに、あとのケースで見えてしまいます）
+
+同じ YAML を、`casebook_env` を切り替えて実 AWS にも流せます（[複数の環境に流す](#複数の環境に流す)）。\
+実 AWS での注意です。
+
+- **本物のデータを消さない**。\
+  サンプルの後片付けは、行・メッセージ・ファイルをすべて消します。\
+  テスト専用のアカウントを使うか、実行ごとに違う名前（`casebook-1a2b3c4d-orders` など）でリソースを作り、最後に丸ごと消してください。\
+  確かめる側のコードは、テーブル・キュー・バケットの名前を設定や環境変数から受け取る作りにしておくと、テストの名前を渡せます
+- **`command:` がそのまま使える**。\
+  別プロセスからも同じ AWS に繋がります。\
+  `AWS_PROFILE` やリソースの名前は `env:` で渡します
+- **非同期の処理は待つ**。\
+  S3 に置くと Lambda が動いて DynamoDB に書くような作りでは、実行の直後にはまだ結果がありません。\
+  observe の hook で、値がそろうまで数秒おきに読み直します（上限の時間を決めておきます）。\
+  SQS は `WaitTimeSeconds` で待って受け取り、DynamoDB は `ConsistentRead=True` で読みます
+- **実行ごとに変わる値をそろえる**。\
+  メッセージ ID・ETag・日時・ARN の中のアカウント ID などは、`normalize:` か `pytest_casebook_placeholders` で置き換えます。\
+  モックと期待出力が違うときは、`-o casebook_golden_dir=golden_real` で実 AWS の期待出力を分けます
+- **遅さと並列**。\
+  1件に数秒かかることがあるので、`timeout:` を付けます。\
+  pytest-xdist（`-n`）で並べると、ワーカーが同じリソースを取り合います。\
+  実 AWS の試験は `-n` なしで流すか、ワーカーごとに名前を分けます
+- **認証**。\
+  手元では SSO かプロファイルを使います。\
+  GitHub Actions では、OIDC でテスト用アカウントのロールを引き受け（secrets にアクセスキーを置かない）、テスト用のリソースだけを許可します。\
+  実 AWS の試験は、PR ごとではなく、手動か夜間に流すのが向いています
+
+よくある使い分けは、PR ごとには moto で速く何度でも流し、リリースの前や夜間に同じ YAML を実 AWS に流す、というものです。\
+実 AWS では、モックでは分からないこと（IAM の権限、実際の Lambda の連携、本物の API の細かい動き）を確かめます。
 
 ### カバレッジを測る
 
