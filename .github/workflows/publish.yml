@@ -1,5 +1,7 @@
-# Publish to TestPyPI and then PyPI when a v* tag is pushed (Trusted Publishing; no tokens).
-# v* のタグを push したら、TestPyPI に上げてから PyPI に上げる（Trusted Publishing。トークンは置かない）。
+# Publish to TestPyPI and then PyPI when a v* tag is pushed (Trusted Publishing; no tokens),
+# then create the GitHub release with the notes from CHANGELOG.md.
+# v* のタグを push したら、TestPyPI に上げてから PyPI に上げ（Trusted Publishing。トークンは置かない）、
+# CHANGELOG.md のノートで GitHub のリリースを作る。
 #
 # Security / 安全のために:
 # - only the owner can create v* tags (ruleset "release tags")
@@ -10,6 +12,10 @@
 #   (a poisoned cache could otherwise end up in the package)
 #   id-token: write は上げるジョブだけに付け、作るジョブではキャッシュを使わない
 #   （汚染されたキャッシュがパッケージに入らないように）
+# - contents: write is given only to the release job, which runs after PyPI and only creates
+#   the release for the existing tag (it cannot create or move tags)
+#   contents: write はリリースのジョブだけに付ける。PyPI のあとに動き、今あるタグのリリースを
+#   作るだけ（タグは作れず、動かせない）
 name: Publish
 
 on:
@@ -48,6 +54,11 @@ jobs:
           version=$(uv run --no-project python -c "import re, pathlib; print(re.search(r'__version__ = \"(.+)\"', pathlib.Path('src/pytest_casebook/__init__.py').read_text()).group(1))")
           echo "tag: $TAG / version: $version"
           test "$TAG" = "v$version"
+      # CHANGELOG.md must have the version's section (the release notes are made from it)
+      # CHANGELOG.md に版の節があることを確かめる（リリースノートはそこから作る）
+      - env:
+          TAG: ${{ github.ref_name }}
+        run: uv run --no-project python scripts/release_notes.py "$TAG"
       - run: uv build
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -88,3 +99,21 @@ jobs:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+
+  release:
+    name: Create the GitHub release
+    needs: pypi
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # create the release for the tag / タグのリリースを作る
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          python3 scripts/release_notes.py "$TAG" > "$RUNNER_TEMP/notes.md"
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
