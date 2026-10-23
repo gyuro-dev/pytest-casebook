@@ -22,7 +22,7 @@ from .http import HttpRequest, HttpResponse
 from .model import Case, CasebookDoc, CasebookError, Group, load
 from .runner import CommandResult, run_in_process
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 # JSON Schema for case files (casebook_*.yaml), used for editor completion and validation.
 # ケースファイル（casebook_*.yaml）の JSON Schema。エディタの補完と検証に使う
