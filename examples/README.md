@@ -21,6 +21,7 @@
 | [15_fastapi](15_fastapi) | FastAPI の API と DB を確かめる | YAML ＋ conftest.py |
 | [16_flask](16_flask) | Flask の API と DB を確かめる | YAML ＋ conftest.py |
 | [17_targets](17_targets) | 同じケースを別々の環境に流し、期待出力を環境ごとに分ける | YAML ＋ conftest.py |
+| [18_manual](18_manual) | 自動にできない確認（目視・帳票など）も同じ表に載せ、結果を手で書く | YAML |
 | [shop](shop) | 01〜13 の書き方を組み合わせた例 | YAML ＋ conftest.py |
 
 ## 実行のしかた

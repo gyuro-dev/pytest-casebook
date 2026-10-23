@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
+# 自動にできない確認（目視・帳票など）を、自動のケースと同じ試験項目表に載せる。作るのはこの YAML だけ。
+# 手動のケースは実行しない。result: を書くまではスキップになり、レポートには「手動」と出る。
+#
+#   uv run pytest examples/18_manual -rs        # まだ確かめていない手動のケースが分かる
+#   uv run pytest examples/18_manual -o casebook_lang=ja --casebook-html=reports/manual.html
+title: 請求書
+levels: [機能]
+
+cases:
+  - group: 金額
+    cases:
+      - name: total
+        description: 明細の合計に消費税（10%）を足す
+        call: invoice:total
+        args: [[1000, 2000]]
+        expect: {return: 3300}
+
+  - group: 印刷
+    cases:
+      - name: print_layout
+        description: 明細が2ページにまたがっても表が崩れない
+        manual: |
+          明細が40行ある請求書の印刷プレビューを開く
+          2ページ目の表を目で確かめる
+        expect:
+          - 2ページ目の先頭にも見出し行が出る
+          - 罫線がページの境目で途切れない
+        result: passed # 手で確かめた結果（passed・failed・skipped）
+
+      - name: monochrome_logo
+        description: モノクロで印刷してもロゴが見分けられる
+        manual: モノクロのプリンターで印刷し、ロゴと背景を見比べる
+        expect: ロゴの輪郭が分かる
+        # result: を書くまでは「手動」と出る（まだ確かめていない）

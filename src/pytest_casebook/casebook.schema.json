@@ -179,6 +179,11 @@
           "required": [
             "request"
           ]
+        },
+        {
+          "required": [
+            "manual"
+          ]
         }
       ],
       "properties": {
@@ -230,6 +235,19 @@
         "request": {
           "$ref": "#/$defs/request"
         },
+        "manual": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A manual case: the steps to check by hand. It is not run; it is shown in the report as Manual / 手動のケースの手順。実行せず、レポートに「手動」と出す"
+        },
+        "result": {
+          "enum": [
+            "passed",
+            "failed",
+            "skipped"
+          ],
+          "description": "The result of a manual case checked by hand (omit while not done yet) / 手動のケースを手で確かめた結果（まだなら書かない）"
+        },
         "state": {
           "type": "string"
         },
@@ -244,7 +262,21 @@
           "description": "Targets fetched after the run (files, etc.) / 実行後に取り出す対象（files など）"
         },
         "expect": {
-          "$ref": "#/$defs/expect"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/expect"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ],
+          "description": "Expected results. A mapping for command / call / request; text (a string or a list of strings) for a manual case / 期待結果。command・call・request はマッピング、manual のケースは文章（文字列か文字列のリスト）"
         },
         "marks": {
           "type": "array",

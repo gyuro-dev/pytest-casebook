@@ -27,6 +27,10 @@ cases:
         call: calc:add            # "モジュール:関数" を呼ぶ
         args: [1, 2]
         kwargs: {}
+      - name: print_layout
+        manual: 印刷プレビューで罫線を目で確かめる  # 手動のケース（実行しない）
+        expect: 2ページ目にも見出し行が出る    # 期待結果を文章で書く
+        result: passed            # 手で確かめた結果（省略可）
       - name: import_csv
         setup:                    # このケースだけの準備（省略可）
           files:                  # ケースごとの作業ディレクトリに作るファイル
@@ -104,7 +108,13 @@ _CASE_KEYS = {
     "setup",
     "observe",
     "expect",
+    "manual",
+    "result",
 }
+# manual のケースに書けないキー（実行しないので意味がない）
+_MANUAL_FORBIDDEN_KEYS = ("args", "kwargs", "stdin", "timeout", "env", "observe", "golden")
+# manual のケースの result: に書ける値
+MANUAL_RESULTS = ("passed", "failed", "skipped")
 
 DEFAULT_STATE = "default"
 DEFAULT_GOLDEN_DIR = "golden"
@@ -154,9 +164,9 @@ class Group:
 @dataclass(frozen=True)
 class Case:
     """
-    A single case. It has exactly one of `command`, `call`, and `request`.
+    A single case. It has exactly one of `command`, `call`, `request`, and `manual`.
 
-    1件のケース。`command`・`call`・`request` のどれか1つを持つ。
+    1件のケース。`command`・`call`・`request`・`manual` のどれか1つを持つ。
     """
 
     name: str
@@ -198,6 +208,12 @@ class Case:
     xfail: str | None = None
     # YAML の中で、このケースが始まる行（0 から数える。分からなければ None）
     line: int | None = None
+    # 手動のケースの手順（manual: に書いたもの）。手動のケースは実行しない
+    manual: str | None = None
+    # 手動のケースの期待結果（expect: に文章で書いたもの）
+    manual_expect: tuple[str, ...] = ()
+    # 手動のケースを手で確かめた結果（passed・failed・skipped。まだなら None）
+    result: str | None = None
 
     @property
     def path(self) -> tuple[str, ...]:
@@ -211,20 +227,23 @@ class Case:
     @property
     def kind(self) -> str:
         """
-        One of `"command"`, `"call"`, and `"request"`.
+        One of `"command"`, `"call"`, `"request"`, and `"manual"`.
 
-        `"command"`・`"call"`・`"request"` のどれか。
+        `"command"`・`"call"`・`"request"`・`"manual"` のどれか。
         """
+        if self.manual is not None:
+            return "manual"
         return _kind_of(self.command, self.call)
 
     @property
     def uses_golden(self) -> bool:
         """
-        Whether the case is compared with a golden file (True when it has no `expect:`).
+        Whether the case is compared with a golden file (True when it has no `expect:` and is
+        not a manual case).
 
-        期待出力ファイルと比べるケースか（expect: がなければ True）。
+        期待出力ファイルと比べるケースか（expect: がなく、手動のケースでなければ True）。
         """
-        return self.expect is None
+        return self.expect is None and self.manual is None
 
     @property
     def observe_targets(self) -> tuple[str, ...]:
@@ -611,8 +630,15 @@ def _parse_case(
         raise CasebookError(error("bad_name", where=loc, name=repr(name)))
     loc = f"{loc}{error('in_case', name=name)}"
 
-    if sum(key in item for key in ("command", "call", "request")) != 1:
+    if sum(key in item for key in ("command", "call", "request", "manual")) != 1:
         raise CasebookError(error("one_action", where=loc))
+    manual = _str(item["manual"], loc, "manual", required=True) if "manual" in item else None
+    if manual is not None:
+        forbidden = [key for key in _MANUAL_FORBIDDEN_KEYS if key in item]
+        if forbidden:
+            raise CasebookError(error("manual_keys", where=loc, keys=", ".join(forbidden)))
+    elif "result" in item:
+        raise CasebookError(error("result_only_manual", where=loc))
     command = None
     command_argv = None
     if isinstance(item.get("command"), list):
@@ -695,11 +721,38 @@ def _parse_case(
         setup_files=setup_files,
         own_setup=item.get("setup"),
         observe=_str_list(item.get("observe"), loc, "observe"),
-        expect=_parse_expect(item["expect"], kind, loc) if "expect" in item else None,
+        expect=(
+            _parse_expect(item["expect"], kind, loc)
+            if "expect" in item and manual is None
+            else None
+        ),
         meta={**meta, **_meta(item.get("meta"), loc)},
         line=doc._source_lines.get(id(item)),
+        manual=manual,
+        manual_expect=_manual_expect(item.get("expect"), loc) if manual is not None else (),
+        result=_manual_result(item.get("result"), loc),
         **{**flags, **_flags(item, loc)},
     )
+
+
+def _manual_expect(value: Any, loc: str) -> tuple[str, ...]:
+    """手動のケースの expect:（期待結果を文章で書いたもの。文字列か文字列のリスト）。"""
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        value = [value]
+    if not (isinstance(value, list) and all(isinstance(v, str) for v in value)):
+        raise CasebookError(error("manual_expect", where=loc))
+    return tuple(value)
+
+
+def _manual_result(value: Any, loc: str) -> str | None:
+    """手動のケースの result:（passed・failed・skipped）。"""
+    if value is None:
+        return None
+    if value not in MANUAL_RESULTS:
+        raise CasebookError(error("result_value", where=loc, values=" / ".join(MANUAL_RESULTS)))
+    return str(value)
 
 
 def _flags(item: dict[str, Any], loc: str) -> dict[str, str]:

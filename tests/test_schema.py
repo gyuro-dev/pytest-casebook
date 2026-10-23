@@ -64,10 +64,23 @@ def test_examples_follow_schema(path: Path) -> None:
         {"env": ["A=1"], "cases": []},  # env がマッピングでない
         {"cases": [{"name": "a", "command": "x", "env": {"A": True}}]},
         {"cases": [{"name": "a", "command": "x", "env": {"A=B": "x"}}]},
+        {"cases": [{"name": "a", "manual": "x", "call": "m:f"}]},  # 手動と操作の両方
+        {"cases": [{"name": "a", "manual": "x", "result": "ok"}]},  # 結果の書き間違い
+        {"cases": [{"name": "a", "manual": ""}]},  # 手順が空
     ],
 )
 def test_schema_rejects_mistakes(doc: Any) -> None:
     assert errors(doc)
+
+
+def test_schema_accepts_manual_case() -> None:
+    doc = {
+        "cases": [
+            {"name": "a", "manual": "目で見る", "expect": "崩れない", "result": "passed"},
+            {"name": "b", "manual": "目で見る", "expect": ["崩れない", "途切れない"]},
+        ]
+    }
+    assert errors(doc) == []
 
 
 def test_schema_accepts_env() -> None:

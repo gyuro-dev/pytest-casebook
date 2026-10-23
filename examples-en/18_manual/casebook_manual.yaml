@@ -1,0 +1,36 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
+# Put checks that cannot be automated (looking at a screen, printed forms) in the same test
+# specification sheet as the automated cases. This YAML is all you write.
+# Manual cases are not run. Until result: is written they are skipped and the report shows "Manual".
+#
+#   uv run pytest examples-en/18_manual -rs     # lists the manual cases not checked yet
+#   uv run pytest examples-en/18_manual --casebook-html=reports/manual-en.html
+title: Invoices
+levels: [Feature]
+
+cases:
+  - group: Amounts
+    cases:
+      - name: total
+        description: Adds 10% tax to the sum of the lines
+        call: invoice_en:total
+        args: [[1000, 2000]]
+        expect: {return: 3300}
+
+  - group: Printing
+    cases:
+      - name: print_layout
+        description: The table is not broken when the lines span two pages
+        manual: |
+          Open the print preview of an invoice with 40 lines
+          Look at the table on page 2
+        expect:
+          - The header row is repeated at the top of page 2
+          - No ruled line is broken at the page break
+        result: passed # the result checked by hand (passed, failed or skipped)
+
+      - name: monochrome_logo
+        description: The logo can be told apart when printed in black and white
+        manual: Print on a monochrome printer and compare the logo with the background
+        expect: The outline of the logo is visible
+        # until result: is written, the report shows "Manual" (not checked yet)

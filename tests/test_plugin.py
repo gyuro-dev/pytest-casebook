@@ -430,7 +430,7 @@ def test_groups_can_be_selected_with_k(project: pytest.Pytester) -> None:
     [
         ("cases:\n  - name: a\n    call: m:f\n  - name: a\n    call: m:f\n", "ケース名が重複"),
         ("cases:\n  - name: a\n    call: m:f\n    arg: [1]\n", "知らないキーがあります: arg"),
-        ("cases:\n  - name: a\n", "command・call・request のどれか1つ"),
+        ("cases:\n  - name: a\n", "command・call・request・manual のどれか1つ"),
         ("cases:\n  - name: a\n    call: m:f\n    state: x\n", "states がないのに state"),
         (
             "states: {default: {}}\ncases:\n  - name: a\n    call: m:f\n    state: x\n",

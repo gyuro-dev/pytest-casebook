@@ -19,6 +19,7 @@ TEXTS: dict[str, dict[str, Any]] = {
         "outcomes": {
             "notrun": "未実施",
             "passed": "成功",
+            "manual": "手動",
             "updated": "更新",
             "skipped": "スキップ",
             "xfailed": "想定どおり失敗",
@@ -53,11 +54,13 @@ TEXTS: dict[str, dict[str, Any]] = {
         "observe": "観察: {targets}",
         "contains": "{label} が「{pattern}」を含む",
         "regex": "{label} が「{pattern}」（正規表現）に合う",
+        "manual_steps": "手動: {steps}",
     },
     "en": {
         "outcomes": {
             "notrun": "Not run",
             "passed": "Passed",
+            "manual": "Manual",
             "updated": "Updated",
             "skipped": "Skipped",
             "xfailed": "Expected failure",
@@ -99,6 +102,7 @@ TEXTS: dict[str, dict[str, Any]] = {
         "observe": "Observe: {targets}",
         "contains": '{label} contains "{pattern}"',
         "regex": '{label} matches the regex "{pattern}"',
+        "manual_steps": "Manual: {steps}",
     },
 }
 LANGS = tuple(TEXTS)
@@ -138,6 +142,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         ),
         "golden_orphans": "{yaml} にない期待出力が {golden_dir} にあります: {orphans}",
         "no_files": "（ファイルなし）",
+        "manual_not_run": "手動のケース（result: がまだありません）",
+        "manual_failed": "[{name}] 手動で確かめた結果が failed です",
+        "manual_skipped": "手動の確認を行っていません（result: skipped）",
     },
     "en": {
         "line": " (line {line})",
@@ -173,6 +180,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         ),
         "golden_orphans": "golden files not used by {yaml} are left in {golden_dir}: {orphans}",
         "no_files": "(no files)",
+        "manual_not_run": "manual case (no result: yet)",
+        "manual_failed": "[{name}] the manual check result is failed",
+        "manual_skipped": "the manual check was not done (result: skipped)",
     },
 }
 
@@ -205,7 +215,13 @@ ERRORS: dict[str, dict[str, str]] = {
         "items_list": "{where}: ケースまたはグループのリストで書いてください",
         "item_mapping": "{where}: ケースまたはグループをマッピングで書いてください",
         "bad_name": "{where}: name に使えるのは英数字・_・-・. だけです: {name}",
-        "one_action": "{where}: command・call・request のどれか1つだけを書いてください",
+        "one_action": "{where}: command・call・request・manual のどれか1つだけを書いてください",
+        "manual_keys": "{where}: manual のケースには {keys} を書けません",
+        "manual_expect": (
+            "{where}: manual のケースの expect は、文字列か文字列のリストで書いてください"
+        ),
+        "result_only_manual": "{where}: result は manual のケースにだけ書けます",
+        "result_value": "{where}: result は {values} のどれかで書いてください",
         "empty_command": "{where}: command が空です（command_prefix もありません）",
         "bad_call": "{where}: call は 'モジュール:関数' の形で書いてください: {call}",
         "args_only_call": "{where}: args / kwargs は call のケースにだけ書けます",
@@ -305,7 +321,11 @@ ERRORS: dict[str, dict[str, str]] = {
         "items_list": "{where}: must be a list of cases or groups",
         "item_mapping": "{where}: each case or group must be a mapping",
         "bad_name": "{where}: name can only contain letters, digits, _, - and .: {name}",
-        "one_action": "{where}: write exactly one of command, call and request",
+        "one_action": "{where}: write exactly one of command, call, request and manual",
+        "manual_keys": "{where}: manual cases cannot have {keys}",
+        "manual_expect": "{where}: expect of a manual case must be a string or a list of strings",
+        "result_only_manual": "{where}: result can only be used in manual cases",
+        "result_value": "{where}: result must be one of {values}",
         "empty_command": "{where}: command is empty (and there is no command_prefix)",
         "bad_call": "{where}: call must be 'module:function': {call}",
         "args_only_call": "{where}: args / kwargs can only be used in call cases",

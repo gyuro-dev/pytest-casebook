@@ -23,6 +23,7 @@ These are the English versions of the samples in [examples](../examples). The ca
 | [15_fastapi](15_fastapi) | Check a FastAPI API and its DB | YAML + conftest.py |
 | [16_flask](16_flask) | Check a Flask API and its DB | YAML + conftest.py |
 | [17_targets](17_targets) | Run the same cases against different environments, with golden files per environment | YAML + conftest.py |
+| [18_manual](18_manual) | Put checks that cannot be automated (visual checks, printed forms) in the same sheet, with results written by hand | YAML |
 | [shop](shop) | An example that combines what 01–13 show | YAML + conftest.py |
 
 ## Running
