@@ -7,6 +7,23 @@ incompatible change raises the minor version).
 
 ## [Unreleased]
 
+### Fixed
+
+- A `command:` that times out now also stops the processes it started. Before, on Windows the
+  run waited until those processes ended (e.g. a command run through `cmd /c`), so `timeout`
+  did not work; on Linux and macOS they kept running in the background.
+- `--casebook-update` fails a case when another case uses the same golden file with a
+  different result (`golden:` pointing to one file, or case names that differ only in case,
+  such as `Add` and `add`, on Windows). Before, the later case silently overwrote the file and
+  the earlier case failed on the next run.
+- `--casebook-html` no longer stops with an internal error when another plugin reports its own
+  outcome, such as `rerun` from pytest-rerunfailures. Those reports are ignored, and the result
+  of the last attempt is shown.
+- `timeout` must be a positive number, as the JSON Schema already said. `0` or a negative
+  number made the case always time out, and `.inf` stopped the case with an error.
+- A case cannot be named `golden_orphans` while `check_orphans` is on, because the check for
+  leftover golden files uses that test name (there were two tests with the same ID).
+
 ## [0.4.0] - 2026-10-23
 
 ### Added

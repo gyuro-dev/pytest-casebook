@@ -27,6 +27,7 @@ import pytest
 from . import hookspecs
 from .expect import map_strings, match_text, match_value
 from .golden import (
+    GoldenContent,
     comparable_text,
     golden_differs,
     parse_golden,
@@ -41,6 +42,7 @@ from .model import (
     DEFAULT_GOLDEN_DIR,
     DEFAULT_STATE,
     FILES_TARGET,
+    ORPHANS_TEST_NAME,
     TEXT_EXPECT_KEYS,
     Case,
     CasebookDoc,
@@ -66,6 +68,8 @@ DEFAULT_FILE_PATTERNS = ["casebook_*.yaml", "casebook_*.yml", "*.casebook.yaml",
 
 # レポートでケースを YAML に書いた順に並べるための通し番号
 _order = itertools.count()
+# --casebook-update で、期待出力ファイル（normcase したパス）-> (先に使ったテストの nodeid, 結果)
+_GOLDEN_OWNERS = pytest.StashKey[dict[str, tuple[str, GoldenContent]]]()
 
 
 def pytest_addhooks(pluginmanager: pytest.PytestPluginManager) -> None:
@@ -214,7 +218,7 @@ class CasebookFile(pytest.File):
             yield item
         if doc.check_orphans:
             yield CasebookItem.from_parent(
-                self, name="golden_orphans", callobj=_make_orphan_test(doc)
+                self, name=ORPHANS_TEST_NAME, callobj=_make_orphan_test(doc)
             )
 
 
@@ -370,15 +374,14 @@ def _find_orphans(doc: CasebookDoc, others: list[CasebookDoc]) -> list[str]:
         for d in others
         if d.golden_dir.resolve() != root and d.golden_dir.resolve().is_relative_to(root)
     ]
-    return sorted(
-        p.relative_to(doc.golden_dir).as_posix()
-        for p in doc.golden_dir.rglob("*")
-        if p.is_file()
-        and not p.name.startswith(".")
-        and p.suffix in suffixes
-        and p.resolve() not in expected
-        and not any(p.resolve().is_relative_to(n) for n in nested)
-    )
+    orphans = []
+    for p in root.rglob("*"):
+        if not p.is_file() or p.name.startswith(".") or p.suffix not in suffixes:
+            continue
+        real = p.resolve()
+        if real not in expected and not any(real.is_relative_to(n) for n in nested):
+            orphans.append(p.relative_to(root).as_posix())
+    return sorted(orphans)
 
 
 def _make_orphan_test(doc: CasebookDoc) -> Callable[..., None]:
@@ -672,6 +675,17 @@ def _compare_golden(
     got = parse_golden(actual, default_section)
     expected = parse_golden(read_golden(path), default_section) if path.exists() else None
     if config.getoption("--casebook-update"):
+        # 同じ期待出力ファイルを使う2つのケースの結果が違うと、あとのケースが黙って上書きし、
+        # 次の実行で先のケースが失敗する。golden: で同じファイルを指したときや、Windows で
+        # 大文字小文字だけが違うケース名（Add と add）のときに起きる
+        owners = config.stash.setdefault(_GOLDEN_OWNERS, {})
+        nodeid = request.node.nodeid
+        owner = owners.setdefault(os.path.normcase(path.resolve()), (nodeid, got))
+        if owner[0] != nodeid and golden_differs(owner[1], got):
+            pytest.fail(
+                m["golden_shared"].format(name=case.name, label=label, other=owner[0]),
+                pytrace=False,
+            )
         # 結果が同じなら書き直さない（手で書いた期待出力の書き方を崩さず、
         # ヘッダーだけの違いで差分が出ないようにする）
         if (expected is None or golden_differs(expected, got)) and write_golden(path, actual):

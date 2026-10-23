@@ -132,6 +132,10 @@ MESSAGES: dict[str, dict[str, str]] = {
             "出力が期待と異なります。意図した変更なら `--casebook-update` で更新してください。"
         ),
         "golden_actual": "実際の出力",
+        "golden_shared": (
+            "[{name}] 期待出力 {label} はケース {other} も使っていて、結果が違います。"
+            "golden: でファイルを分けてください。"
+        ),
         "golden_orphans": "{yaml} にない期待出力が {golden_dir} にあります: {orphans}",
         "no_files": "（ファイルなし）",
     },
@@ -163,6 +167,10 @@ MESSAGES: dict[str, dict[str, str]] = {
             "If the change is intended, update it with `--casebook-update`."
         ),
         "golden_actual": "actual output",
+        "golden_shared": (
+            "[{name}] The golden file {label} is also used by case {other} with a different "
+            "result. Give the cases separate files with golden:."
+        ),
         "golden_orphans": "golden files not used by {yaml} are left in {golden_dir}: {orphans}",
         "no_files": "(no files)",
     },
@@ -190,6 +198,10 @@ ERRORS: dict[str, dict[str, str]] = {
         "states_mapping": "{where}: states は 状態名 -> 内容 のマッピングで書いてください",
         "no_cases": "{where}: cases がありません",
         "duplicate_names": "{where}: ケース名が重複しています: {names}",
+        "reserved_name": (
+            "{where}: ケース名 {name} は期待出力の消し忘れの確認に使うので、"
+            "別の名前にしてください（または check_orphans: false）"
+        ),
         "items_list": "{where}: ケースまたはグループのリストで書いてください",
         "item_mapping": "{where}: ケースまたはグループをマッピングで書いてください",
         "bad_name": "{where}: name に使えるのは英数字・_・-・. だけです: {name}",
@@ -205,7 +217,7 @@ ERRORS: dict[str, dict[str, str]] = {
         ),
         "args_list": "{where}: args はリストで書いてください",
         "kwargs_mapping": "{where}: kwargs は 引数名 -> 値 のマッピングで書いてください",
-        "timeout_number": "{where}: timeout は秒数（数値）で書いてください",
+        "timeout_number": "{where}: timeout は 0 より大きい秒数（数値）で書いてください",
         "state_without_states": "{where}: states がないのに state: {state} を指定しています",
         "unknown_state": "{where}: states に {state} がありません",
         "meta_mapping": "{where}: meta は キー -> 値 のマッピングで書いてください",
@@ -286,6 +298,10 @@ ERRORS: dict[str, dict[str, str]] = {
         "states_mapping": "{where}: states must be a mapping of state name -> contents",
         "no_cases": "{where}: cases is missing",
         "duplicate_names": "{where}: duplicate case names: {names}",
+        "reserved_name": (
+            "{where}: the case name {name} is used by the check for leftover golden files; "
+            "rename the case (or set check_orphans: false)"
+        ),
         "items_list": "{where}: must be a list of cases or groups",
         "item_mapping": "{where}: each case or group must be a mapping",
         "bad_name": "{where}: name can only contain letters, digits, _, - and .: {name}",
@@ -301,7 +317,7 @@ ERRORS: dict[str, dict[str, str]] = {
         ),
         "args_list": "{where}: args must be a list",
         "kwargs_mapping": "{where}: kwargs must be a mapping of argument name -> value",
-        "timeout_number": "{where}: timeout must be a number of seconds",
+        "timeout_number": "{where}: timeout must be a positive number of seconds",
         "state_without_states": "{where}: state: {state} is set, but there are no states",
         "unknown_state": "{where}: {state} is not in states",
         "meta_mapping": "{where}: meta must be a mapping of key -> value",

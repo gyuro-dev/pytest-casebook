@@ -43,6 +43,7 @@ cases:
 
 from __future__ import annotations
 
+import math
 import re
 import shlex
 from dataclasses import dataclass, field
@@ -107,6 +108,8 @@ _CASE_KEYS = {
 
 DEFAULT_STATE = "default"
 DEFAULT_GOLDEN_DIR = "golden"
+# 期待出力の消し忘れを確かめるテストの名前（check_orphans: true のとき、ケース名には使えない）
+ORPHANS_TEST_NAME = "golden_orphans"
 
 # expect に書ける、実行結果そのものの項目（それ以外のキーは observe の対象として扱う）
 COMMAND_EXPECT_KEYS = ("exit_code", "stdout", "stderr")
@@ -394,10 +397,10 @@ def load(
         those of `lang`: `Category / Subcategory / Item` for `en`)
     :param command_prefix: arguments put before the command when the YAML has no
         `command_prefix`
+    :param lang: language of the error messages and the default `levels`: `en` or `ja`
     :return: the validated contents of the case file
     :raises CasebookError: when the file cannot be read as YAML or is written incorrectly
     :raises OSError: when the file cannot be read
-    :param lang: language of the error messages and the default `levels`: `en` or `ja`
     :raises UnicodeDecodeError: when the file is not UTF-8
 
     ケースファイルを読み込む。pytest の外（デモ用のスクリプトなど）から、
@@ -543,6 +546,9 @@ def parse_document(
     duplicates = sorted(name for name, count in seen.items() if count > 1)
     if duplicates:
         raise CasebookError(error("duplicate_names", where=where, names=", ".join(duplicates)))
+    # 同じ名前のテストが2つになり、-k や結果で区別できなくなるため
+    if doc.check_orphans and ORPHANS_TEST_NAME in seen:
+        raise CasebookError(error("reserved_name", where=where, name=ORPHANS_TEST_NAME))
     doc._source_lines = {}
     return doc
 
@@ -644,7 +650,12 @@ def _parse_case(
     if not (isinstance(kwargs, dict) and all(isinstance(k, str) for k in kwargs)):
         raise CasebookError(error("kwargs_mapping", where=loc))
     timeout = item.get("timeout")
-    if timeout is not None and (isinstance(timeout, bool) or not isinstance(timeout, int | float)):
+    # 0 以下は必ず時間切れになり、.inf や .nan はスレッドを待つところで例外になるので、誤りにする
+    if timeout is not None and (
+        isinstance(timeout, bool)
+        or not isinstance(timeout, int | float)
+        or not 0 < timeout < math.inf
+    ):
         raise CasebookError(error("timeout_number", where=loc))
 
     state = _str(item.get("state"), loc, "state") or state
