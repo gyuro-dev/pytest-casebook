@@ -1,7 +1,10 @@
-# CI: lint, type check, workflow security check, tests on Linux / Windows / macOS, and the
-# end-to-end test with Docker. "CI result" is the single check required by the main ruleset.
-# CI: lint・型の検査・ワークフローの安全性の検査・Linux / Windows / macOS のテスト・Docker を
-# 使う実起動の試験。main のルールで必須にするのは「CI result」の1つだけ。
+# CI: lint, type check, workflow security check, tests on Linux / Windows, and the end-to-end
+# test with Docker. "CI result" is the single check required by the main ruleset. macOS is
+# tested once a week in weekly.yml (GitHub's macOS runners are scarce; a queue there should not
+# block pull requests).
+# CI: lint・型の検査・ワークフローの安全性の検査・Linux / Windows のテスト・Docker を使う
+# 実起動の試験。main のルールで必須にするのは「CI result」の1つだけ。macOS は weekly.yml で
+# 週に1回確かめる（GitHub の macOS の runner は数が少なく、その待ちで PR を止めないため）。
 #
 # Security / 安全のために:
 # - every action is pinned to a commit SHA (tags can be moved) / Actions は commit の SHA で固定する
@@ -76,8 +79,6 @@ jobs:
         include:
           - {os: windows-2025, python: "3.11", pytest: "9"}
           - {os: windows-2025, python: "3.15", pytest: "9"}
-          - {os: macos-15, python: "3.11", pytest: "9"}
-          - {os: macos-15, python: "3.15", pytest: "9"}
     defaults:
       run:
         shell: bash
