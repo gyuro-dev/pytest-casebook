@@ -1,18 +1,26 @@
-# Weekly check against upcoming pytest versions: the latest pre-release on PyPI and the main
-# branch of pytest. pytest-casebook puts pytest.Function items under YAML files, which relies a
-# little on pytest's internals, so this finds breakage before a pytest release reaches users.
-# A failure here does not block anything; GitHub mails the failure of a scheduled run.
-# 週に1回、これから出る pytest（PyPI のプレリリースの最新と、pytest の main ブランチ）で
-# テストを流す。YAML のファイルの下に pytest.Function を置く作りは pytest の内部の動きに
-# 少し頼っているので、pytest のリリースが利用者に届く前に壊れたことに気づくため。
-# ここが失敗しても何も止めない（定期実行の失敗は GitHub がメールで知らせる）。
+# Weekly checks that do not block pull requests. A failure here blocks nothing; GitHub mails
+# the failure of a scheduled run.
+# 週に1回の確かめ。PR は止めない（失敗しても何も止めず、定期実行の失敗は GitHub がメールで知らせる）。
+#
+# - pytest-next: the tests with upcoming pytest versions (the latest pre-release on PyPI and the
+#   main branch of pytest). pytest-casebook puts pytest.Function items under YAML files, which
+#   relies a little on pytest's internals, so this finds breakage before a pytest release
+#   reaches users.
+#   これから出る pytest（PyPI のプレリリースの最新と、pytest の main ブランチ）でテストを流す。
+#   YAML のファイルの下に pytest.Function を置く作りは pytest の内部の動きに少し頼っているので、
+#   pytest のリリースが利用者に届く前に壊れたことに気づくため。
+# - macos: the tests on macOS. They are not in ci.yml because GitHub's macOS runners are scarce
+#   (a queue there stopped pull requests), and the code has no macOS-only paths (Linux covers
+#   POSIX).
+#   macOS でテストを流す。GitHub の macOS の runner は数が少なく、その待ちで PR が止まったので、
+#   ci.yml からは外した（macOS だけの処理はなく、POSIX の動きは Linux で確かめている）。
 #
 # Security / 安全のために: same as ci.yml (actions pinned to SHAs, read-only token, no
 # credentials kept by checkout). pytest's main branch is installed from GitHub, but the job
 # has no secrets and no write permissions.
 # ci.yml と同じ（Actions は SHA で固定、トークンは読むだけ、checkout で認証情報を残さない）。
 # pytest の main は GitHub から入れるが、このジョブには秘密の値も書き込みの権限もない。
-name: pytest pre-release
+name: Weekly
 
 on:
   schedule:
@@ -33,7 +41,7 @@ env:
   PYYAML_FORCE_LIBYAML: "0"
 
 jobs:
-  test:
+  pytest-next:
     name: Test (Python ${{ matrix.python }}, pytest ${{ matrix.pytest }})
     runs-on: ubuntu-24.04
     permissions:
@@ -61,4 +69,25 @@ jobs:
       - if: matrix.pytest == 'main'
         run: uv pip install "pytest @ git+https://github.com/pytest-dev/pytest@main"
       - run: uv run --no-sync python -c "import sys, pluggy, pytest; print(sys.version, pytest.__version__, pluggy.__version__)"
+      - run: uv run --no-sync pytest -p no:cacheprovider
+
+  macos:
+    name: Test (macos-15, Python ${{ matrix.python }})
+    runs-on: macos-15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.15"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ matrix.python }}
+          enable-cache: false
+      - run: uv sync --frozen
       - run: uv run --no-sync pytest -p no:cacheprovider
