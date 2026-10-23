@@ -7,6 +7,8 @@ incompatible change raises the minor version).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-23
+
 ### Added
 
 - `env:` sets environment variables for `command:` cases. It can be written at the top of the
@@ -84,7 +86,8 @@ The first release.
 - Checked with Python 3.11-3.15, pytest 8 / 9 and pytest-xdist (Windows and Ubuntu 22.04 on
   WSL), mypy (strict) and ruff
 
-[Unreleased]: https://github.com/gyuro-dev/pytest-casebook/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/gyuro-dev/pytest-casebook/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/gyuro-dev/pytest-casebook/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/gyuro-dev/pytest-casebook/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/gyuro-dev/pytest-casebook/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/gyuro-dev/pytest-casebook/releases/tag/v0.1.0
