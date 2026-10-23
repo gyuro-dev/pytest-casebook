@@ -440,6 +440,10 @@ def test_groups_can_be_selected_with_k(project: pytest.Pytester) -> None:
         ("cases:\n  - name: a\n    request: /x\n    env: {A: x}\n", "env は command のケース"),
         ("env: [A]\ncases:\n  - name: a\n    call: m:f\n", "env は 変数名 -> 値"),
         ("cases:\n  - name: a\n    call: f\n", "'モジュール:関数' の形"),
+        ("cases:\n  - name: a\n    call: m:f\n    timeout: 0\n", "0 より大きい秒数"),
+        ("cases:\n  - name: a\n    call: m:f\n    timeout: -1\n", "0 より大きい秒数"),
+        ("cases:\n  - name: a\n    call: m:f\n    timeout: .inf\n", "0 より大きい秒数"),
+        ("cases:\n  - name: golden_orphans\n    call: m:f\n", "消し忘れの確認に使う"),
         ("cases: [\n", "YAML として読めません"),
     ],
 )
@@ -450,6 +454,37 @@ def test_invalid_casebook_is_a_collection_error(
     result = project.runpytest()
     result.assert_outcomes(errors=1)
     result.stdout.fnmatch_lines([f"*{message}*"])
+
+
+def test_golden_orphans_is_a_case_name_without_the_check(project: pytest.Pytester) -> None:
+    """check_orphans: false なら、golden_orphans もケース名に使える（確かめのテストがないため）。"""
+    write_casebook(
+        project,
+        "check_orphans: false\ncases:\n  - name: golden_orphans\n    call: calc:add\n"
+        "    args: [1, 2]\n    expect: {return: 3}\n",
+    )
+    project.runpytest().assert_outcomes(passed=1)
+
+
+def test_shared_golden_with_different_results_fails_on_update(project: pytest.Pytester) -> None:
+    """
+    golden: で同じファイルを指した2つのケースの結果が違えば、--casebook-update で失敗にする
+    （あとのケースが黙って上書きし、次の実行で先のケースが失敗するのを防ぐ）。
+    """
+    write_casebook(
+        project,
+        """
+        cases:
+          - {name: three, call: calc:add, args: [1, 2], golden: sum.txt}
+          - {name: also_three, call: calc:add, args: [2, 1], golden: sum.txt}
+          - {name: seven, call: calc:add, args: [3, 4], golden: sum.txt}
+        """,
+    )
+    result = project.runpytest("--casebook-update")
+    result.assert_outcomes(passed=3, failed=1)  # passed のうち1つは golden_orphans
+    shared = "golden/casebook_calc/sum.txt はケース casebook_calc.yaml::three も使っていて"
+    result.stdout.fnmatch_lines([f"*[[]seven[]] 期待出力 {shared}*"])
+    assert "3" in golden(project, "sum")
 
 
 def test_ini_options(project: pytest.Pytester) -> None:
@@ -531,6 +566,38 @@ def test_html_report_has_levels_and_merged_cells(project: pytest.Pytester) -> No
     )
     assert page.count("<tr class='detail") == 1
     assert '<span class="badge failed">失敗 1</span>' in page
+
+
+def test_html_report_ignores_outcomes_of_other_plugins(project: pytest.Pytester) -> None:
+    """
+    pytest-rerunfailures の "rerun" のような、知らない結果でも止まらない（数えずに飛ばす）。
+    """
+    project.makeconftest(
+        """
+        import pytest
+
+        @pytest.hookimpl(wrapper=True)
+        def pytest_runtest_makereport(item, call):
+            report = yield
+            if call.when == "call" and item.name == "flaky":
+                report.outcome = "rerun"
+            return report
+        """
+    )
+    write_casebook(
+        project,
+        """
+        check_orphans: false
+        cases:
+          - {name: flaky, call: calc:add, args: [1, 2], expect: {return: 3}}
+          - {name: steady, call: calc:add, args: [1, 2], expect: {return: 3}}
+        """,
+    )
+    report = project.path / "report.html"
+    result = project.runpytest(f"--casebook-html={report}")
+    assert result.ret == pytest.ExitCode.OK
+    assert "INTERNALERROR" not in result.stdout.str()
+    assert "steady" in report.read_text(encoding="utf-8")
 
 
 def test_html_report_in_english(project: pytest.Pytester) -> None:

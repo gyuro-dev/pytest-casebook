@@ -10,6 +10,7 @@ import inspect
 import io
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -77,25 +78,56 @@ def run_subprocess(
     # 読み取る側と同じ文字コードで出力させる（利用者が設定していればそれを使う）
     child_env = _overlay_env({"PYTHONIOENCODING": encoding, **os.environ}, env or {})
     try:
-        proc = subprocess.run(
+        proc = subprocess.Popen(
             [_find_program(argv[0], child_env), *argv[1:]],
             cwd=cwd,
             env=child_env,
-            input=stdin,
             # 入力を渡さないときは空にし、子プロセスが端末の入力を待って止まらないようにする
-            stdin=subprocess.DEVNULL if stdin is None else None,
-            capture_output=True,
+            stdin=subprocess.DEVNULL if stdin is None else subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
             encoding=encoding,
             errors="replace",
-            timeout=timeout,
-            check=False,
+            # POSIX では別のプロセスグループにして、時間切れのときに孫のプロセスもまとめて止める
+            process_group=None if sys.platform == "win32" else 0,
         )
     except FileNotFoundError:
         raise CasebookRunError(error("command_not_found", program=argv[0])) from None
-    except subprocess.TimeoutExpired:
-        raise CasebookRunError(error("command_timeout", timeout=timeout, argv=list(argv))) from None
-    return CommandResult(proc.returncode, proc.stdout or "", proc.stderr or "")
+    with proc:
+        try:
+            stdout, stderr = proc.communicate(stdin, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _kill_tree(proc)
+            if sys.platform == "win32":
+                # Windows は出力を読むスレッドを終わらせる（subprocess.run と同じ）
+                proc.communicate()
+            raise CasebookRunError(
+                error("command_timeout", timeout=timeout, argv=list(argv))
+            ) from None
+        except BaseException:
+            _kill_tree(proc)
+            raise
+    return CommandResult(proc.returncode, stdout or "", stderr or "")
+
+
+def _kill_tree(proc: subprocess.Popen[str]) -> None:
+    """
+    プロセスと、そこから起動したプロセス（孫）をまとめて止める。
+
+    子だけを止めると、孫が出力のパイプを持ったまま動き続ける。Windows ではその孫が終わるまで
+    出力を読み終えられず、timeout が効かない（`cmd /c` から起動したコマンドなど）。
+    """
+    if sys.platform == "win32":
+        # /T で子孫も止める（taskkill は Windows に標準である）
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, check=False
+        )
+    else:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(proc.pid, signal.SIGKILL)
+    # taskkill が使えなかったときのため（もう止まっていれば何もしない）
+    proc.kill()
 
 
 def _same_name(a: str, b: str) -> bool:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -75,3 +76,25 @@ def test_program_is_found_on_path_from_env(tmp_path: Path, monkeypatch: pytest.M
 def test_env_names_are_case_insensitive_on_windows() -> None:
     merged = runner._overlay_env({"PATH": "a", "X": "1"}, {"Path": "b"})
     assert merged == {"X": "1", "Path": "b"}
+
+
+def test_timeout_also_stops_grandchildren(tmp_path: Path) -> None:
+    """
+    時間切れのときは、コマンドが起動したプロセス（孫）も止める。
+
+    子だけを止めると、孫が出力のパイプを持ったまま動き続け、Windows では孫が終わるまで
+    待ってしまう（timeout が効かない）。POSIX でも孫が残り、あとで動き続ける。
+    """
+    started, finished = tmp_path / "started", tmp_path / "finished"
+    grandchild = (
+        f"import time; open({str(started)!r}, 'w').close(); time.sleep(2.5);"
+        f" open({str(finished)!r}, 'w').close()"
+    )
+    child = f"import subprocess, sys; subprocess.run([sys.executable, '-c', {grandchild!r}])"
+    begin = time.monotonic()
+    with pytest.raises(runner.CasebookRunError, match="did not finish within"):
+        runner.run_subprocess([sys.executable, "-c", child], cwd=tmp_path, timeout=1.5)
+    assert started.exists()  # 孫が動き出してから時間切れになった
+    assert time.monotonic() - begin < 2.5  # 孫が終わるのを待っていない
+    time.sleep(3)
+    assert not finished.exists()  # 孫も止まった

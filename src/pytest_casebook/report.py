@@ -91,14 +91,16 @@ class CasebookHtmlReport:
     def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
         props = dict(report.user_properties)
         meta = props.get("casebook")
-        if not isinstance(meta, dict):
+        outcome = _outcome_of(report)
+        # pytest-rerunfailures の "rerun" のような、ほかのプラグインの結果は数えない
+        # （やり直したときは、最後の試行の結果が表に出る）
+        if not isinstance(meta, dict) or outcome not in OUTCOMES:
             return
         row = self.rows.setdefault(report.nodeid, CaseRow(meta=meta))
         # 時間はケースの実行（call）だけを数える。setup には session の fixture（環境を作る
         # 時間など）が入り、最初のケースだけが遅く見えてしまうため
         if report.when == "call":
             row.duration += report.duration
-        outcome = _outcome_of(report)
         if outcome == "passed" and props.get("casebook_updated"):
             outcome = "updated"
         row.update(outcome)
