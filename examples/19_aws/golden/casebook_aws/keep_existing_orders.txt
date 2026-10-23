@@ -1,0 +1,14 @@
+# case: keep_existing_orders
+# call: order_import:import_orders
+# args: ["inbox", "new.csv"]
+----- return -----
+{
+  "imported": 1
+}
+----- observe: dynamodb.orders -----
+{"id": "1", "price": 300}
+{"id": "2", "price": 500}
+----- observe: sqs.order-events -----
+{"type": "imported", "count": 1}
+----- observe: s3.reports -----
+{"key": "new.csv.report.txt", "body": "1 件を取り込みました"}

@@ -22,6 +22,7 @@
 | [16_flask](16_flask) | Flask の API と DB を確かめる | YAML ＋ conftest.py |
 | [17_targets](17_targets) | 同じケースを別々の環境に流し、期待出力を環境ごとに分ける | YAML ＋ conftest.py |
 | [18_manual](18_manual) | 自動にできない確認（目視・帳票など）も同じ表に載せ、結果を手で書く | YAML |
+| [19_aws](19_aws) | S3・DynamoDB に入力を置いて実行し、DynamoDB・SQS・S3 の中身を確かめる（moto のモック） | YAML ＋ conftest.py |
 | [shop](shop) | 01〜13 の書き方を組み合わせた例 | YAML ＋ conftest.py |
 
 ## 実行のしかた
@@ -50,7 +51,7 @@ uv run pytest examples -o casebook_lang=ja --casebook-html=reports/examples.html
 uv run pytest examples --casebook-update
 ```
 
-15_fastapi と 16_flask は、FastAPI / Flask が入っているときだけ実行します（入っていなければ集めません）。このリポジトリでは開発用の依存（`uv sync` で入る）に含めています。pytest-casebook 自身の依存ではありません。
+15_fastapi・16_flask・19_aws は、FastAPI / Flask / moto が入っているときだけ実行します（入っていなければ集めません）。このリポジトリでは開発用の依存（`uv sync` で入る）に含めています。pytest-casebook 自身の依存ではありません。
 
 ## 自分のプロジェクトで使うとき
 
