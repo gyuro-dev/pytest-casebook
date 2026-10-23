@@ -1,0 +1,49 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
+# Check a function that uses AWS (S3, DynamoDB, SQS) with moto's mock.
+# You write the YAML and conftest.py (the mock AWS, putting the inputs in, reading the contents).
+#
+#   s3 / dynamodb in setup:  -> before the run, put files in S3 and rows in DynamoDB
+#   dynamodb.<table>, sqs.<queue>, s3.<bucket> in expect: / observe: -> the contents after the run
+#
+#   uv run pytest examples-en/19_aws --casebook-update   # create the golden file (first time)
+#   uv run pytest examples-en/19_aws
+title: Importing orders (AWS)
+levels: [Feature]
+
+cases:
+  - group: Import
+    cases:
+      - name: import_orders
+        description: Saves the orders of an S3 CSV in DynamoDB, notifies SQS and writes a report to S3
+        setup:
+          s3: {inbox/orders.csv: "id,price\n1,300\n2,500\n"}
+        call: order_import_en:import_orders
+        args: [inbox, orders.csv]
+        expect:
+          return: {imported: 2}
+          dynamodb.orders: [{id: "1", price: 300}, {id: "2", price: 500}]
+          sqs.order-events: [{type: imported, count: 2}]
+          s3.reports: [{key: orders.csv.report.txt, body: imported 2 orders}]
+
+      - name: keep_existing_orders
+        description: Existing orders are kept (the contents after the run are checked with a golden file)
+        setup:
+          s3: {inbox/new.csv: "id,price\n2,500\n"}
+          dynamodb: {orders: [{id: "1", price: 300}]}
+        call: order_import_en:import_orders
+        args: [inbox, new.csv]
+        observe: [dynamodb.orders, sqs.order-events, s3.reports]
+
+  - group: Bad input
+    cases:
+      - name: bad_price
+        description: If a price is not a number, nothing is saved and nothing is sent
+        setup:
+          s3: {inbox/bad.csv: "id,price\n1,300\n2,abc\n"}
+        call: order_import_en:import_orders
+        args: [inbox, bad.csv]
+        expect:
+          raises: "ValueError: price is not a number: 2"
+          dynamodb.orders: []
+          sqs.order-events: []
+          s3.reports: []

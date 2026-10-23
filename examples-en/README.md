@@ -24,6 +24,7 @@ These are the English versions of the samples in [examples](../examples). The ca
 | [16_flask](16_flask) | Check a Flask API and its DB | YAML + conftest.py |
 | [17_targets](17_targets) | Run the same cases against different environments, with golden files per environment | YAML + conftest.py |
 | [18_manual](18_manual) | Put checks that cannot be automated (visual checks, printed forms) in the same sheet, with results written by hand | YAML |
+| [19_aws](19_aws) | Put inputs in S3 and DynamoDB, run, and check DynamoDB, SQS and S3 (moto's mock) | YAML + conftest.py |
 | [shop](shop) | An example that combines what 01–13 show | YAML + conftest.py |
 
 ## Running
@@ -54,7 +55,7 @@ uv run pytest examples-en --casebook-update
 
 Run `examples-en` and `examples` in separate pytest sessions, not together in one run (17_targets defines the `--target` option in both).
 
-15_fastapi and 16_flask only run when FastAPI / Flask is installed (otherwise they are not collected). In this repository they are part of the development dependencies (installed by `uv sync`). They are not dependencies of pytest-casebook itself.
+15_fastapi, 16_flask and 19_aws only run when FastAPI / Flask / moto is installed (otherwise they are not collected). In this repository they are part of the development dependencies (installed by `uv sync`). They are not dependencies of pytest-casebook itself.
 
 ## Using them in your own project
 

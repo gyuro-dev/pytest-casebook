@@ -215,6 +215,7 @@ DB を使うときや、テスト用の環境を渡したいときだけ、conft
 | FastAPI の API と DB を確かめたい | YAML ＋ conftest.py | `request:`・`setup:`・`expect:` ＋ TestClient | [15_fastapi](examples/15_fastapi) |
 | Flask の API と DB を確かめたい | YAML ＋ conftest.py | `request:`・`setup:`・`expect:` ＋ test_client | [16_flask](examples/16_flask) |
 | 同じケースを別々の環境（ローカルとステージング、モックと本物など）に流したい | conftest.py ＋ コマンドライン | `casebook_env` で切り替え、`-o casebook_golden_dir=…` と `-m`（[やり方](#複数の環境に流す)） | [17_targets](examples/17_targets) |
+| AWS を確かめたい（S3 にファイル、DynamoDB に行を入れ、実行後の DynamoDB・SQS・S3 を見る） | YAML ＋ conftest.py | `setup:`・`expect:` ＋ `pytest_casebook_setup` / `pytest_casebook_observe` で boto3（moto のモック） | [19_aws](examples/19_aws) |
 | 手動の確認（目視・帳票など）も同じ表に載せたい | YAML | `manual:` と `result:`（[書き方](#手動のケース-manual)） | [18_manual](examples/18_manual) |
 | 試験の前に、これから確かめる項目の表を出したい | コマンドライン | `pytest --collect-only --casebook-html=plan.html`（結果は「未実施」。[やり方](#html-レポート)） | — |
 | HTML レポートを出しながら、カバレッジも測りたい | pyproject.toml ＋ コマンドライン | pytest-cov と、coverage.py の `patch = ["subprocess"]`（[やり方](#カバレッジを測る)） | — |

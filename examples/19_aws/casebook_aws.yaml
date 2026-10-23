@@ -1,0 +1,49 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
+# AWS（S3・DynamoDB・SQS）を使う関数を、moto のモックで確かめる。
+# 作るのは YAML と conftest.py（モックの AWS の用意・入力の投入・中身の取り出し）。
+#
+#   setup: の s3 / dynamodb  → 実行の前に、S3 にファイルを置き、DynamoDB に行を入れる
+#   expect: / observe: の dynamodb.<テーブル>・sqs.<キュー>・s3.<バケット> → 実行後の中身
+#
+#   uv run pytest examples/19_aws --casebook-update   # 期待出力ファイルを作る（最初の1回）
+#   uv run pytest examples/19_aws
+title: 注文の取り込み（AWS）
+levels: [機能]
+
+cases:
+  - group: 取り込み
+    cases:
+      - name: import_orders
+        description: S3 の CSV の注文を DynamoDB に保存し、SQS に通知して、結果を S3 に書く
+        setup:
+          s3: {inbox/orders.csv: "id,price\n1,300\n2,500\n"}
+        call: order_import:import_orders
+        args: [inbox, orders.csv]
+        expect:
+          return: {imported: 2}
+          dynamodb.orders: [{id: "1", price: 300}, {id: "2", price: 500}]
+          sqs.order-events: [{type: imported, count: 2}]
+          s3.reports: [{key: orders.csv.report.txt, body: 2 件を取り込みました}]
+
+      - name: keep_existing_orders
+        description: 前からある注文は残る（実行後の中身を期待出力ファイルで確かめる）
+        setup:
+          s3: {inbox/new.csv: "id,price\n2,500\n"}
+          dynamodb: {orders: [{id: "1", price: 300}]}
+        call: order_import:import_orders
+        args: [inbox, new.csv]
+        observe: [dynamodb.orders, sqs.order-events, s3.reports]
+
+  - group: 入力の誤り
+    cases:
+      - name: bad_price
+        description: 価格が数字でない行があれば、何も保存せず、通知もしない
+        setup:
+          s3: {inbox/bad.csv: "id,price\n1,300\n2,abc\n"}
+        call: order_import:import_orders
+        args: [inbox, bad.csv]
+        expect:
+          raises: "ValueError: 価格が数字ではありません: 2"
+          dynamodb.orders: []
+          sqs.order-events: []
+          s3.reports: []
