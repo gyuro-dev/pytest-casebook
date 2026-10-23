@@ -188,7 +188,7 @@ Every row has a ready-to-run sample in [examples-en](https://github.com/gyuro-de
 | Test a FastAPI API together with its DB | YAML + conftest.py | `request:`, `setup:`, `expect:` + TestClient | [15_fastapi](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/15_fastapi) |
 | Test a Flask API together with its DB | YAML + conftest.py | `request:`, `setup:`, `expect:` + test_client | [16_flask](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/16_flask) |
 | Run the same cases against different environments (local and staging, mock and real, …) | conftest.py + command line | switch in `casebook_env`, `-o casebook_golden_dir=…` and `-m` ([how](#running-against-multiple-environments)) | [17_targets](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/17_targets) |
-| Check AWS (put files in S3 and rows in DynamoDB, then check DynamoDB, SQS and S3) | YAML + conftest.py | `setup:`, `expect:` + boto3 in `pytest_casebook_setup` / `pytest_casebook_observe` (moto's mock) | [19_aws](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/19_aws) |
+| Check AWS (put files in S3 and rows in DynamoDB, then check DynamoDB, SQS and S3) | YAML + conftest.py | `setup:`, `expect:` + boto3 in `pytest_casebook_setup` / `pytest_casebook_observe` (moto's mock; [how](#aws-moto-and-real-aws)) | [19_aws](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/19_aws) |
 | Put manual checks (visual checks, printed forms) in the same sheet | YAML | `manual:` and `result:` ([how](#manual-cases-manual)) | [18_manual](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/18_manual) |
 | Write the sheet of what will be checked, before testing | command line | `pytest --collect-only --casebook-html=plan.html` (results are "Not run"; [how](#html-report)) | — |
 | Measure coverage while writing the HTML report | pyproject.toml + command line | pytest-cov and coverage.py's `patch = ["subprocess"]` ([how](#measuring-coverage)) | — |
@@ -696,6 +696,31 @@ uv run pytest --target staging -o casebook_golden_dir=golden_staging -m "not loc
 - `golden_dir:` in the YAML takes precedence over `-o`. When switching locations per environment, do not write it in the YAML
 - Check environment-dependent answers with golden files and environment-independent ones with `expect:`, to avoid duplicated expectations
 - See [examples-en/17_targets](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/17_targets)
+
+### AWS (moto and real AWS)
+
+pytest-casebook does not talk to AWS itself. Put inputs in with `pytest_casebook_setup` and read the results with `pytest_casebook_observe`, both with boto3 (see [19_aws](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/19_aws)):
+
+- `setup: {s3: {bucket/key: contents}, dynamodb: {table: [rows]}}` puts input files in S3 and rows in DynamoDB
+- `dynamodb.<table>`, `sqs.<queue>` and `s3.<bucket>` in `expect:` / `observe:` read the contents after the action
+
+Things to know with moto (a mock of AWS):
+
+- moto's `mock_aws()` only works inside the pytest process. `call:` and `request:` (and `command:` with `run_in_process`) are mocked; a CLI run as a subprocess by `command:` is not. For that, start moto's server or LocalStack and pass `AWS_ENDPOINT_URL` with `env:`
+- DynamoDB returns numbers as `Decimal`. Turn them into `int` / `float` in the observe hook, or `price: 300` does not match
+- DynamoDB scans and SQS receives have no fixed order. Sort in the hook, or use `$unordered` in `expect:`
+- SQS returns at most 10 messages per call. Receive until the queue is empty, and delete what you received (otherwise the messages come back in a later case after the visibility timeout)
+
+The same YAML can run against real AWS by switching `casebook_env` ([Running against multiple environments](#running-against-multiple-environments)). Things to know with real AWS:
+
+- **Never empty real data.** The sample's cleanup deletes every row, message and object. Use a dedicated test account, or create resources with a name unique to the run (e.g. `casebook-1a2b3c4d-orders`) and delete them all at the end of the session. Let the code under test take the table, queue and bucket names from settings or environment variables, so that the test can pass its own
+- **`command:` works as is.** A subprocess reaches the same AWS; pass `AWS_PROFILE` or the resource names with `env:`
+- **Wait for asynchronous work.** When an S3 upload triggers a Lambda that writes to DynamoDB, the result is not there right after the action. Read again every few seconds in the observe hook until it appears (with an upper limit). Receive SQS messages with `WaitTimeSeconds`, and scan DynamoDB with `ConsistentRead=True`
+- **Normalize what changes.** Message IDs, ETags, timestamps and account IDs in ARNs differ per run: replace them with `normalize:` or `pytest_casebook_placeholders`. Keep the golden files of real AWS apart with `-o casebook_golden_dir=golden_real` when they differ from the mock
+- **Slow and parallel runs.** A case can take seconds; add `timeout:`. With pytest-xdist (`-n`), workers share the same resources: run real-AWS tests without `-n`, or give each worker its own names
+- **Credentials.** Locally, use SSO or a profile. On GitHub Actions, assume a role in the test account with OIDC (no access keys in secrets), and allow only the test resources. Run the real-AWS tests by hand or nightly rather than on every pull request
+
+A common split: run with moto on every pull request (fast, any number of times), and run the same YAML against real AWS before a release or nightly, to check what a mock cannot (IAM permissions, real Lambda triggers, details of the real APIs).
 
 ### Measuring coverage
 
