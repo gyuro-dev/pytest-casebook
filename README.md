@@ -616,6 +616,8 @@ When to use which:
 
 Without `timeout:`, the function and the hook run in the test's own thread, as before. With it, they run in another thread, so objects that can only be used from the thread that created them (e.g. an `sqlite3` connection made in `pytest_casebook_setup`) cannot be used. Context variables (`contextvars`) set before the call are visible to the function (it receives a copy).
 
+The current directory is shared by the whole process. A case with `setup.files` runs in its own working directory, and that directory is left when the case ends. A function that keeps running after a timeout therefore sees another current directory: the original one, or the working directory of a later case. If it reads or writes files with relative paths, it can touch the wrong files (and break the `files` comparison of a later case). In a function that may time out, use absolute paths.
+
 ### Hooks and fixtures
 
 Write them in conftest.py. Each hook only needs the arguments it uses (e.g. `def pytest_casebook_observe(target, env): ...`). A hook only applies to cases in YAML files under the directory of its conftest.py.
