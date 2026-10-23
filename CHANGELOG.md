@@ -7,6 +7,16 @@ incompatible change raises the minor version).
 
 ## [Unreleased]
 
+### Added
+
+- Manual cases: checks that cannot be automated (looking at a screen, printed forms) go in the
+  same test specification sheet. Write the steps in `manual:` instead of `command:` / `call:` /
+  `request:`, the expected results as text in `expect:` (a string or a list of strings), and
+  the result checked by hand in `result:` (`passed`, `failed` or `skipped`). Manual cases are
+  never run; without `result:` they are skipped and the HTML report shows them as "Manual".
+  `Case.kind` can now be `"manual"` (new fields `Case.manual`, `Case.manual_expect` and
+  `Case.result`). See the `18_manual` sample.
+
 ### Fixed
 
 - A `command:` that times out now also stops the processes it started. Before, on Windows the

@@ -27,16 +27,18 @@ from .messages import TEXTS
 
 # 結果の種類 -> 優先度。
 # 1件のケースで複数の段階（setup / call / teardown）の結果があるときは、優先度の高いほうを使う。
-# notrun は、集めたが実行していないケース（--collect-only や、-x で途中で止まったとき）
+# notrun は、集めたが実行していないケース（--collect-only や、-x で途中で止まったとき）。
+# manual は、手動のケースで、手で確かめた結果（result:）がまだ書かれていないもの
 OUTCOMES: dict[str, int] = {
     "notrun": -1,
     "passed": 0,
     "updated": 1,
-    "skipped": 2,
-    "xfailed": 3,
-    "xpassed": 4,
-    "failed": 5,
-    "error": 6,
+    "manual": 2,
+    "skipped": 3,
+    "xfailed": 4,
+    "xpassed": 5,
+    "failed": 6,
+    "error": 7,
 }
 _PROBLEMS = {"failed", "error", "xpassed"}
 
@@ -103,11 +105,14 @@ class CasebookHtmlReport:
             row.duration += report.duration
         if outcome == "passed" and props.get("casebook_updated"):
             outcome = "updated"
+        if outcome == "skipped" and props.get("casebook_manual"):
+            outcome = "manual"
         row.update(outcome)
         if hasattr(report, "wasxfail"):
             row.note = report.wasxfail
         # skip の longrepr は (ファイル, 行, "Skipped: 理由") のタプル。理由だけを出す
-        elif report.skipped and isinstance(report.longrepr, tuple):
+        # （手動のケースは「手動」のバッジで分かるので、理由は出さない）
+        elif outcome == "skipped" and isinstance(report.longrepr, tuple):
             row.note = str(report.longrepr[2]).removeprefix("Skipped: ")
         elif report.failed and report.longreprtext:
             row.details.append(report.longreprtext)
@@ -235,16 +240,19 @@ def _case_table(texts: dict[str, Any], rows: list[CaseRow], labels: list[str]) -
                 f"<td class='level' rowspan='{span}'>"
                 f"<div class='group'>{_e(meta['path'][level])}</div>{desc_html}</td>"
             )
-        cells.append(
-            f"<td class='case'><div class='name'>{_e(meta['name'])}</div>"
-            f"<code class='run'>{_e(meta['run'])}</code></td>"
-        )
+        if meta["kind"] == "manual":
+            run = f"<div class='steps'>{_e(texts['manual_steps'].format(steps=meta['run']))}</div>"
+        else:
+            run = f"<code class='run'>{_e(meta['run'])}</code>"
+        cells.append(f"<td class='case'><div class='name'>{_e(meta['name'])}</div>{run}</td>")
         cells.append(f"<td class='desc'>{_e(meta['description'])}</td>")
         cells.append(f"<td class='cond'>{_list(meta['precondition'])}</td>")
         cells.append(f"<td class='cond'>{_list(meta['expected'])}</td>")
         note = f"<div class='muted note'>{_e(row.note)}</div>" if row.note else ""
         cells.append(f"<td class='result'>{_badge(texts, row.outcome)}{note}</td>")
-        duration = "—" if row.outcome == "notrun" else f"{row.duration * 1000:.0f} ms"
+        # 実行していないケース（未実施・手動）には時間を出さない
+        not_run = row.outcome == "notrun" or meta["kind"] == "manual"
+        duration = "—" if not_run else f"{row.duration * 1000:.0f} ms"
         cells.append(f"<td class='num'>{duration}</td>")
         # data-outcome と data-text は、ページ上部の絞り込み（_JS）が使う
         lines.append(
@@ -444,6 +452,7 @@ h3 { font-size: 14px; margin: 16px 0 6px; }
 }
 .badge.notrun { color: var(--muted); border: 1px dashed var(--line); }
 .badge.passed { color: var(--ok); background: var(--ok-bg); }
+.badge.manual { color: var(--info); border: 1px dashed var(--info); }
 .badge.updated { color: var(--info); background: var(--info-bg); }
 .badge.skipped, .badge.xfailed { color: var(--skip); background: var(--skip-bg); }
 .badge.xpassed { color: var(--warn); background: var(--warn-bg); }
@@ -459,6 +468,7 @@ td.level .group { font-weight: 600; }
 td.level.empty { background: var(--bg); }
 td.case { min-width: 170px; }
 td.case .name { font-weight: 600; overflow-wrap: anywhere; }
+td.case .steps { margin-top: 2px; font-size: 12px; white-space: pre-line; overflow-wrap: anywhere; }
 code.run {
   display: block; margin-top: 2px; padding: 1px 4px; background: var(--code); border-radius: 4px;
   font: 12px/1.5 ui-monospace, "Cascadia Code", Consolas, monospace; word-break: break-all;
@@ -493,6 +503,7 @@ a { color: var(--info); }
   font-family: inherit; line-height: 1.6; cursor: pointer; border: 1px solid transparent;
 }
 .filter button.badge.notrun { border: 1px dashed var(--line); }
+.filter button.badge.manual { border: 1px dashed var(--info); }
 .filter button.badge.all { color: var(--fg); background: var(--bg); border-color: var(--line); }
 .filter button.badge.all[aria-pressed="true"] {
   color: var(--bg); background: var(--fg); border-color: var(--fg);

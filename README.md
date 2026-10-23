@@ -12,6 +12,7 @@ A pytest plugin that runs test cases written in YAML and writes the results as a
 - **Set up preconditions**: put files in place, insert rows into a DB, switch to a state such as "during an outage" ([how](#preconditions-setup))
 - **Check the DB or files after the action** ([how](#values-after-the-action-observe))
 - Write expected results **directly in YAML**, or **generate golden files** from the actual output and compare with a diff ([how](#expected-results-expect))
+- Put **manual checks** that cannot be automated (looking at a screen, printed forms) in the same sheet, with the results written by hand ([how](#manual-cases-manual))
 - Organize cases into **categories, subcategories and items** (any depth) and write an **HTML test specification sheet** (in English or Japanese; [how](#html-report))
 
 Run `pytest --casebook-html=report.html` and the cases in your YAML come out as this test specification sheet. The group hierarchy is merged vertically, and preconditions, expected results and results sit on one row.
@@ -187,6 +188,7 @@ Every row has a ready-to-run sample in [examples-en](https://github.com/gyuro-de
 | Test a FastAPI API together with its DB | YAML + conftest.py | `request:`, `setup:`, `expect:` + TestClient | [15_fastapi](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/15_fastapi) |
 | Test a Flask API together with its DB | YAML + conftest.py | `request:`, `setup:`, `expect:` + test_client | [16_flask](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/16_flask) |
 | Run the same cases against different environments (local and staging, mock and real, …) | conftest.py + command line | switch in `casebook_env`, `-o casebook_golden_dir=…` and `-m` ([how](#running-against-multiple-environments)) | [17_targets](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/17_targets) |
+| Put manual checks (visual checks, printed forms) in the same sheet | YAML | `manual:` and `result:` ([how](#manual-cases-manual)) | [18_manual](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/18_manual) |
 | Write the sheet of what will be checked, before testing | command line | `pytest --collect-only --casebook-html=plan.html` (results are "Not run"; [how](#html-report)) | — |
 | Measure coverage while writing the HTML report | pyproject.toml + command line | pytest-cov and coverage.py's `patch = ["subprocess"]` ([how](#measuring-coverage)) | — |
 
@@ -370,16 +372,18 @@ You can select by group name, e.g. `-k Pricing`. The HTML report only shows as m
 | `call` | Function to call (`module:function`, `module:Class.method`). `async def` functions are awaited |
 | `args` / `kwargs` | Arguments for the function |
 | `request` | HTTP request to send (`"POST /users"`, or method, path, query, headers, json, body; [how](#http-apis-request)) |
+| `manual` | Steps of a manual case, which is not run ([how](#manual-cases-manual)) |
+| `result` | Result of a manual case checked by hand: `passed`, `failed` or `skipped` |
 | `state` | State name (from `states:`) |
 | `setup` | Preconditions. `files` (files placed in the working directory) and content passed to `pytest_casebook_setup` |
 | `observe` | What to read after the action. `files` (built in) or a name read by `pytest_casebook_observe` |
-| `expect` | Expected result. When present, no golden file is used |
+| `expect` | Expected result. When present, no golden file is used (for a manual case, text: a string or a list of strings) |
 | `marks` | List of pytest mark names |
 | `skip` / `xfail` | Reason to skip / reason it is known to fail. Shown in the terminal (`pytest -rsx`) and in the HTML result column |
 | `meta` | Free-form information (see [meta](#meta)) |
 | `golden` | Expected-output file name (default `<name>.txt`) |
 
-Write exactly one of `command`, `call` and `request`. Keys not in this table are errors, to catch typos. Put your own information under `meta:`.
+Write exactly one of `command`, `call`, `request` and `manual`. Keys not in this table are errors, to catch typos. Put your own information under `meta:`.
 
 ### Environment variables (env)
 
@@ -617,6 +621,30 @@ When to use which:
 Without `timeout:`, the function and the hook run in the test's own thread, as before. With it, they run in another thread, so objects that can only be used from the thread that created them (e.g. an `sqlite3` connection made in `pytest_casebook_setup`) cannot be used. Context variables (`contextvars`) set before the call are visible to the function (it receives a copy).
 
 The current directory is shared by the whole process. A case with `setup.files` runs in its own working directory, and that directory is left when the case ends. A function that keeps running after a timeout therefore sees another current directory: the original one, or the working directory of a later case. If it reads or writes files with relative paths, it can touch the wrong files (and break the `files` comparison of a later case). In a function that may time out, use absolute paths.
+
+### Manual cases (manual)
+
+Checks that cannot be automated (looking at a screen, checking a printed form, …) can go in the same test specification sheet. Write the steps in `manual:` instead of `command` / `call` / `request`. A manual case is never run.
+
+```yaml
+cases:
+  - group: Printing
+    cases:
+      - name: print_layout
+        description: The table is not broken when printed
+        manual: |
+          Open the print preview
+          Check that the ruled lines do not break across pages
+        expect:                      # expected results in words (a string or a list)
+          - The header row is repeated at the top of page 2
+          - No ruled line is broken
+        result: passed               # the result checked by hand (omit until checked)
+```
+
+- In the HTML report, the steps are shown under the case name and `expect:` in the expected-result column
+- Without `result:`, the case is skipped by pytest and the report shows **Manual**. Use it to see what is left to check by hand
+- `result: passed` / `failed` / `skipped` make the case pass / fail / be skipped, in pytest and in the report. With the results written in, one `pytest --casebook-html=…` run gives a complete sheet of the automated and the manual results
+- `setup:` and `state:` can be written; they are only shown as preconditions (the `pytest_casebook_setup` hook is not called). `args`, `kwargs`, `stdin`, `timeout`, `env`, `observe` and `golden` cannot be written
 
 ### Hooks and fixtures
 

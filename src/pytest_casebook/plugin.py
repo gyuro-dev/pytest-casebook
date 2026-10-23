@@ -203,7 +203,8 @@ class CasebookFile(pytest.File):
         file_label = Path(os.path.relpath(self.path, config.rootpath)).as_posix()
         texts = _texts(config)
         for case in doc.cases:
-            item = CasebookItem.from_parent(self, name=case.name, callobj=_make_test(doc, case))
+            test = _make_manual_test(case) if case.manual is not None else _make_test(doc, case)
+            item = CasebookItem.from_parent(self, name=case.name, callobj=test)
             item.casebook_line = case.line
             for mark in case.marks:
                 item.add_marker(mark)
@@ -211,6 +212,8 @@ class CasebookFile(pytest.File):
                 item.add_marker(pytest.mark.skip(reason=case.skip))
             if case.xfail is not None:
                 item.add_marker(pytest.mark.xfail(reason=case.xfail))
+            if case.manual is not None:
+                _mark_manual(item, case, config)
             # -k でグループ名でも絞り込めるようにする
             item.extra_keyword_matches.update(case.path)
             meta = _report_meta(doc, case, file_label, texts)
@@ -223,7 +226,9 @@ class CasebookFile(pytest.File):
 
 
 def _run_display(doc: CasebookDoc, case: Case) -> str:
-    """レポートや期待出力に書く、実行内容の表記。"""
+    """レポートや期待出力に書く、実行内容の表記（手動のケースは手順）。"""
+    if case.manual is not None:
+        return case.manual
     if case.command is not None:
         prefix = shlex.join(doc.command_prefix)
         return f"{prefix} {case.command}" if prefix else case.command
@@ -258,6 +263,8 @@ def _precondition_lines(doc: CasebookDoc, case: Case, texts: dict[str, Any]) -> 
 
 def _expected_lines(case: Case, texts: dict[str, Any]) -> list[str]:
     """レポートの「期待結果」の列に出す行。"""
+    if case.manual is not None:
+        return list(case.manual_expect)
     if case.expect is None:
         # 置き場所はファイルの見出しに1回だけ出す（全行に同じパスが並ぶと読みにくいため）
         lines = [texts["golden"].format(name=case.golden_file)]
@@ -320,6 +327,33 @@ def _make_test(doc: CasebookDoc, case: Case) -> Callable[..., None]:
             _run_case(request, doc, case, casebook_env, tmp_path_factory)
 
     return casebook_test
+
+
+def _mark_manual(item: CasebookItem, case: Case, config: pytest.Config) -> None:
+    """
+    手動のケースを、result: がないか skipped ならスキップにする。
+
+    マーカーで止めるので、スキップの場所には YAML の行が出る。result: がなければ、
+    レポートでふつうのスキップと分けて「手動」と出すための印も付ける。
+    """
+    m = MESSAGES[config.getini("casebook_lang")]
+    if case.result is None:
+        item.add_marker(pytest.mark.skip(reason=m["manual_not_run"]))
+        if case.skip is None:
+            item.user_properties.append(("casebook_manual", True))
+    elif case.result == "skipped":
+        item.add_marker(pytest.mark.skip(reason=m["manual_skipped"]))
+
+
+def _make_manual_test(case: Case) -> Callable[..., None]:
+    """手動のケースのテスト関数を作る（実行はせず、result: に書いた結果にする）。"""
+
+    def casebook_manual(request: pytest.FixtureRequest) -> None:
+        if case.result == "failed":
+            m = MESSAGES[request.config.getini("casebook_lang")]
+            pytest.fail(m["manual_failed"].format(name=case.name), pytrace=False)
+
+    return casebook_manual
 
 
 def _load_doc(config: pytest.Config, path: Path) -> CasebookDoc:

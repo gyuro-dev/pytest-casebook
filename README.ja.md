@@ -13,6 +13,7 @@ Excel の試験項目表と自動テストを別々に管理して、内容が�
 - **前提条件を用意する**: ファイルを置く、DB に行を入れる、「障害時」のような状態に切り替える（[書き方](#前提条件-setup)）
 - **実行後の DB やファイルの中身**も確かめる（[書き方](#実行後の値-observe)）
 - 期待結果は **YAML に直接書く**か、実際の出力から**期待出力ファイルを作って差分で比べる**（[書き方](#期待結果-expect)）
+- 自動にできない**手動の確認**（画面を目で見る、帳票など）も同じ表に載せ、結果を手で書き込める（[書き方](#手動のケース-manual)）
 - ケースを**大項目・中項目・小項目**（何階層でも）に分け、**試験項目表の HTML** を出す（日本語・英語。[書き方](#html-レポート)）
 
 `pytest --casebook-html=report.html` を実行すると、YAML に書いたケースが、次のような試験項目表として出力されます。\
@@ -214,6 +215,7 @@ DB を使うときや、テスト用の環境を渡したいときだけ、conft
 | FastAPI の API と DB を確かめたい | YAML ＋ conftest.py | `request:`・`setup:`・`expect:` ＋ TestClient | [15_fastapi](examples/15_fastapi) |
 | Flask の API と DB を確かめたい | YAML ＋ conftest.py | `request:`・`setup:`・`expect:` ＋ test_client | [16_flask](examples/16_flask) |
 | 同じケースを別々の環境（ローカルとステージング、モックと本物など）に流したい | conftest.py ＋ コマンドライン | `casebook_env` で切り替え、`-o casebook_golden_dir=…` と `-m`（[やり方](#複数の環境に流す)） | [17_targets](examples/17_targets) |
+| 手動の確認（目視・帳票など）も同じ表に載せたい | YAML | `manual:` と `result:`（[書き方](#手動のケース-manual)） | [18_manual](examples/18_manual) |
 | 試験の前に、これから確かめる項目の表を出したい | コマンドライン | `pytest --collect-only --casebook-html=plan.html`（結果は「未実施」。[やり方](#html-レポート)） | — |
 | HTML レポートを出しながら、カバレッジも測りたい | pyproject.toml ＋ コマンドライン | pytest-cov と、coverage.py の `patch = ["subprocess"]`（[やり方](#カバレッジを測る)） | — |
 
@@ -403,16 +405,18 @@ HTML レポートの階層の列は、実際に使われているグループの
 | `call` | 呼び出す関数（`モジュール:関数`、`モジュール:クラス.メソッド`）。`async def` の関数は終わるまで待つ |
 | `args` / `kwargs` | 関数に渡す引数 |
 | `request` | 送る HTTP のリクエスト（`"POST /users"` か、method・path・query・headers・json・body。[書き方](#http-の-api-request)） |
+| `manual` | 手動のケースの手順。実行しない（[書き方](#手動のケース-manual)） |
+| `result` | 手動のケースを手で確かめた結果。`passed`・`failed`・`skipped` のどれか |
 | `state` | 状態名（`states:` に書いたもの） |
 | `setup` | 前提条件。`files`（作業ディレクトリに置くファイル）と、`pytest_casebook_setup` に渡す内容 |
 | `observe` | 実行後に取り出す対象。`files`（組み込み）か、`pytest_casebook_observe` で取り出す名前 |
-| `expect` | 期待結果。書いたときは期待出力ファイルを使わない |
+| `expect` | 期待結果。書いたときは期待出力ファイルを使わない（手動のケースでは文章。文字列か文字列のリスト） |
 | `marks` | pytest のマーク名のリスト |
 | `skip` / `xfail` | 止める理由 / 失敗すると分かっている理由。ターミナル（`pytest -rsx`）と HTML の結果の列に出る |
 | `meta` | 自由に使う情報（[meta](#meta)） |
 | `golden` | 期待出力のファイル名（省略時は `<name>.txt`） |
 
-`command`・`call`・`request` は、どれか1つだけを書きます。\
+`command`・`call`・`request`・`manual` は、どれか1つだけを書きます。\
 上の表にないキーは、打ち間違いを見つけるためにエラーにします。\
 自分で使う情報は `meta:` の中に書きます。
 
@@ -695,6 +699,35 @@ expect:
 そのため、時間切れのあとも動き続ける関数からは、カレントディレクトリが別の場所（元のディレクトリや、あとのケースの作業ディレクトリ）に見えます。\
 相対パスでファイルを読み書きすると、違うファイルを触ることがあります（あとのケースの `files` の比較が壊れることもあります）。\
 時間切れになりうる関数では、絶対パスを使ってください。
+
+### 手動のケース (manual)
+
+自動にできない確認（画面を目で見る、印刷した帳票を確かめるなど）も、同じ試験項目表に載せられます。\
+`command` / `call` / `request` の代わりに、`manual:` に手順を書きます。\
+手動のケースは実行しません。
+
+```yaml
+cases:
+  - group: 印刷
+    cases:
+      - name: print_layout
+        description: 印刷しても表が崩れない
+        manual: |
+          印刷プレビューを開く
+          罫線がページをまたいで途切れていないか目で確かめる
+        expect:                      # 期待結果を文章で書く（文字列かリスト）
+          - 2ページ目の先頭にも見出し行が出る
+          - 罫線が途切れない
+        result: passed               # 手で確かめた結果（確かめるまでは書かない）
+```
+
+- HTML レポートでは、ケース名の下に手順を、期待結果の列に `expect:` を出します
+- `result:` がなければ、pytest ではスキップになり、レポートには**手動**と出ます。\
+  手で確かめる残りを見るのに使えます
+- `result: passed` / `failed` / `skipped` と書くと、pytest でもレポートでも、成功・失敗・スキップになります。\
+  結果を書き込めば、`pytest --casebook-html=…` を1回実行するだけで、自動と手動の結果がそろった試験項目表になります
+- `setup:` と `state:` は書けますが、前提条件として表に出すだけです（`pytest_casebook_setup` hook は呼びません）。\
+  `args`・`kwargs`・`stdin`・`timeout`・`env`・`observe`・`golden` は書けません
 
 ### hook と fixture
 

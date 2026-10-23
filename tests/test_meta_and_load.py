@@ -133,7 +133,9 @@ def test_load_reports_errors(tmp_path: Path) -> None:
     with pytest.raises(pytest_casebook.CasebookError, match="exactly one of command, call"):
         pytest_casebook.load(wrong)
     # lang で日本語のメッセージにできる
-    with pytest.raises(pytest_casebook.CasebookError, match="command・call・request のどれか1つ"):
+    with pytest.raises(
+        pytest_casebook.CasebookError, match="command・call・request・manual のどれか1つ"
+    ):
         pytest_casebook.load(wrong, lang="ja")
     # "false" のような文字列を True と取り違えない
     quoted = tmp_path / "quoted.yaml"
