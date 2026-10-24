@@ -444,6 +444,8 @@ def test_groups_can_be_selected_with_k(project: pytest.Pytester) -> None:
         ("cases:\n  - name: a\n    call: m:f\n    timeout: -1\n", "0 より大きい秒数"),
         ("cases:\n  - name: a\n    call: m:f\n    timeout: .inf\n", "0 より大きい秒数"),
         ("cases:\n  - name: golden_orphans\n    call: m:f\n", "消し忘れの確認に使う"),
+        ("cases:\n  - name: a\n    call: m:f\n    skip: true\n", "例: skip: 不具合 #12"),
+        ("cases:\n  - name: a\n    call: m:f\n    expect: {}\n", "1つ以上書いてください"),
         ("cases: [\n", "YAML として読めません"),
     ],
 )
@@ -485,6 +487,34 @@ def test_shared_golden_with_different_results_fails_on_update(project: pytest.Py
     shared = "golden/casebook_calc/sum.txt はケース casebook_calc.yaml::three も使っていて"
     result.stdout.fnmatch_lines([f"*[[]seven[]] 期待出力 {shared}*"])
     assert "3" in golden(project, "sum")
+
+
+def test_run_error_is_shown_once(project: pytest.Pytester) -> None:
+    """
+    実行の誤り（import できないなど）は、メッセージを1回だけ出す
+    （元の例外がつながって「During handling of …」と2回出ない）。
+    """
+    write_casebook(project, "cases:\n  - name: a\n    call: nope:f\n    expect: {return: 1}\n")
+    result = project.runpytest()
+    result.assert_outcomes(failed=1, passed=1)
+    out = result.stdout.str()
+    assert out.count("No module named 'nope'") == 1
+    assert "During handling" not in out
+    assert "direct cause" not in out
+
+
+def test_expect_key_typo_suggests_the_key(project: pytest.Pytester) -> None:
+    """expect: の結果のキーの打ち間違いは、observe として失敗するので、正しいキーを示す。"""
+    write_casebook(project, "cases:\n  - {name: a, call: calc:add, expect: {retrun: 3}}\n")
+    result = project.runpytest()
+    result.stdout.fnmatch_lines(["*expect の return の書き間違いではありませんか？*"])
+
+
+def test_help_is_in_english(project: pytest.Pytester) -> None:
+    """pytest --help の説明は英語（pytest のほかの説明と同じく、既定の言語も英語）。"""
+    result = project.runpytest("--help")
+    result.stdout.fnmatch_lines(["*--casebook-update*rewrite golden files*"])
+    assert "期待出力" not in result.stdout.str()
 
 
 def test_ini_options(project: pytest.Pytester) -> None:
