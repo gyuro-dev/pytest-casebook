@@ -1,5 +1,10 @@
 # pytest-casebook
 
+[![PyPI](https://img.shields.io/pypi/v/pytest-casebook)](https://pypi.org/project/pytest-casebook/)
+[![Python](https://img.shields.io/pypi/pyversions/pytest-casebook)](https://pypi.org/project/pytest-casebook/)
+[![CI](https://github.com/gyuro-dev/pytest-casebook/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/gyuro-dev/pytest-casebook/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/pypi/l/pytest-casebook)](https://github.com/gyuro-dev/pytest-casebook/blob/main/LICENSE)
+
 [English](README.md) | 日本語
 
 YAML に書いたテストケースを pytest で実行し、結果を、大項目・中項目・小項目で整理した**試験項目表**（HTML）として出力する pytest プラグインです。\
@@ -187,6 +192,46 @@ casebook_lang = "ja"
 | `expect:` | 期待結果を YAML に直接書く書き方。書いたときは期待出力ファイルを使わない |
 | hook | conftest.py に書く、決まった名前の関数（`pytest_casebook_…`）。DB の準備など、YAML だけでは書けない部分を受け持つ |
 | `casebook_env` | conftest.py で用意する「環境」（DB の接続やモックなど）。各 hook に `env` として渡る |
+
+## HTML レポート
+
+`--casebook-html=report.html` を付けると、結果を試験項目表（HTML のファイル1つ）として出力します。\
+ケースファイルごとに、次の内容を出力します。
+
+- 大項目ごとの件数と結果
+- 確認が必要なケースの一覧（表の行へのリンク）
+- 階層（`levels`）の列を縦に結合した表。\
+  ケース名・実行内容・確認内容・前提条件・期待結果・結果・時間を並べます。\
+  失敗した行では差分を開いて見られます
+- 前提条件には、default 以外の状態の名前と、ケースに書いた `setup:` を出します。\
+  スキップや既知の不具合の理由は、結果の下に出します
+- 時間はケースの実行だけを数えます（session の fixture で環境を作る時間は含みません）
+
+ページの上部で、表を絞り込めます。\
+結果（「失敗」など）を押すと、その結果のケースだけを出します（複数押すと足し合わせ、「すべて」で元に戻ります）。\
+入力欄に文字を入れると、グループ・ケース名・コマンド・確認内容・前提条件・期待結果にその文字を含むケースだけを出します（大文字と小文字は区別せず、空白で区切った語はすべて含むものに絞ります）。\
+縦に結合したグループの列は残った行に合わせて結合し直し、合うケースのないファイルは隠します。\
+ファイルごとの件数は、絞り込みによらず実行の全体を表します。\
+レポートは1つの HTML ファイルのままで、JavaScript が動かないときは今までどおり表の全体を出します。
+
+試験の前に「これから何を確かめるか」を提出するときは、`--collect-only` と一緒に使います。\
+ケースを実行せずに、結果の列がすべて「未実施」の表を出します（前提条件と期待結果の列は、YAML から出ます）。
+
+```bash
+uv run pytest --collect-only --casebook-html=reports/plan.html
+```
+
+表の全体はこのようになります（[docs/screenshots](docs/screenshots) のケースから作ったもの）。
+
+![試験項目表の HTML レポートの全体](docs/images/report-overview.png)
+
+失敗したケースは、その行の下で差分を開いて見られます。
+
+![失敗したケースの差分](docs/images/report-failure.png)
+
+結果は「成功・更新（`--casebook-update` で書き直した）・手動（`result:` をまだ書いていない[手動のケース](#手動のケース-manual)）・スキップ・想定どおり失敗・想定外に成功・失敗・エラー・未実施」のどれかで表示します。\
+「未実施」は、集めたが実行していないケースです（`-x` で途中で止まったときなど）。\
+pytest-html は要りません（一緒に使うこともできます）。
 
 ## やりたいことから探す
 
@@ -901,45 +946,6 @@ pytest がテストの場所として受け取るので、JUnit XML（xunit1）�
 
 オプションの名前はすべて `--casebook-` で始めています。\
 `--update-golden` のような一般的な名前は、プロジェクトの conftest.py がすでに定義していることがあり、同じ名前だと pytest が起動できなくなるためです。
-
-### HTML レポート
-
-ケースファイルごとに、次の内容を出力します。
-
-- 大項目ごとの件数と結果
-- 確認が必要なケースの一覧（表の行へのリンク）
-- 階層（`levels`）の列を縦に結合した表。\
-  ケース名・実行内容・確認内容・前提条件・期待結果・結果・時間を並べます。\
-  失敗した行では差分を開いて見られます
-- 前提条件には、default 以外の状態の名前と、ケースに書いた `setup:` を出します。\
-  スキップや既知の不具合の理由は、結果の下に出します
-- 時間はケースの実行だけを数えます（session の fixture で環境を作る時間は含みません）
-
-ページの上部で、表を絞り込めます。\
-結果（「失敗」など）を押すと、その結果のケースだけを出します（複数押すと足し合わせ、「すべて」で元に戻ります）。\
-入力欄に文字を入れると、グループ・ケース名・コマンド・確認内容・前提条件・期待結果にその文字を含むケースだけを出します（大文字と小文字は区別せず、空白で区切った語はすべて含むものに絞ります）。\
-縦に結合したグループの列は残った行に合わせて結合し直し、合うケースのないファイルは隠します。\
-ファイルごとの件数は、絞り込みによらず実行の全体を表します。\
-レポートは1つの HTML ファイルのままで、JavaScript が動かないときは今までどおり表の全体を出します。
-
-試験の前に「これから何を確かめるか」を提出するときは、`--collect-only` と一緒に使います。\
-ケースを実行せずに、結果の列がすべて「未実施」の表を出します（前提条件と期待結果の列は、YAML から出ます）。
-
-```bash
-uv run pytest --collect-only --casebook-html=reports/plan.html
-```
-
-表の全体はこのようになります（[docs/screenshots](docs/screenshots) のケースから作ったもの）。
-
-![試験項目表の HTML レポートの全体](docs/images/report-overview.png)
-
-失敗したケースは、その行の下で差分を開いて見られます。
-
-![失敗したケースの差分](docs/images/report-failure.png)
-
-結果は「成功・更新（`--casebook-update` で書き直した）・スキップ・想定どおり失敗・想定外に成功・失敗・エラー・未実施」のどれかで表示します。\
-「未実施」は、集めたが実行していないケースです（`-x` で途中で止まったときなど）。\
-pytest-html は要りません（一緒に使うこともできます）。
 
 ### ini の設定
 

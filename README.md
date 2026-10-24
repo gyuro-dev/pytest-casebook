@@ -1,5 +1,10 @@
 # pytest-casebook
 
+[![PyPI](https://img.shields.io/pypi/v/pytest-casebook)](https://pypi.org/project/pytest-casebook/)
+[![Python](https://img.shields.io/pypi/pyversions/pytest-casebook)](https://pypi.org/project/pytest-casebook/)
+[![CI](https://github.com/gyuro-dev/pytest-casebook/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/gyuro-dev/pytest-casebook/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/pypi/l/pytest-casebook)](https://github.com/gyuro-dev/pytest-casebook/blob/main/LICENSE)
+
 English | [日本語](https://github.com/gyuro-dev/pytest-casebook/blob/main/README.ja.md)
 
 A pytest plugin that runs test cases written in YAML and writes the results as a **test specification sheet (an HTML table with categories, subcategories and items)**. It keeps your test specification sheet and your automated tests from drifting apart, because they are the same file.
@@ -162,6 +167,34 @@ casebook_lang = "ja"
 | `expect:` | Writing the expected result directly in YAML. When present, no golden file is used |
 | hook | A pytest hook (`pytest_casebook_…`) in conftest.py. Handles what YAML alone cannot, such as preparing a DB |
 | `casebook_env` | The "environment" (DB connection, mocks, etc.) you prepare in conftest.py. Passed to each hook as `env` |
+
+## HTML report
+
+Add `--casebook-html=report.html` to write the results as a test specification sheet (one HTML file). For each case file the report contains:
+
+- counts and results per top-level group
+- a list of cases that need attention (links to their rows)
+- a table whose level columns (`levels`) are merged vertically, with case name, action, description, preconditions, expected result, result and time. Failed rows can be expanded to show the diff
+- preconditions show non-default state names and the case's own `setup:`. Skip and known-bug reasons are shown under the result
+- the time only counts running the case (not session fixtures that build the environment)
+
+At the top of the page you can narrow the table down. Click a result (e.g. Failed) to show only those cases (click more results to add them, "All" to reset), and type in the box to keep only the cases whose group, case name, command, description, preconditions or expected results contain the text (case-insensitive; several words must all match). The merged group cells are rebuilt for the rows that remain, and files with no matching case are hidden. The per-file counts always describe the whole run. The report stays a single HTML file; without JavaScript the full table is shown.
+
+To submit "what will be checked" before testing, use it with `--collect-only`. The cases are not run, and every result is "Not run" (the precondition and expected result columns come from the YAML).
+
+```bash
+uv run pytest --collect-only --casebook-html=reports/plan.html
+```
+
+The whole report looks like this (made from the cases in [docs/screenshots-en](https://github.com/gyuro-dev/pytest-casebook/tree/main/docs/screenshots-en)).
+
+![The whole HTML report](https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/docs/images/report-overview-en.png)
+
+A failed case can be expanded below its row to show the diff.
+
+![Diff of a failed case](https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/docs/images/report-failure-en.png)
+
+Results are one of: passed, updated (rewritten by `--casebook-update`), manual (a [manual case](#manual-cases-manual) without `result:` yet), skipped, expected failure, unexpected pass, failed, error, not run (labels follow `casebook_lang`). "Not run" is a case that was collected but not run (e.g. after `-x` stopped the session). pytest-html is not required (they can be used together).
 
 ## How do I...?
 
@@ -781,34 +814,6 @@ A failed case shows the line in the YAML where it is written (`[wrong] (line 8)`
 | `--casebook-html=PATH` | write the results as HTML |
 
 All options start with `--casebook-`. Generic names such as `--update-golden` may already be defined by a project's conftest.py, and a duplicate name stops pytest from starting.
-
-### HTML report
-
-For each case file the report contains:
-
-- counts and results per top-level group
-- a list of cases that need attention (links to their rows)
-- a table whose level columns (`levels`) are merged vertically, with case name, action, description, preconditions, expected result, result and time. Failed rows can be expanded to show the diff
-- preconditions show non-default state names and the case's own `setup:`. Skip and known-bug reasons are shown under the result
-- the time only counts running the case (not session fixtures that build the environment)
-
-At the top of the page you can narrow the table down. Click a result (e.g. Failed) to show only those cases (click more results to add them, "All" to reset), and type in the box to keep only the cases whose group, case name, command, description, preconditions or expected results contain the text (case-insensitive; several words must all match). The merged group cells are rebuilt for the rows that remain, and files with no matching case are hidden. The per-file counts always describe the whole run. The report stays a single HTML file; without JavaScript the full table is shown.
-
-To submit "what will be checked" before testing, use it with `--collect-only`. The cases are not run, and every result is "Not run" (the precondition and expected result columns come from the YAML).
-
-```bash
-uv run pytest --collect-only --casebook-html=reports/plan.html
-```
-
-The whole report looks like this (made from the cases in [docs/screenshots-en](https://github.com/gyuro-dev/pytest-casebook/tree/main/docs/screenshots-en)).
-
-![The whole HTML report](https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/docs/images/report-overview-en.png)
-
-A failed case can be expanded below its row to show the diff.
-
-![Diff of a failed case](https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/docs/images/report-failure-en.png)
-
-Results are one of: passed, updated (rewritten by `--casebook-update`), skipped, expected failure, unexpected pass, failed, error, not run (labels follow `casebook_lang`). "Not run" is a case that was collected but not run (e.g. after `-x` stopped the session). pytest-html is not required (they can be used together).
 
 ### ini options
 
