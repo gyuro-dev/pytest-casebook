@@ -4,6 +4,8 @@ setup:（前提条件）・observe:（実行後の値の取り出し）・expect
 
 from __future__ import annotations
 
+import hashlib
+import shutil
 import textwrap
 
 import pytest
@@ -411,3 +413,45 @@ def test_html_shows_precondition_and_expected(db_project: pytest.Pytester) -> No
     assert "期待出力ファイルの置き場所: golden/casebook_calc/" in page
     assert "期待出力ファイル（golden_case.txt）" in page
     assert "観察: db.users" in page
+
+
+def test_observed_binary_file_is_size_and_hash(project: pytest.Pytester) -> None:
+    """
+    observe の files で UTF-8 で読めないファイルは、大きさと SHA-256 の1行にする
+    （置換文字で読むと、違うバイト列が同じ置換文字になり、変わっても気づけない）。
+    改行だけのちがい（CRLF）は、テキストとして LF にそろえる。
+    """
+
+    def yaml_for(byte: int, expect: str = "") -> str:
+        program = (
+            f"import pathlib; pathlib.Path('out.bin').write_bytes(bytes([0, {byte}, 146, 150]));"
+            " pathlib.Path('out.txt').write_bytes(bytes([97, 13, 10, 98, 13, 10]))"
+        )
+        return f"""
+        command_prefix: [{PY}, -c]
+        cases:
+          - name: files
+            command:
+              - "{program}"
+            observe: [files]
+            {expect}
+        """
+
+    write_casebook(project, yaml_for(159))
+    project.runpytest("--casebook-update").assert_outcomes(passed=2)
+    digest = hashlib.sha256(bytes([0, 159, 146, 150])).hexdigest()
+    text = golden(project, "files")
+    assert f"<binary: 4 bytes, sha256={digest}>" in text
+    assert "=== out.txt ===\na\nb" in text
+    # もう一度流しても一致する
+    project.runpytest().assert_outcomes(passed=2)
+    # 中身（バイト列）が変われば一致しない（大きさが同じでも SHA-256 で分かる）。
+    # expect: に替えるので、使わなくなる期待出力は消しておく（消し忘れの確認に掛からないように）
+    shutil.rmtree(project.path / "golden")
+    write_casebook(
+        project,
+        yaml_for(160, f"expect: {{files: {{out.bin: '<binary: 4 bytes, sha256={digest}>'}}}}"),
+    )
+    result = project.runpytest()
+    result.assert_outcomes(failed=1, passed=1)
+    result.stdout.fnmatch_lines(["*files.out.bin: 期待*sha256*"])

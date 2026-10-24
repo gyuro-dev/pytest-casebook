@@ -84,11 +84,17 @@ class CasebookHtmlReport:
         self.rows: dict[str, CaseRow] = {}
 
     def pytest_collection_finish(self, session: pytest.Session) -> None:
-        """集めたケースを、まず「未実施」の行として入れる（実行したものは結果で上書きする）。"""
+        """
+        集めたケースを、まず「未実施」の行として入れる（実行したものは結果で上書きする）。
+
+        手動のケースで result: がまだないものは、実行しても「手動」のままなので、
+        `--collect-only` の計画の表でも「未実施」ではなく「手動」と出す。
+        """
         for item in session.items:
             meta = dict(item.user_properties).get("casebook")
             if isinstance(meta, dict):
-                self.rows.setdefault(item.nodeid, CaseRow(meta=meta))
+                outcome = "manual" if meta.get("manual_pending") else "notrun"
+                self.rows.setdefault(item.nodeid, CaseRow(meta=meta, outcome=outcome))
 
     def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
         props = dict(report.user_properties)

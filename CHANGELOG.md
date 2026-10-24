@@ -7,6 +7,26 @@ incompatible change raises the minor version).
 
 ## [Unreleased]
 
+### Changed
+
+- A file whose `cases:` is an empty list is an error, like a file without `cases:` (it
+  silently passed with only the golden-file check before).
+- A case name cannot start with `.` or `-` (`.foo` made the golden file a dotfile, which
+  the check for leftover golden files skips).
+- In `observe: [files]` / `expect: {files: ...}`, a file that is not UTF-8 (an image etc.)
+  is written as one line with its size and SHA-256, instead of being read with replacement
+  characters. Different bytes used to produce the same replacement characters, so a changed
+  binary file could pass; now it fails. Golden files of binary files change.
+
+### Fixed
+
+- `{casebook_dir}` in `env:` values is replaced with the YAML's directory, as in `command:`
+  (it was passed to the program as the literal token).
+- A case's `request: headers:` now overrides `request_defaults` headers whatever the case of
+  the header name (`authorization` vs `Authorization` sent both headers before).
+- In the `--collect-only` plan report, a manual case without `result:` shows "Manual"
+  instead of "Not run" (it will not run).
+
 ## [0.5.1] - 2026-10-24
 
 ### Fixed
