@@ -208,6 +208,9 @@ ERRORS: dict[str, dict[str, str]] = {
         "states_mapping": "{where}: states は 状態名 -> 内容 のマッピングで書いてください",
         "no_cases": "{where}: cases がありません",
         "duplicate_names": "{where}: ケース名が重複しています: {names}",
+        "reason_string": (
+            "{where}: {key} には理由を文字列で書いてください（例: {key}: 不具合 #12 の修正待ち）"
+        ),
         "reserved_name": (
             "{where}: ケース名 {name} は期待出力の消し忘れの確認に使うので、"
             "別の名前にしてください（または check_orphans: false）"
@@ -249,7 +252,7 @@ ERRORS: dict[str, dict[str, str]] = {
             "{where}: expect.{key} は文字列か、{{contains: ...}} / {{regex: ...}} の"
             "どれかで書いてください"
         ),
-        "expect_mapping": "{where}: expect は 項目 -> 期待値 のマッピングで書いてください",
+        "expect_mapping": "{where}: expect は 項目 -> 期待値 のマッピングで、1つ以上書いてください",
         "expect_kind": "{where}: expect.{key} は {kinds} のケースにだけ書けます",
         "return_and_raises": (
             "{where}: expect には return と raises のどちらか一方だけを書いてください"
@@ -293,6 +296,7 @@ ERRORS: dict[str, dict[str, str]] = {
             "observe: {target} を取り出せません"
             "（pytest_casebook_observe hook がないか、None を返しました）"
         ),
+        "did_you_mean": "。expect の {key} の書き間違いではありませんか？",
     },
     "en": {
         "line": " (line {line})",
@@ -314,6 +318,10 @@ ERRORS: dict[str, dict[str, str]] = {
         "states_mapping": "{where}: states must be a mapping of state name -> contents",
         "no_cases": "{where}: cases is missing",
         "duplicate_names": "{where}: duplicate case names: {names}",
+        "reason_string": (
+            "{where}: write the reason for {key} as a string "
+            "(e.g. {key}: waiting for the fix of #12)"
+        ),
         "reserved_name": (
             "{where}: the case name {name} is used by the check for leftover golden files; "
             "rename the case (or set check_orphans: false)"
@@ -351,7 +359,9 @@ ERRORS: dict[str, dict[str, str]] = {
         "expect_text": (
             "{where}: expect.{key} must be a string, {{contains: ...}} or {{regex: ...}}"
         ),
-        "expect_mapping": "{where}: expect must be a mapping of item -> expected value",
+        "expect_mapping": (
+            "{where}: expect must be a mapping of item -> expected value with at least one item"
+        ),
         "expect_kind": "{where}: expect.{key} can only be used in {kinds} cases",
         "return_and_raises": "{where}: write either return or raises in expect, not both",
         "exit_code_int": "{where}: expect.exit_code must be an integer",
@@ -392,6 +402,7 @@ ERRORS: dict[str, dict[str, str]] = {
             "observe: cannot fetch {target} "
             "(there is no pytest_casebook_observe hook, or it returned None)"
         ),
+        "did_you_mean": ". Did you mean {key} in expect?",
     },
 }
 

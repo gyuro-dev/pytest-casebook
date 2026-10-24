@@ -7,6 +7,18 @@ incompatible change raises the minor version).
 
 ## [Unreleased]
 
+### Fixed
+
+- When a case cannot be run (command not found, cannot import a function, timeout, …), the
+  message is shown once. Before, it was repeated after "During handling of the above
+  exception, another exception occurred:" (and the import error a third time).
+- `pytest --help` describes the options and ini settings in English (they were in Japanese
+  only, although the default language is English).
+- Clearer messages for common mistakes: `skip: true` / `xfail: true` show how to write the
+  reason, `expect: {}` says that at least one item is needed, and a misspelled result key in
+  `expect:` (e.g. `retrun`) suggests the right one instead of only saying that the observe
+  hook returned nothing.
+
 ## [0.5.0] - 2026-10-24
 
 ### Added

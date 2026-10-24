@@ -760,7 +760,11 @@ def _flags(item: dict[str, Any], loc: str) -> dict[str, str]:
     flags: dict[str, str] = {}
     for key in ("skip", "xfail"):
         if key in item:
-            flags[key] = _str(item[key], loc, key, required=True)
+            value = item[key]
+            # skip: true のように書きがちなので、理由を書くことを例で示す
+            if not isinstance(value, str) or not value.strip():
+                raise CasebookError(error("reason_string", where=loc, key=key))
+            flags[key] = value
     return flags
 
 

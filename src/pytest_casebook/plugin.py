@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import copy
+import difflib
 import fnmatch
 import itertools
 import json
@@ -41,6 +42,7 @@ from .messages import LANGS, MESSAGES, TEXTS, error, language
 from .model import (
     DEFAULT_GOLDEN_DIR,
     DEFAULT_STATE,
+    EXPECT_KEYS_BY_KIND,
     FILES_TARGET,
     ORPHANS_TEST_NAME,
     TEXT_EXPECT_KEYS,
@@ -79,61 +81,61 @@ def pytest_addhooks(pluginmanager: pytest.PytestPluginManager) -> None:
 def pytest_addoption(parser: pytest.Parser) -> None:
     group = parser.getgroup("casebook", "pytest-casebook")
     # オプション名はすべて --casebook- で始める。--update-golden のような一般的な名前は、
-    # 利用する側の conftest.py がすでに定義していることがあり、同じ名前だと pytest が起動できない
+    # 利用する側の conftest.py がすでに定義していることがあり、同じ名前だと pytest が起動できない。
+    # ヘルプは英語で書く（pytest --help のほかの説明と同じく、既定の言語も英語のため）
     group.addoption(
         "--casebook-update",
         action="store_true",
         default=False,
-        help="期待出力ファイルを今の出力で書き直す（結果が変わったものだけ。比較で失敗にはしない）",
+        help="rewrite golden files with the current output (only those whose results changed; "
+        "no comparison failures)",
     )
     group.addoption(
         "--casebook-html",
         metavar="PATH",
         default=None,
-        help="ケースの結果を、グループの階層の表で HTML に出力する",
+        help="write the case results as an HTML test specification sheet grouped by levels",
     )
     parser.addini(
         "casebook_files",
         type="linelist",
         default=DEFAULT_FILE_PATTERNS,
-        help="ケースファイルとして集めるファイル名のパターン",
+        help="file name patterns collected as case files",
     )
     parser.addini(
         "casebook_golden_dir",
         default=DEFAULT_GOLDEN_DIR,
-        help="期待出力の置き場所（ケースファイルからの相対パス。その下にケースファイル名（拡張子なし）ごとの"
-        "ディレクトリを作る）",
+        help="where golden files are stored, relative to the case file "
+        "(a directory per case file name without the extension is made under it)",
     )
     parser.addini(
         "casebook_levels",
         type="linelist",
         default=[],
-        help="グループの階層の呼び名（YAML の levels がないときに使う。省略時は"
-        " casebook_lang の言語の既定。en なら Category Subcategory Item、"
-        "ja なら 大項目 中項目 小項目）",
+        help="names of the group levels when the YAML has no levels "
+        "(default: those of casebook_lang, e.g. Category Subcategory Item)",
     )
     parser.addini(
         "casebook_command_prefix",
         default="",
-        help="command の前に付ける引数（YAML の command_prefix がないときに使う）",
+        help="arguments put before every command when the YAML has no command_prefix",
     )
-    parser.addini("casebook_encoding", default="utf-8", help="command の出力の文字コード")
+    parser.addini("casebook_encoding", default="utf-8", help="encoding of the command output")
     parser.addini(
         "casebook_builtin_patterns",
         type="bool",
         default=True,
-        help="日時と UUID を <datetime> / <uuid> に置き換える",
+        help="replace datetimes and UUIDs with <datetime> / <uuid>",
     )
     parser.addini(
         "casebook_html_title",
         default="",
-        help="HTML レポートの題名（省略時は casebook_lang の言語の既定。"
-        "en なら Test Specification、ja なら 試験項目表）",
+        help="title of the HTML report (default: that of casebook_lang, e.g. Test Specification)",
     )
     parser.addini(
         "casebook_lang",
         default="en",
-        help=f"HTML レポートとメッセージの言語（{' / '.join(LANGS)}）",
+        help=f"language of the HTML report and the messages ({' / '.join(LANGS)})",
     )
 
 
@@ -475,6 +477,7 @@ def _run_case(
     # （config.hook は、ほかのディレクトリの conftest.py の hook も呼ぶ）
     hook = request.node.ihook
     workdir: Path | None = None
+    run_error: str | None = None
     try:
         with contextlib.ExitStack() as stack:
             if case.needs_workdir:
@@ -500,7 +503,11 @@ def _run_case(
             for target in case.observe_targets:
                 outcome.observed[target] = _observe(config, hook, case, target, env, workdir)
     except CasebookRunError as e:
-        pytest.fail(f"[{case.name}] {e}", pytrace=False)
+        run_error = str(e)
+    # 失敗にするのは except の外で（中で pytest.fail を呼ぶと、元の例外もつながって表示され、
+    # 同じメッセージが2回出る）
+    if run_error is not None:
+        pytest.fail(f"[{case.name}] {run_error}", pytrace=False)
 
     if doc.states is not None:
         # 実行内容（command / call / request と引数）のあと、結果（exit_code / status）の前に置く
@@ -645,7 +652,12 @@ def _observe(
         target=target, case=case, env=env, workdir=workdir, config=config
     )
     if value is None:
-        raise CasebookRunError(error("observe_failed", target=target))
+        message = error("observe_failed", target=target)
+        # expect: の結果のキーの打ち間違い（retrun など）は、observe の対象として扱われてここに来る
+        close = difflib.get_close_matches(target, EXPECT_KEYS_BY_KIND.get(case.kind, ()), n=1)
+        if close:
+            message += error("did_you_mean", key=close[0])
+        raise CasebookRunError(message)
     return value
 
 
