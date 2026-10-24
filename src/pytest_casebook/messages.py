@@ -206,7 +206,7 @@ ERRORS: dict[str, dict[str, str]] = {
         "yaml_error": "{where}: YAML として読めません: {error}{hint}",
         "top_mapping": "{where}: 先頭は title や cases を持つマッピングで書いてください",
         "states_mapping": "{where}: states は 状態名 -> 内容 のマッピングで書いてください",
-        "no_cases": "{where}: cases がありません",
+        "no_cases": "{where}: cases にケースがありません",
         "duplicate_names": "{where}: ケース名が重複しています: {names}",
         "reason_string": (
             "{where}: {key} には理由を文字列で書いてください（例: {key}: 不具合 #12 の修正待ち）"
@@ -217,7 +217,7 @@ ERRORS: dict[str, dict[str, str]] = {
         ),
         "items_list": "{where}: ケースまたはグループのリストで書いてください",
         "item_mapping": "{where}: ケースまたはグループをマッピングで書いてください",
-        "bad_name": "{where}: name に使えるのは英数字・_・-・. だけです: {name}",
+        "bad_name": ("{where}: name に使えるのは英数字・_・-・. で、先頭は英数字か _ です: {name}"),
         "one_action": "{where}: command・call・request・manual のどれか1つだけを書いてください",
         "manual_keys": "{where}: manual のケースには {keys} を書けません",
         "manual_expect": (
@@ -316,7 +316,7 @@ ERRORS: dict[str, dict[str, str]] = {
         "yaml_error": "{where}: cannot read as YAML: {error}{hint}",
         "top_mapping": "{where}: the top level must be a mapping with title, cases, etc.",
         "states_mapping": "{where}: states must be a mapping of state name -> contents",
-        "no_cases": "{where}: cases is missing",
+        "no_cases": "{where}: there are no cases in cases",
         "duplicate_names": "{where}: duplicate case names: {names}",
         "reason_string": (
             "{where}: write the reason for {key} as a string "
@@ -328,7 +328,10 @@ ERRORS: dict[str, dict[str, str]] = {
         ),
         "items_list": "{where}: must be a list of cases or groups",
         "item_mapping": "{where}: each case or group must be a mapping",
-        "bad_name": "{where}: name can only contain letters, digits, _, - and .: {name}",
+        "bad_name": (
+            "{where}: name can only contain letters, digits, _, - and ., and must not"
+            " start with . or -: {name}"
+        ),
         "one_action": "{where}: write exactly one of command, call, request and manual",
         "manual_keys": "{where}: manual cases cannot have {keys}",
         "manual_expect": "{where}: expect of a manual case must be a string or a list of strings",

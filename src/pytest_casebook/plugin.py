@@ -13,6 +13,7 @@ import contextlib
 import copy
 import difflib
 import fnmatch
+import hashlib
 import itertools
 import json
 import os
@@ -311,6 +312,8 @@ def _report_meta(
         "description": case.description,
         "kind": case.kind,
         "run": _run_display(doc, case),
+        # 手動のケースで、手で確かめた結果（result:）がまだないもの（レポートで「手動」と出す）
+        "manual_pending": case.manual is not None and case.result is None,
         "precondition": _precondition_lines(doc, case, texts),
         "expected": _expected_lines(case, texts),
     }
@@ -557,7 +560,8 @@ def _execute_command(
             stdin=case.stdin,
             timeout=case.timeout,
             encoding=config.getini("casebook_encoding"),
-            env=case.env,
+            # argv と同じく、env の値の中の {casebook_dir} も YAML のディレクトリにする
+            env={k: v.replace(CASEBOOK_DIR_TOKEN, yaml_dir) for k, v in case.env.items()},
         )
     elif not isinstance(result, CommandResult):
         result = CommandResult(*result)
@@ -644,7 +648,7 @@ def _observe(
     if target == FILES_TARGET:
         assert workdir is not None
         return {
-            p.relative_to(workdir).as_posix(): p.read_text(encoding="utf-8", errors="replace")
+            p.relative_to(workdir).as_posix(): _read_observed_file(p)
             for p in sorted(workdir.rglob("*"))
             if p.is_file()
         }
@@ -659,6 +663,22 @@ def _observe(
             message += error("did_you_mean", key=close[0])
         raise CasebookRunError(message)
     return value
+
+
+def _read_observed_file(path: Path) -> str:
+    """
+    observe の files で読むファイルの中身。
+
+    UTF-8 で読めないファイル（画像など）は、大きさと SHA-256 の1行にする。置換文字で
+    読んでしまうと、違うバイト列が同じ置換文字になり、中身が変わっても気づけないため。
+    """
+    data = path.read_bytes()
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return f"<binary: {len(data)} bytes, sha256={hashlib.sha256(data).hexdigest()}>"
+    # 改行は LF にそろえる（Windows のプログラムが書く CRLF で期待出力が変わらないように）
+    return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
 def _render_observed(target: str, value: Any, no_files: str = MESSAGES["en"]["no_files"]) -> str:

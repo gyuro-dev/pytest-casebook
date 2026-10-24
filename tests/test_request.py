@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 from helpers import golden, write_casebook
 
+import pytest_casebook
 from pytest_casebook import HttpRequest, HttpResponse
 from pytest_casebook.http import send_with_httpx_client, send_with_werkzeug_client
 
@@ -345,3 +346,27 @@ def test_flask_test_client() -> None:
     )
     assert res.status == 201
     assert res.parse_json() == (True, {"item": {"n": 1}, "q": "x"})
+
+
+def test_header_override_is_case_insensitive(tmp_path: Any) -> None:
+    """
+    request_defaults のヘッダーは、ケースで違う大文字小文字で書いても上書きになる
+    （HTTP のヘッダー名は大文字小文字を区別しないので、両方は送らない）。
+    """
+    path = tmp_path / "casebook_h.yaml"
+    path.write_text(
+        textwrap.dedent(
+            """
+            request_defaults:
+              headers: {Authorization: Bearer default, X-Keep: a}
+            cases:
+              - name: override
+                request: {path: /x, headers: {authorization: Bearer mine}}
+                expect: {status: 200}
+            """
+        ),
+        encoding="utf-8",
+    )
+    (case,) = pytest_casebook.load(path).cases
+    assert case.request is not None
+    assert case.request.headers == {"authorization": "Bearer mine", "X-Keep": "a"}

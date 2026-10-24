@@ -60,8 +60,9 @@ from .expect import find_matcher_errors
 from .http import HttpRequest
 from .messages import TEXTS, error, language
 
-# ケース名は期待出力のファイル名になるため、ファイル名に使える文字だけにする
-NAME_RE = re.compile(r"^[\w.\-]+$")
+# ケース名は期待出力のファイル名になるため、ファイル名に使える文字だけにする。
+# 先頭の . と - は認めない（.foo.txt は隠しファイルになり、消し忘れの確認からも漏れる）
+NAME_RE = re.compile(r"^\w[\w.\-]*$")
 
 _TOP_KEYS = {
     "request_defaults",
@@ -555,7 +556,7 @@ def parse_document(
         _source_lines=source_lines or {},
     )
 
-    if "cases" not in data:
+    if not data.get("cases"):
         raise CasebookError(error("no_cases", where=where))
     _walk(data["cases"], doc, (), DEFAULT_STATE, (), {}, doc.env, {}, f"{where}: cases")
 
@@ -952,11 +953,16 @@ def _parse_request(value: Any, default_headers: dict[str, str], loc: str) -> Htt
         raise CasebookError(error("query_mapping", where=loc))
     if "json" in value and "body" in value:
         raise CasebookError(error("json_and_body", where=loc))
+    own_headers = _str_mapping(value.get("headers"), loc, "request.headers")
+    # ヘッダー名は大文字小文字を区別しないので、既定と違う書き方（Authorization と
+    # authorization）でも上書きにする（両方送らない）
+    overridden = {name.lower() for name in own_headers}
+    kept = {k: v for k, v in default_headers.items() if k.lower() not in overridden}
     return HttpRequest(
         method=method,
         path=path,
         query=query,
-        headers={**default_headers, **_str_mapping(value.get("headers"), loc, "request.headers")},
+        headers={**kept, **own_headers},
         json=value.get("json"),
         body=_str(value["body"], loc, "request.body") if "body" in value else None,
     )

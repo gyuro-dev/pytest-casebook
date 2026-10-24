@@ -180,7 +180,7 @@ Add `--casebook-html=report.html` to write the results as a test specification s
 
 At the top of the page you can narrow the table down. Click a result (e.g. Failed) to show only those cases (click more results to add them, "All" to reset), and type in the box to keep only the cases whose group, case name, command, description, preconditions or expected results contain the text (case-insensitive; several words must all match). The merged group cells are rebuilt for the rows that remain, and files with no matching case are hidden. The per-file counts always describe the whole run. The report stays a single HTML file; without JavaScript the full table is shown.
 
-To submit "what will be checked" before testing, use it with `--collect-only`. The cases are not run, and every result is "Not run" (the precondition and expected result columns come from the YAML).
+To submit "what will be checked" before testing, use it with `--collect-only`. The cases are not run, and every result is "Not run" (the precondition and expected result columns come from the YAML; manual cases without `result:` show "Manual").
 
 ```bash
 uv run pytest --collect-only --casebook-html=reports/plan.html
@@ -397,7 +397,7 @@ You can select by group name, e.g. `-k Pricing`. The HTML report only shows as m
 
 | Key | Meaning |
 |---|---|
-| `name` | Case name. It becomes the golden file name, so use letters, digits, `_`, `-`, `.` |
+| `name` | Case name. It becomes the golden file name, so use letters, digits, `_`, `-`, `.` (the first character must not be `.` or `-`) |
 | `description` | What is checked |
 | `command` | Arguments to run as a CLI (split like a shell command), appended to `command_prefix`. May be empty (`""`) if `command_prefix` is set. A list (`[a, 'b c']`) is passed as is without splitting |
 | `stdin` | Standard input for the command |
@@ -437,6 +437,7 @@ cases:
 ```
 
 - When the command runs in a subprocess, these values are put over the environment of the pytest process (`os.environ`). A `PATH` set here is also used to find the program
+- `{casebook_dir}` in a value becomes the YAML's directory, as in `command:` (e.g. `env: {DATA_DIR: "{casebook_dir}/data"}`)
 - Inner levels override outer ones key by key (file → group → case). Values are strings or numbers; `true` / `false` are errors (write `"true"`). `null` only removes a value from an outer `env:`; it does not unset variables inherited from your shell
 - Only command cases use it: `env:` written on a call / request case is an error, and `env:` inherited from the file or a group is ignored for them
 - Hooks read the merged result as `case.env`. When `pytest_casebook_run_command` runs the command itself, apply it there; `run_in_process` does not change `os.environ`, so wrap it, e.g. in `unittest.mock.patch.dict(os.environ, case.env)`
@@ -534,7 +535,8 @@ Only the results are compared: `# exit_code:` (`# status:` for requests) and the
 A `request:` case sends an HTTP request and checks the response. pytest-casebook itself does not send HTTP; the `pytest_casebook_request` hook in conftest.py does, using your framework's test client.
 
 ```yaml
-request_defaults:                     # headers added to every request (cases can override)
+request_defaults:                     # headers added to every request (cases can override,
+                                      # whatever the case of the header name)
   headers: {Authorization: Bearer test-token}
 
 cases:
@@ -578,7 +580,7 @@ The golden file contains `# status:` and, if the body is JSON, a formatted `----
 
 - For cases using a golden file, the observed values are added as `----- observe: <target> -----`
 - Lists (DB rows etc.) are written one item per line as JSON, so when a value changes, the diff shows only that line
-- `files` writes the files in the working directory and their contents as `=== file name ===`
+- `files` writes the files in the working directory and their contents as `=== file name ===`. Newlines are compared as LF, and a file that is not UTF-8 (an image etc.) becomes one line with its size and SHA-256
 
 ### Expected results (expect)
 

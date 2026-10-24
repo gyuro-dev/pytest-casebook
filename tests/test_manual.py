@@ -72,6 +72,23 @@ def test_manual_cases_in_html_report(project: pytest.Pytester) -> None:
     assert "result: がまだありません" not in page
 
 
+def test_plan_report_shows_manual(project: pytest.Pytester) -> None:
+    """
+    `--collect-only` の計画の表でも、result: のない手動のケースは「未実施」ではなく「手動」。
+
+    実行しても手動のままなので、「これから実行する」ように見せない。result: を書いたものと
+    自動のケースは「未実施」のまま。
+    """
+    write_casebook(project, CASES)
+    report = project.path / "report.html"
+    project.runpytest("--collect-only", f"--casebook-html={report}")
+    page = report.read_text(encoding="utf-8")
+    # 手動 2 件（layout と broken ... broken は result があるので未実施）→ layout だけが手動
+    assert page.count('<span class="badge manual">手動</span>') == 1
+    assert page.count('class="badge notrun"') >= 1
+    assert "data-outcome='manual'" in page
+
+
 def test_manual_case_in_english(project: pytest.Pytester) -> None:
     write_casebook(project, CASES)
     report = project.path / "report.html"

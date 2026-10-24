@@ -437,6 +437,9 @@ def test_groups_can_be_selected_with_k(project: pytest.Pytester) -> None:
             "states に x",
         ),
         ("cases:\n  - name: a b\n    call: m:f\n", "name に使えるのは"),
+        ("cases:\n  - name: .hidden\n    call: m:f\n", "先頭は英数字か _"),
+        ("cases:\n  - name: '-x'\n    call: m:f\n", "先頭は英数字か _"),
+        ("cases: []\n", "cases にケースがありません"),
         ("cases:\n  - name: a\n    request: /x\n    env: {A: x}\n", "env は command のケース"),
         ("env: [A]\ncases:\n  - name: a\n    call: m:f\n", "env は 変数名 -> 値"),
         ("cases:\n  - name: a\n    call: f\n", "'モジュール:関数' の形"),
@@ -843,3 +846,32 @@ def test_deselected_cases_are_not_in_the_report(project: pytest.Pytester) -> Non
     page = report.read_text(encoding="utf-8")
     assert "全 1 件" in page
     assert "notrun" not in page.split("<style>")[0] + page.split("</style>")[1]
+
+
+def test_japanese_case_names_are_allowed(project: pytest.Pytester) -> None:
+    """ケース名は日本語でもよい（先頭の . と - を禁じた分、締めすぎていないことの確認）。"""
+    write_casebook(
+        project,
+        "cases:\n  - name: 足し算_1-2\n    call: calc:add\n    args: [1, 2]\n"
+        "    expect: {return: 3}\n",
+    )
+    project.runpytest().assert_outcomes(passed=2)
+
+
+def test_command_env_replaces_casebook_dir(project: pytest.Pytester) -> None:
+    """env: の値の中の {casebook_dir} も、argv と同じく YAML のディレクトリになる。"""
+    posix = project.path.as_posix()
+    write_casebook(
+        project,
+        f"""
+        cases:
+          - name: envdir
+            command:
+              - {PY}
+              - -c
+              - "import os; print(os.path.samefile(os.environ['CASEBOOK_D'], '{posix}'))"
+            env: {{CASEBOOK_D: "{{casebook_dir}}"}}
+            expect: {{stdout: "True\\n"}}
+        """,
+    )
+    project.runpytest().assert_outcomes(passed=2)

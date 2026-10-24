@@ -189,7 +189,7 @@
       "properties": {
         "name": {
           "type": "string",
-          "pattern": "^[\\w.\\-]+$",
+          "pattern": "^\\w[\\w.\\-]*$",
           "description": "Case name (becomes the golden file name) / ケース名（期待出力のファイル名になる）"
         },
         "description": {
@@ -316,7 +316,7 @@
     },
     "env": {
       "type": "object",
-      "description": "Environment variables for running command: cases, put over the current ones. Inner levels (file, group, case) override outer ones; null removes an outer value / command: のケースを実行するときの環境変数（今の環境変数に重ねる）。内側（ファイル・グループ・ケース）が外側を上書きし、null で外側の値を消す",
+      "description": "Environment variables for running command: cases, put over the current ones. Inner levels (file, group, case) override outer ones; null removes an outer value / command: のケースを実行するときの環境変数（今の環境変数に重ねる）。内側（ファイル・グループ・ケース）が外側を上書きし、null で外側の値を消す. {casebook_dir} in a value becomes the YAML's directory / 値の中の {casebook_dir} は YAML のディレクトリになる",
       "propertyNames": {
         "pattern": "^[^=]+$"
       },
