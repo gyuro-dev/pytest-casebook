@@ -495,7 +495,8 @@ def test_run_error_is_shown_once(project: pytest.Pytester) -> None:
     （元の例外がつながって「During handling of …」と2回出ない）。
     """
     write_casebook(project, "cases:\n  - name: a\n    call: nope:f\n    expect: {return: 1}\n")
-    result = project.runpytest()
+    # 最後の要約（short test summary）は端末の幅で省略が変わるので、出さずに数える
+    result = project.runpytest("-rN")
     result.assert_outcomes(failed=1, passed=1)
     out = result.stdout.str()
     assert out.count("No module named 'nope'") == 1
