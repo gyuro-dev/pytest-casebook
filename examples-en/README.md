@@ -25,6 +25,7 @@ These are the English versions of the samples in [examples](../examples). The ca
 | [17_targets](17_targets) | Run the same cases against different environments, with golden files per environment | YAML + conftest.py |
 | [18_manual](18_manual) | Put checks that cannot be automated (visual checks, printed forms) in the same sheet, with results written by hand | YAML |
 | [19_aws](19_aws) | Put inputs in S3 and DynamoDB, run, and check DynamoDB, SQS and S3 (moto's mock) | YAML + conftest.py |
+| [20_params](20_params) | Write many cases that differ only in arguments as rows with params | YAML |
 | [shop](shop) | An example that combines what 01–13 show | YAML + conftest.py |
 
 ## Running

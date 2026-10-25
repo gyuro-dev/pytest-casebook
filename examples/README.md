@@ -23,6 +23,7 @@
 | [17_targets](17_targets) | 同じケースを別々の環境に流し、期待出力を環境ごとに分ける | YAML ＋ conftest.py |
 | [18_manual](18_manual) | 自動にできない確認（目視・帳票など）も同じ表に載せ、結果を手で書く | YAML |
 | [19_aws](19_aws) | S3・DynamoDB に入力を置いて実行し、DynamoDB・SQS・S3 の中身を確かめる（moto のモック） | YAML ＋ conftest.py |
+| [20_params](20_params) | 引数だけ違うケースを params で表の形に並べる | YAML |
 | [shop](shop) | 01〜13 の書き方を組み合わせた例 | YAML ＋ conftest.py |
 
 ## 実行のしかた

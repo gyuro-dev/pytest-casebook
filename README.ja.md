@@ -250,6 +250,7 @@ DB を使うときや、テスト用の環境を渡したいときだけ、conft
 | Python の関数を呼んで、戻り値を確かめたい | YAML | `call: モジュール:関数` と `args` / `kwargs` | [02_function](examples/02_function) |
 | 例外になることを確かめたい | YAML | `expect: {raises: ValueError}` | [03_exception](examples/03_exception) |
 | 期待結果を YAML に直接書きたい | YAML | `expect:`（[書き方](#期待結果-expect)） | [04_expect](examples/04_expect) |
+| 引数だけ違うケースを表の形で並べたい | YAML | `params:`（[書き方](#表の形で同じケースを並べる-params)） | [20_params](examples/20_params) |
 | ケースを大項目・中項目・小項目に分けたい | YAML | `group:` の入れ子（[書き方](#グループ)） | [05_groups](examples/05_groups) |
 | 入力ファイルを置いてから実行したい / できたファイルを確かめたい | YAML | `setup: {files: ...}` と `observe: [files]` | [06_files](examples/06_files) |
 | 同じ操作を「通常時」「障害時」で確かめたい | YAML ＋ conftest.py | `states:` ＋ `pytest_casebook_setup` | [07_states](examples/07_states) |
@@ -467,10 +468,36 @@ HTML レポートの階層の列は、実際に使われているグループの
 | `skip` / `xfail` | 止める理由 / 失敗すると分かっている理由。ターミナル（`pytest -rsx`）と HTML の結果の列に出る |
 | `meta` | 自由に使う情報（[meta](#meta)） |
 | `golden` | 期待出力のファイル名（省略時は `<name>.txt`） |
+| `params` | このケースに重ねる行。要素ごとに1件のケースになる（[書き方](#表の形で同じケースを並べる-params)） |
 
 `command`・`call`・`request`・`manual` は、どれか1つだけを書きます。\
 上の表にないキーは、打ち間違いを見つけるためにエラーにします。\
 自分で使う情報は `meta:` の中に書きます。
+
+### 表の形で同じケースを並べる (params)
+
+引数と期待値だけが違うケースを並べると、共通のキーの繰り返しになります。\
+共通の部分を1回だけ書き、違う部分を `params:` に行として並べると、そのケースはテンプレートになり、要素ごとに1件のふつうのケースに展開されます。
+
+```yaml
+cases:
+  - name: shipping
+    description: 送料の計算
+    call: shop:shipping
+    params:
+      - {name: "0",    description: 0 円は送料 500 円,    args: [0],    expect: {return: 500}}
+      - {name: "2999", description: 2999 円は送料 500 円, args: [2999], expect: {return: 500}}
+      - {name: "3000", description: 3000 円から送料無料,  args: [3000], expect: {return: 0}}
+```
+
+`shipping-0`・`shipping-2999`・`shipping-3000` という3件のケースになります。\
+各要素には `name` が必須で、ケース名は `<ケース名>-<要素名>` になります。\
+たいてい要素ごとに `description` も書くので、試験項目表（HTML）の各行はそれだけで読めます。
+
+要素のキーはテンプレートのキーをまるごと置き換えます（深い併合はしません）。\
+要素に `expect:` を書くと、テンプレートの `expect:` 全体が置き換わります。\
+重ねた結果は、ふつうのケースと同じように検証します。\
+YAML のほかの部分を共有したいときは、アンカー（`&` / `*` / `<<:`）も今までどおり使えます。
 
 ### 環境変数 (env)
 

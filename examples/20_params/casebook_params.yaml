@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
+# 引数と期待値だけが違うケースを params で表の形に並べる。作るのはこの YAML だけ。
+# params の各要素がテンプレートのケースに上書きで重なり、1件ずつのケース（<ケース名>-<要素名>）になる。
+title: 表の形で同じケースを並べる
+
+cases:
+  - name: shipping
+    description: 送料の計算
+    call: shipping_fee:fee
+    params:
+      - {name: "0",    description: 0 円は送料 500 円,    args: [0],    expect: {return: 500}}
+      - {name: "2999", description: 2999 円は送料 500 円, args: [2999], expect: {return: 500}}
+      - {name: "3000", description: 3000 円から送料無料,  args: [3000], expect: {return: 0}}

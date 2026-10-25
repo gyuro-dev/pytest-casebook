@@ -42,6 +42,11 @@ cases:
           exit_code: 0
           stdout: {contains: 1件}
           db.users: [{id: 1, name: 佐藤}]
+      - name: shipping            # params: を書くとテンプレートになり、要素を上書きで重ねて
+        call: shop:shipping       # 1件ずつのケースに展開する（名前は shipping-0 など）
+        params:
+          - {name: "0", args: [0], expect: {return: 500}}
+          - {name: "3000", args: [3000], expect: {return: 0}}
 ```
 """
 
@@ -97,6 +102,7 @@ _CASE_KEYS = {
     "skip",
     "xfail",
     "name",
+    "params",
     "description",
     "command",
     "call",
@@ -660,6 +666,36 @@ def _walk(
                 _timeout(item["timeout"], loc) if "timeout" in item else timeout,
                 f"{loc}{error('in_group', name=group.name)}.cases",
             )
+        elif "params" in item:
+            # params: を持つケースはテンプレート。テンプレートに params の各要素を上書きで
+            # 重ねて（深い併合はしない）、1件ずつのケースにする。要素は name を持ち、
+            # ケース名は「テンプレート名-要素名」になる。重ねた結果の検証は、ふつうの
+            # ケースと同じ _parse_case に任せる
+            params = item["params"]
+            if not (
+                isinstance(params, list) and params and all(isinstance(p, dict) for p in params)
+            ):
+                raise CasebookError(error("params_list", where=loc))
+            template = {k: v for k, v in item.items() if k != "params"}
+            name = _str(template.get("name"), loc, "name", required=True)
+            for param in params:
+                if "params" in param:
+                    raise CasebookError(error("params_nested", where=loc))
+                if "name" not in param:
+                    raise CasebookError(error("params_name", where=loc))
+                merged = {**template, **param}
+                merged["name"] = f"{name}-{_str(param['name'], loc, 'name', required=True)}"
+                # 誤りの表示とレポートの行番号は、要素自身の行を優先する（分からなければ
+                # テンプレートの行）。_parse_case が merged の id で行を引けるように登録する
+                pline = doc._source_lines.get(id(param), line)
+                ploc = f"{where}[{i}]" + (
+                    error("line", line=pline + 1) if pline is not None else ""
+                )
+                if pline is not None:
+                    doc._source_lines[id(merged)] = pline
+                doc.cases.append(
+                    _parse_case(merged, doc, groups, state, marks, meta, env, flags, timeout, ploc)
+                )
         else:
             doc.cases.append(
                 _parse_case(item, doc, groups, state, marks, meta, env, flags, timeout, loc)

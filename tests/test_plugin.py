@@ -511,6 +511,27 @@ def test_groups_can_be_selected_with_k(project: pytest.Pytester) -> None:
         ("cases:\n  - name: golden_orphans\n    call: m:f\n", "消し忘れの確認に使う"),
         ("cases:\n  - name: a\n    call: m:f\n    skip: true\n", "例: skip: 不具合 #12"),
         ("cases:\n  - name: a\n    call: m:f\n    expect: {}\n", "1つ以上書いてください"),
+        ("cases:\n  - name: a\n    call: m:f\n    params: {}\n", "params は、ケースに重ねる"),
+        ("cases:\n  - name: a\n    call: m:f\n    params: []\n", "params は、ケースに重ねる"),
+        (
+            "cases:\n  - name: a\n    call: m:f\n    params: [{args: [1]}]\n",
+            "name（ケース名に足す名前）",
+        ),
+        (
+            "cases:\n  - name: a\n    call: m:f\n    params: [{name: x, params: [{name: y}]}]\n",
+            "params の中に params は書けません",
+        ),
+        (
+            "cases:\n  - name: a\n    call: m:f\n    params: [{name: x, arg: [1]}]\n",
+            "知らないキーがあります: arg",
+        ),
+        (
+            (
+                "cases:\n  - name: a\n    call: m:f\n    params: [{name: x}]\n"
+                "  - name: a-x\n    call: m:f\n"
+            ),
+            "ケース名が重複しています: a-x",
+        ),
         ("cases: [\n", "YAML として読めません"),
     ],
 )
@@ -609,6 +630,52 @@ def test_ini_options(project: pytest.Pytester) -> None:
     )
     project.runpytest("--casebook-update").assert_outcomes(passed=2)
     assert (project.path / "expected" / "my.cases" / "add.txt").exists()
+
+
+# =============================================================================
+# params（引数だけ違うケースの展開）
+# =============================================================================
+
+
+def test_params_rows_run_as_their_own_cases(project: pytest.Pytester) -> None:
+    """params で展開したケースは1件ずつ実行され、失敗した要素は自分の行番号で報告される。"""
+    project.makepyfile(shipping="def fee(subtotal):\n    return 0 if subtotal >= 3000 else 500\n")
+    write_casebook(
+        project,
+        """
+        cases:
+          - name: shipping
+            description: 送料の計算
+            call: shipping:fee
+            params:
+              - {name: "0", description: 0 円は送料 500 円, args: [0], expect: {return: 500}}
+              - {name: "2999", description: 送料無料のつもり, args: [2999], expect: {return: 0}}
+              - {name: "3000", description: 3000 円から送料無料, args: [3000], expect: {return: 0}}
+        """,
+    )
+    result = project.runpytest()
+    result.assert_outcomes(passed=3, failed=1)  # passed のうち1つは golden_orphans
+    result.stdout.fnmatch_lines(["*[[]shipping-2999[]]（7 行目）*"])
+
+
+def test_html_report_has_one_row_per_params_element(project: pytest.Pytester) -> None:
+    """params で展開したケースは、試験項目表にも1件ずつ行として出る。"""
+    write_casebook(
+        project,
+        """
+        cases:
+          - name: adding
+            call: calc:add
+            params:
+              - {name: one, args: [1, 0], expect: {return: 1}}
+              - {name: two, args: [1, 1], expect: {return: 2}}
+        """,
+    )
+    report = project.path / "report.html"
+    project.runpytest(f"--casebook-html={report}").assert_outcomes(passed=3)
+    page = report.read_text(encoding="utf-8")
+    assert "<div class='name'>adding-one</div>" in page
+    assert "<div class='name'>adding-two</div>" in page
 
 
 # =============================================================================
