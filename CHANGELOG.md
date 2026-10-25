@@ -7,6 +7,8 @@ incompatible change raises the minor version).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-25
+
 ### Added
 
 - The HTML report shows the compared parts of each golden file, folded under the case like
@@ -199,7 +201,8 @@ The first release.
 - Checked with Python 3.11-3.15, pytest 8 / 9 and pytest-xdist (Windows and Ubuntu 22.04 on
   WSL), mypy (strict) and ruff
 
-[Unreleased]: https://github.com/gyuro-dev/pytest-casebook/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/gyuro-dev/pytest-casebook/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/gyuro-dev/pytest-casebook/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/gyuro-dev/pytest-casebook/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/gyuro-dev/pytest-casebook/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/gyuro-dev/pytest-casebook/compare/v0.5.0...v0.5.1
