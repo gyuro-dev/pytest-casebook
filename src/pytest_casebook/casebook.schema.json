@@ -91,6 +91,11 @@
     "env": {
       "$ref": "#/$defs/env"
     },
+    "timeout": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Seconds before a case fails as too slow: the default for the cases in this file (a group's or case's own timeout wins). A command is stopped; a call / request function keeps running in the background / ケースを時間切れで失敗にするまでの秒数。このファイルのケースの既定（グループやケースの timeout が優先）。command は止める。call / request の関数は裏で動き続ける"
+    },
     "cases": {
       "$ref": "#/$defs/items"
     }
@@ -144,6 +149,11 @@
         },
         "env": {
           "$ref": "#/$defs/env"
+        },
+        "timeout": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Seconds before a case fails as too slow: the default for the cases inside (a case's own timeout wins). A command is stopped; a call / request function keeps running in the background / ケースを時間切れで失敗にするまでの秒数。中のケースの既定（ケースの timeout が優先）。command は止める。call / request の関数は裏で動き続ける"
         },
         "skip": {
           "$ref": "#/$defs/reason",
@@ -212,6 +222,11 @@
         },
         "stdin": {
           "type": "string"
+        },
+        "stdin_file": {
+          "type": "string",
+          "minLength": 1,
+          "description": "File passed to standard input, relative to the YAML's directory (not with stdin) / 標準入力に渡すファイル（YAML のディレクトリからの相対パス。stdin とは同時に書けない）"
         },
         "timeout": {
           "type": "number",

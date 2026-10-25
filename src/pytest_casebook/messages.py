@@ -235,6 +235,11 @@ ERRORS: dict[str, dict[str, str]] = {
         "bad_call": "{where}: call は 'モジュール:関数' の形で書いてください: {call}",
         "args_only_call": "{where}: args / kwargs は call のケースにだけ書けます",
         "stdin_only_command": "{where}: stdin は command のケースにだけ書けます",
+        "stdin_file_only_command": "{where}: stdin_file は command のケースにだけ書けます",
+        "stdin_and_file": "{where}: stdin と stdin_file は同時に書けません",
+        "stdin_file_path": (
+            "{where}: stdin_file は YAML のディレクトリの中を指す相対パスで書いてください: {name}"
+        ),
         "env_only_command": "{where}: env は command のケースにだけ書けます",
         "env_mapping": (
             "{where}: env は 変数名 -> 値（文字列か数値。null で外側の値を消す）の"
@@ -280,6 +285,7 @@ ERRORS: dict[str, dict[str, str]] = {
         "matcher_string": "{where}: {name} には文字列を書いてください",
         "matcher_list": "{where}: {name} にはリストを書いてください",
         "command_not_found": "コマンドが見つかりません: {program}",
+        "stdin_file_missing": "stdin_file が見つかりません: {name}",
         "command_timeout": "{timeout} 秒以内に終わりませんでした: {argv}",
         "call_timeout": (
             "call: {call} が {timeout} 秒以内に終わりませんでした"
@@ -351,6 +357,11 @@ ERRORS: dict[str, dict[str, str]] = {
         "bad_call": "{where}: call must be 'module:function': {call}",
         "args_only_call": "{where}: args / kwargs can only be used in call cases",
         "stdin_only_command": "{where}: stdin can only be used in command cases",
+        "stdin_file_only_command": "{where}: stdin_file can only be used in command cases",
+        "stdin_and_file": "{where}: stdin and stdin_file cannot be used together",
+        "stdin_file_path": (
+            "{where}: stdin_file must be a relative path inside the YAML's directory: {name}"
+        ),
         "env_only_command": "{where}: env can only be used in command cases",
         "env_mapping": (
             "{where}: env must be a mapping of variable name -> value "
@@ -392,6 +403,7 @@ ERRORS: dict[str, dict[str, str]] = {
         "matcher_string": "{where}: {name} needs a string",
         "matcher_list": "{where}: {name} needs a list",
         "command_not_found": "command not found: {program}",
+        "stdin_file_missing": "stdin_file not found: {name}",
         "command_timeout": "did not finish within {timeout} seconds: {argv}",
         "call_timeout": (
             "call: {call} did not finish within {timeout} seconds "

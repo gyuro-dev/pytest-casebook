@@ -422,6 +422,7 @@ normalize:                     # 出力に当てる置き換え
   - {pattern: 'req-[0-9a-f]+', replace: '<request-id>'}
 meta: {owner: qa}              # 自由に使う情報（下の「meta」を参照）
 env: {LANG: C}                 # command のケースの環境変数（下の「環境変数」を参照）
+timeout: 5                     # 中のケースの既定の timeout（グループやケースの値が優先）
 cases: [...]                   # ケースまたはグループのリスト
 ```
 
@@ -434,6 +435,7 @@ cases: [...]                   # ケースまたはグループのリスト
   marks: [slow]            # 中のケースに付ける pytest のマーク
   meta: {area: price}      # 中のケースに付ける meta
   env: {TZ: UTC}           # 中の command のケースに付ける環境変数
+  timeout: 5               # 中のケースの既定の timeout
   skip: 仕様が決まるまで止める  # 中のケースすべてを、この理由でスキップする（xfail: も書ける）
   cases: [...]
 ```
@@ -449,6 +451,7 @@ HTML レポートの階層の列は、実際に使われているグループの
 | `description` | 確認する内容 |
 | `command` | CLI として実行する引数（shell と同じ書き方で区切る）。`command_prefix` の後ろに付く。`command_prefix` があれば空文字（`""`）でもよい。リスト（`[a, 'b c']`）で書くと区切らずにそのまま渡す |
 | `stdin` | command の標準入力 |
+| `stdin_file` | 標準入力に渡すファイル。YAML のディレクトリからの相対パス。`stdin` とは同時に書けない |
 | `timeout` | ケースを時間切れで失敗にするまでの秒数（`command`・`call`・`request`。[詳しく](#時間の上限-timeout)） |
 | `env` | command を実行するときの環境変数。今の環境変数に重ねる（[書き方](#環境変数-env)） |
 | `call` | 呼び出す関数（`モジュール:関数`、`モジュール:クラス.メソッド`）。`async def` の関数は終わるまで待つ |
@@ -733,7 +736,9 @@ expect:
 ### 時間の上限 (timeout)
 
 `timeout:` は、ケースの実行にかけてよい秒数です。\
-ケースごとに書きます（ファイル全体やグループに既定の値を書くことはできません）。
+ケースごとに書くほか、ファイルの先頭やグループにも書けます（中のケースの既定になります）。\
+いちばん近い値が使われ、ケース自身の `timeout:` が最優先です。\
+手動のケース（`manual:`）は実行しないので、既定の値は当てはまりません。
 
 - **command（別プロセス）**: プロセスを止めて、ケースを失敗にします
 - **call / request**: 関数（request では `pytest_casebook_request` hook）を別のスレッドで動かし、時間内に終わらなければケースを失敗にします。\
@@ -780,7 +785,7 @@ cases:
 - `result: passed` / `failed` / `skipped` と書くと、pytest でもレポートでも、成功・失敗・スキップになります。\
   結果を書き込めば、`pytest --casebook-html=…` を1回実行するだけで、自動と手動の結果がそろった試験項目表になります
 - `setup:` と `state:` は書けますが、前提条件として表に出すだけです（`pytest_casebook_setup` hook は呼びません）。\
-  `args`・`kwargs`・`stdin`・`timeout`・`env`・`observe`・`golden` は書けません
+  `args`・`kwargs`・`stdin`・`stdin_file`・`timeout`・`env`・`observe`・`golden` は書けません
 
 ### hook と fixture
 

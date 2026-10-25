@@ -1,5 +1,5 @@
 """
-call: と request: のケースの timeout の確認。
+call: と request: のケースの timeout と、ファイル・グループに書く既定の timeout の確認。
 
 時間切れのケースの関数・hook は止められず、裏のスレッド（daemon）で動き続ける。テストが遅く
 ならないよう、時間切れにするものは 0.2 秒で打ち切り、裏では 1 秒だけ眠らせる。
@@ -8,11 +8,14 @@ call: と request: のケースの timeout の確認。
 from __future__ import annotations
 
 import sys
+import textwrap
 import threading
+from pathlib import Path
 
 import pytest
 from helpers import write_casebook
 
+import pytest_casebook
 from pytest_casebook.runner import WorkerTimeout, invoke, run_with_timeout
 
 SLOW_MODULE = """
@@ -196,6 +199,55 @@ def test_request_timeout(project: pytest.Pytester) -> None:
         "（pytest_casebook_request hook は止められないため、裏で動き続けます）"
     )
     result.stdout.fnmatch_lines([f"*[[]hang[]] {message}*"])
+
+
+# =============================================================================
+# ファイル・グループの既定の timeout
+# =============================================================================
+
+INHERIT_CASEBOOK = """
+timeout: 10
+cases:
+  - name: from_file
+    call: m:f
+  - group: g
+    timeout: 5
+    cases:
+      - name: from_group
+        call: m:f
+      - name: own
+        call: m:f
+        timeout: 1
+  - name: check
+    manual: 目で確かめる
+"""
+
+
+def test_timeout_default_is_inherited(tmp_path: Path) -> None:
+    path = tmp_path / "casebook_t.yaml"
+    path.write_text(textwrap.dedent(INHERIT_CASEBOOK), encoding="utf-8")
+    doc = pytest_casebook.load(path)
+    timeouts = {c.name: c.timeout for c in doc.cases}
+    # いちばん近い値が使われる（ファイル < グループ < ケース）
+    assert timeouts["from_file"] == 10
+    assert timeouts["from_group"] == 5
+    assert timeouts["own"] == 1
+    # 手動のケースは実行しないので、既定の timeout を受け継がない
+    assert timeouts["check"] is None
+
+
+def test_invalid_file_timeout(tmp_path: Path) -> None:
+    path = tmp_path / "casebook_t.yaml"
+    path.write_text("timeout: 0\ncases:\n  - {name: a, call: 'm:f'}\n", encoding="utf-8")
+    with pytest.raises(pytest_casebook.CasebookError, match="0 より大きい秒数"):
+        pytest_casebook.load(path, lang="ja")
+
+
+def test_file_timeout_applies_to_cases(slow: pytest.Pytester) -> None:
+    write_casebook(slow, "timeout: 0.2\ncases:\n  - {name: hang, call: 'slow:wait'}\n")
+    result = slow.runpytest()
+    result.assert_outcomes(failed=1, passed=1)
+    result.stdout.fnmatch_lines(["*[[]hang[]] call: slow:wait が 0.2 秒以内に*"])
 
 
 # =============================================================================

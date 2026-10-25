@@ -377,6 +377,7 @@ normalize:                     # replacements applied to the output
   - {pattern: 'req-[0-9a-f]+', replace: '<request-id>'}
 meta: {owner: qa}              # free-form information (see "meta")
 env: {LANG: C}                 # environment variables for command cases (see "Environment variables")
+timeout: 5                     # default seconds for the cases (a group's or case's value wins)
 cases: [...]                   # list of cases or groups
 ```
 
@@ -389,6 +390,7 @@ cases: [...]                   # list of cases or groups
   marks: [slow]              # pytest marks for the cases inside
   meta: {area: price}        # meta for the cases inside
   env: {TZ: UTC}             # environment variables for the command cases inside
+  timeout: 5                 # default timeout for the cases inside
   skip: paused until the spec is decided  # skip all cases inside with this reason (xfail: too)
   cases: [...]
 ```
@@ -403,6 +405,7 @@ You can select by group name, e.g. `-k Pricing`. The HTML report only shows as m
 | `description` | What is checked |
 | `command` | Arguments to run as a CLI (split like a shell command), appended to `command_prefix`. May be empty (`""`) if `command_prefix` is set. A list (`[a, 'b c']`) is passed as is without splitting |
 | `stdin` | Standard input for the command |
+| `stdin_file` | File passed to standard input, relative to the YAML's directory (not together with `stdin`) |
 | `timeout` | Seconds before the case fails as too slow (`command`, `call` and `request`; [details](#timeouts-timeout)) |
 | `env` | Environment variables for the command, put over the current ones ([how](#environment-variables-env)) |
 | `call` | Function to call (`module:function`, `module:Class.method`). `async def` functions are awaited |
@@ -650,7 +653,7 @@ When to use which:
 
 ### Timeouts (timeout)
 
-`timeout:` is the number of seconds a case may take to run. It is written per case (there is no default for a whole file or group).
+`timeout:` is the number of seconds a case may take to run. It can also be written at the top of the file or on a group as the default for the cases inside; the nearest value wins, and a case's own `timeout:` overrides it. A manual case (`manual:`) is never run, so the default does not apply to it.
 
 - **command (subprocess)**: the process is stopped and the case fails
 - **call / request**: the function (for request, the `pytest_casebook_request` hook) runs in a separate thread, and the case fails if it has not finished in time. Python cannot stop a thread, so **the function is not stopped**: it keeps running in the background until it returns. Its output after the timeout is not captured, and it does not keep pytest from exiting. To stop a hanging test for real, use [pytest-timeout](https://pypi.org/project/pytest-timeout/)
@@ -682,7 +685,7 @@ cases:
 - In the HTML report, the steps are shown under the case name and `expect:` in the expected-result column
 - Without `result:`, the case is skipped by pytest and the report shows **Manual**. Use it to see what is left to check by hand
 - `result: passed` / `failed` / `skipped` make the case pass / fail / be skipped, in pytest and in the report. With the results written in, one `pytest --casebook-html=…` run gives a complete sheet of the automated and the manual results
-- `setup:` and `state:` can be written; they are only shown as preconditions (the `pytest_casebook_setup` hook is not called). `args`, `kwargs`, `stdin`, `timeout`, `env`, `observe` and `golden` cannot be written
+- `setup:` and `state:` can be written; they are only shown as preconditions (the `pytest_casebook_setup` hook is not called). `args`, `kwargs`, `stdin`, `stdin_file`, `timeout`, `env`, `observe` and `golden` cannot be written
 
 ### Hooks and fixtures
 

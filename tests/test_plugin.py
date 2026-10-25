@@ -140,6 +140,63 @@ def test_command_stdin(project: pytest.Pytester) -> None:
     assert golden(project, "upper").endswith("----- stdout -----\nABC\n")
 
 
+def test_command_stdin_file(project: pytest.Pytester) -> None:
+    """YAML の隣に置いたファイルを標準入力に渡す（長い入力を YAML に書かずに済む）。"""
+    project.makefile(".txt", stdin_data="hello,世界")
+    write_casebook(
+        project,
+        f"""
+        command_prefix: [{PY}, -c, "import sys; print(sys.stdin.read().strip().upper())"]
+        cases:
+          - name: from_file
+            command: "-"
+            stdin_file: stdin_data.txt
+        """,
+    )
+    project.runpytest("--casebook-update").assert_outcomes(passed=2)
+    assert golden(project, "from_file").endswith("----- stdout -----\nHELLO,世界\n")
+
+
+@pytest.mark.parametrize(
+    ("case", "message"),
+    [
+        (
+            "{name: a, command: x, stdin: abc, stdin_file: in.txt}",
+            "stdin と stdin_file は同時に書けません",
+        ),
+        (
+            "{name: a, call: 'calc:add', stdin_file: in.txt}",
+            "stdin_file は command のケースにだけ書けます",
+        ),
+        (
+            "{name: a, command: x, stdin_file: ../in.txt}",
+            "stdin_file は YAML のディレクトリの中を指す相対パスで書いてください",
+        ),
+    ],
+)
+def test_invalid_stdin_file(project: pytest.Pytester, case: str, message: str) -> None:
+    write_casebook(project, f"cases:\n  - {case}\n")
+    result = project.runpytest()
+    result.assert_outcomes(errors=1)
+    result.stdout.fnmatch_lines([f"*{message}*"])
+
+
+def test_missing_stdin_file_fails_the_case(project: pytest.Pytester) -> None:
+    write_casebook(
+        project,
+        f"""
+        command_prefix: [{PY}, -c, "import sys; print(sys.stdin.read())"]
+        cases:
+          - name: missing
+            command: "-"
+            stdin_file: no_such.txt
+        """,
+    )
+    result = project.runpytest()
+    result.assert_outcomes(failed=1, passed=1)
+    result.stdout.fnmatch_lines(["*[[]missing[]] stdin_file が見つかりません: no_such.txt*"])
+
+
 def test_command_env(project: pytest.Pytester) -> None:
     write_casebook(
         project,
