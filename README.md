@@ -20,7 +20,7 @@ A pytest plugin that runs test cases written in YAML and writes the results as a
 - Put **manual checks** that cannot be automated (looking at a screen, printed forms) in the same sheet, with the results written by hand ([how](#manual-cases-manual))
 - Organize cases into **categories, subcategories and items** (any depth) and write an **HTML test specification sheet** (in English or Japanese; [how](#html-report))
 
-Run `pytest --casebook-html=report.html` and the cases in your YAML come out as this test specification sheet. The group hierarchy is merged vertically, and preconditions, expected results and results sit on one row.
+Run `pytest --casebook-html=report.html` and the cases in your YAML come out as this test specification sheet. The group hierarchy is merged vertically, and preconditions, expected results and results sit on one row. The contents of each golden file are folded under its row (`price_one.txt` is expanded here).
 
 ![HTML report as a test specification sheet](https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/docs/images/report-top-en.png)
 

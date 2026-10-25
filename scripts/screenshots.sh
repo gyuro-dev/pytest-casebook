@@ -72,12 +72,19 @@ render() {
     "$dir/overview.html" > "$dir/failure.html"
   # README の冒頭に置く、縦に短い画像。題名と全体の件数のすぐ下にケースの表が来るよう、
   # ファイルごとの説明・集計の表・確認が必要なケースの一覧を隠す。表は行の途中で切れない
-  # よう、最初の7件（価格計算と、在庫の通常時）だけを出す
-  local hide='document.querySelectorAll("section > :not(h2):not(.scroll),'
-  hide+=' table.cases tbody tr:nth-child(n+8)").forEach(e => e.style.display = "none");'
+  # よう、ケース7件（価格計算と、在庫の通常時）だけを出す（期待出力の折りたたみの行は
+  # ケースと一緒に数えない）。最初の期待出力は開いて、中身が見えることを見せる
+  local hide='document.querySelectorAll("section > :not(h2):not(.scroll)")'
+  hide+='.forEach(e => e.style.display = "none");'
+  hide+=' let n = 0;'
+  hide+=' document.querySelectorAll("table.cases tbody tr").forEach(r => {'
+  hide+='   if (!r.classList.contains("detail")) n++;'
+  hide+='   if (n > 7) r.style.display = "none";'
+  hide+=' });'
+  hide+=' const g = document.querySelector("details.golden"); if (g) g.open = true;'
   sed "s#</body>#<script>$hide</script></body>#" "$dir/overview.html" > "$dir/top.html"
 
-  shot "$dir/top.html" "$OUT/report-top$3.png" 680
+  shot "$dir/top.html" "$OUT/report-top$3.png" 860
   shot "$dir/overview.html" "$OUT/report-overview$3.png" 1440
   shot "$dir/failure.html" "$OUT/report-failure$3.png" 648
 }

@@ -55,7 +55,7 @@ TEXTS: dict[str, dict[str, Any]] = {
         "files": "ファイル: {files}",
         "env": "環境変数: {env}",
         "golden": "期待出力ファイル（{name}）",
-        "observe": "観察: {targets}",
+        "observe": "実行後の値: {targets}",
         "contains": "{label} が「{pattern}」を含む",
         "regex": "{label} が「{pattern}」（正規表現）に合う",
         "manual_steps": "手動: {steps}",
