@@ -5,7 +5,8 @@ Hooks that check AWS (DynamoDB, SQS, S3) with moto's mock. You write these three
 - pytest_casebook_setup: put the s3 (input files) and dynamodb (rows) of setup: in, and empty
   everything when the case ends
 - pytest_casebook_observe: read dynamodb.<table>, sqs.<queue> and s3.<bucket> written in
-  observe: / expect:
+  observe: / expect: (DynamoDB returns numbers as Decimal, but pytest-casebook turns them
+  into numbers, so the hook only sorts)
 
 call: runs the function in this process, so moto's mock applies as is. To check a CLI in a
 subprocess with command:, start moto's server or LocalStack and pass AWS_ENDPOINT_URL with env:
@@ -22,7 +23,6 @@ import json
 import os
 from collections.abc import Iterator
 from dataclasses import dataclass
-from decimal import Decimal
 from typing import Any
 from unittest import mock
 
@@ -101,8 +101,8 @@ else:
     def pytest_casebook_observe(target: str, env: Aws) -> Any:
         kind, _, name = target.partition(".")
         if kind == "dynamodb":
-            items = [_plain(item) for item in env.dynamodb.Table(name).scan()["Items"]]
             # the order of scan is not defined, so sort by the key
+            items = env.dynamodb.Table(name).scan()["Items"]
             return sorted(items, key=lambda item: item[TABLES[name]])
         if kind == "sqs":
             bodies = [json.loads(m["Body"]) for m in _receive_all(env.sqs, name)]
@@ -136,13 +136,3 @@ else:
             for message in batch:
                 sqs.delete_message(QueueUrl=url, ReceiptHandle=message["ReceiptHandle"])
         return messages
-
-    def _plain(value: Any) -> Any:
-        """Turn DynamoDB numbers (Decimal) into int / float, to compare with YAML numbers."""
-        if isinstance(value, Decimal):
-            return int(value) if value == value.to_integral_value() else float(value)
-        if isinstance(value, dict):
-            return {k: _plain(v) for k, v in value.items()}
-        if isinstance(value, list):
-            return [_plain(v) for v in value]
-        return value

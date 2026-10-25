@@ -5,7 +5,8 @@ AWS（DynamoDB・SQS・S3）を moto のモックで確かめる hook。作る�
 - pytest_casebook_setup: setup: の s3（入力ファイル）と dynamodb（行）を入れ、
   ケースが終わったら空にする
 - pytest_casebook_observe: observe: / expect: の dynamodb.<テーブル>・sqs.<キュー>・
-  s3.<バケット> の中身を取り出す
+  s3.<バケット> の中身を取り出す（DynamoDB の数は Decimal で返るが、pytest-casebook が
+  数にするので、hook では並べるだけでよい）
 
 call: で関数を同じプロセスで呼ぶので、moto のモックがそのまま効く。command: で別プロセスの
 CLI を確かめるときは、moto のサーバーか LocalStack を立て、env: で AWS_ENDPOINT_URL を渡す
@@ -22,7 +23,6 @@ import json
 import os
 from collections.abc import Iterator
 from dataclasses import dataclass
-from decimal import Decimal
 from typing import Any
 from unittest import mock
 
@@ -101,8 +101,8 @@ else:
     def pytest_casebook_observe(target: str, env: Aws) -> Any:
         kind, _, name = target.partition(".")
         if kind == "dynamodb":
-            items = [_plain(item) for item in env.dynamodb.Table(name).scan()["Items"]]
             # scan の順は決まっていないので、キーで並べる
+            items = env.dynamodb.Table(name).scan()["Items"]
             return sorted(items, key=lambda item: item[TABLES[name]])
         if kind == "sqs":
             bodies = [json.loads(m["Body"]) for m in _receive_all(env.sqs, name)]
@@ -135,13 +135,3 @@ else:
             for message in batch:
                 sqs.delete_message(QueueUrl=url, ReceiptHandle=message["ReceiptHandle"])
         return messages
-
-    def _plain(value: Any) -> Any:
-        """DynamoDB の数値（Decimal）を int / float にする（YAML の数と比べられるように）。"""
-        if isinstance(value, Decimal):
-            return int(value) if value == value.to_integral_value() else float(value)
-        if isinstance(value, dict):
-            return {k: _plain(v) for k, v in value.items()}
-        if isinstance(value, list):
-            return [_plain(v) for v in value]
-        return value
