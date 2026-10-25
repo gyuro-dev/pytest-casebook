@@ -129,6 +129,61 @@ def test_handwritten_return_and_raises(project: pytest.Pytester) -> None:
 
 
 # =============================================================================
+# --casebook-update の、書き直したファイルの一覧
+# =============================================================================
+
+
+UPDATE_LIST_CASES = """
+cases:
+  - {name: add, call: "calc:add", args: [1, 2]}
+  - {name: tags, call: "calc:tags"}
+"""
+
+
+def test_update_lists_rewritten_golden_files(project: pytest.Pytester) -> None:
+    write_casebook(project, UPDATE_LIST_CASES)
+    result = project.runpytest("--casebook-update")
+    result.assert_outcomes(passed=3)
+    result.stdout.fnmatch_lines(
+        [
+            "*書き直した期待出力: 2 件*",
+            "golden/casebook_calc/add.txt",
+            "golden/casebook_calc/tags.txt",
+        ]
+    )
+
+
+def test_update_without_changes_lists_nothing(project: pytest.Pytester) -> None:
+    write_casebook(project, UPDATE_LIST_CASES)
+    project.runpytest("--casebook-update").assert_outcomes(passed=3)
+    # 2回目は結果が変わらず書き直さないので、一覧も出ない
+    result = project.runpytest("--casebook-update")
+    result.assert_outcomes(passed=3)
+    assert "書き直した期待出力" not in result.stdout.str()
+
+
+def test_normal_run_lists_nothing(project: pytest.Pytester) -> None:
+    write_casebook(project, UPDATE_LIST_CASES)
+    project.runpytest("--casebook-update").assert_outcomes(passed=3)
+    result = project.runpytest()
+    result.assert_outcomes(passed=3)
+    assert "書き直した期待出力" not in result.stdout.str()
+
+
+def test_update_list_header_in_english(project: pytest.Pytester) -> None:
+    write_casebook(project, UPDATE_LIST_CASES)
+    result = project.runpytest("--casebook-update", "-o", "casebook_lang=en")
+    result.assert_outcomes(passed=3)
+    result.stdout.fnmatch_lines(
+        [
+            "*Updated golden files: 2*",
+            "golden/casebook_calc/add.txt",
+            "golden/casebook_calc/tags.txt",
+        ]
+    )
+
+
+# =============================================================================
 # async の関数・skip / xfail
 # =============================================================================
 

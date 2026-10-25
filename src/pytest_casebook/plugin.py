@@ -159,6 +159,27 @@ def pytest_configure(config: pytest.Config) -> None:
         config.pluginmanager.register(report, "casebook-html-report")
 
 
+def pytest_terminal_summary(
+    terminalreporter: pytest.TerminalReporter, config: pytest.Config
+) -> None:
+    """`--casebook-update` で書き直した期待出力ファイルの一覧を、実行の最後に出す。"""
+    # 書き直したテストの user_properties から、期待出力のパスの表記を集める
+    # （pytest-xdist でも、ワーカーの結果はまとめ役の stats に集まる）
+    labels = {
+        value
+        for reports in terminalreporter.stats.values()
+        for report in reports
+        if getattr(report, "when", None) == "call"
+        for key, value in getattr(report, "user_properties", [])
+        if key == "casebook_updated" and isinstance(value, str) and value
+    }
+    if not labels:
+        return
+    terminalreporter.write_sep("-", _texts(config)["updated_golden"].format(n=len(labels)))
+    for label in sorted(labels):
+        terminalreporter.write_line(label)
+
+
 @pytest.fixture(scope="session")
 def casebook_env() -> Any:
     """
@@ -755,7 +776,10 @@ def _compare_golden(
         # 結果が同じなら書き直さない（手で書いた期待出力の書き方を崩さず、
         # ヘッダーだけの違いで差分が出ないようにする）
         if (expected is None or golden_differs(expected, got)) and write_golden(path, actual):
-            request.node.user_properties.append(("casebook_updated", True))
+            # 値は rootdir からのパスの表記（実行の最後の一覧に出す。HTML レポートは
+            # 真偽しか見ないので、空でない文字列でも「更新」と出る）
+            updated = Path(os.path.relpath(path, config.rootpath)).as_posix()
+            request.node.user_properties.append(("casebook_updated", updated))
         return
     if expected is None:
         pytest.fail(m["golden_missing"].format(name=case.name, label=label), pytrace=False)
