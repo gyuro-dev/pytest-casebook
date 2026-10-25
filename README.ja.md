@@ -234,6 +234,7 @@ uv run pytest --collect-only --casebook-html=reports/plan.html
 
 期待出力ファイルを使うケース（`expect:` のないケース）では、期待出力の比べる部分も、同じようにケースの行の下に折りたたんで出します。\
 出す量は ini の `casebook_html_golden` で選べます（`off`: 出さない / `summary`: 既定。`casebook_html_golden_lines` 行（既定 40）で打ち切る / `full`: 全部）。\
+絞り込みの欄の横のボタンで、すべての期待出力をまとめて開く・閉じることができます。\
 期待出力の中の `<datetime>` などの `<…>` は、実行ごとに変わる値の置き換えです（その注記を、ファイルの見出しの下に1行出します）。\
 `--collect-only` でも出るので、実装の前に「期待値つきの試験項目表」としてレビューできます。
 
