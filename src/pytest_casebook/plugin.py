@@ -571,14 +571,21 @@ def _execute_command(
     ]
     cwd = workdir or doc.path.parent
     with _in_dir(workdir):
+        # hook にはケースをそのまま渡す（stdin_file に対応する実装は、hook の中で自分で読む）
         result = hook.pytest_casebook_run_command(
             case=case, argv=argv, env=env, cwd=cwd, config=config
         )
     if result is None:
+        stdin = case.stdin
+        if case.stdin_file is not None:
+            try:
+                stdin = (doc.path.parent / case.stdin_file).read_text(encoding="utf-8")
+            except OSError:
+                raise CasebookRunError(error("stdin_file_missing", name=case.stdin_file)) from None
         result = run_subprocess(
             argv,
             cwd=cwd,
-            stdin=case.stdin,
+            stdin=stdin,
             timeout=case.timeout,
             encoding=config.getini("casebook_encoding"),
             # argv と同じく、env の値の中の {casebook_dir} も YAML のディレクトリにする

@@ -76,6 +76,7 @@ _TOP_KEYS = {
     "normalize",
     "meta",
     "env",
+    "timeout",
     "cases",
 }
 _GROUP_KEYS = {
@@ -85,6 +86,7 @@ _GROUP_KEYS = {
     "marks",
     "meta",
     "env",
+    "timeout",
     "skip",
     "xfail",
     "cases",
@@ -101,6 +103,7 @@ _CASE_KEYS = {
     "args",
     "kwargs",
     "stdin",
+    "stdin_file",
     "timeout",
     "env",
     "state",
@@ -113,7 +116,16 @@ _CASE_KEYS = {
     "result",
 }
 # manual のケースに書けないキー（実行しないので意味がない）
-_MANUAL_FORBIDDEN_KEYS = ("args", "kwargs", "stdin", "timeout", "env", "observe", "golden")
+_MANUAL_FORBIDDEN_KEYS = (
+    "args",
+    "kwargs",
+    "stdin",
+    "stdin_file",
+    "timeout",
+    "env",
+    "observe",
+    "golden",
+)
 # manual のケースの result: に書ける値
 MANUAL_RESULTS = ("passed", "failed", "skipped")
 
@@ -183,6 +195,8 @@ class Case:
     args: list[Any] = field(default_factory=list)
     kwargs: dict[str, Any] = field(default_factory=dict)
     stdin: str | None = None
+    # 標準入力に渡すファイル（YAML のディレクトリからの相対パス。stdin とは同時に書けない）
+    stdin_file: str | None = None
     timeout: float | None = None
     # command を実行するときに os.environ に重ねる環境変数。ファイル・グループ・ケースの env: を
     # 外側から上書きで重ねたもの（null で外側の変数を消す）。command 以外のケースでは空
@@ -351,6 +365,19 @@ def _bool(value: Any, where: str, key: str) -> bool:
     """真偽値を確かめる（"false" のような文字列を True と取り違えないように）。"""
     if not isinstance(value, bool):
         raise CasebookError(error("not_bool", where=where, key=key))
+    return value
+
+
+def _timeout(value: Any, loc: str) -> float | int | None:
+    """
+    timeout:（秒数）を確かめる。ファイル・グループ・ケースで同じ書き方。
+
+    0 以下は必ず時間切れになり、.inf や .nan はスレッドを待つところで例外になるので、誤りにする。
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int | float) or not 0 < value < math.inf:
+        raise CasebookError(error("timeout_number", where=loc))
     return value
 
 
@@ -558,7 +585,18 @@ def parse_document(
 
     if not data.get("cases"):
         raise CasebookError(error("no_cases", where=where))
-    _walk(data["cases"], doc, (), DEFAULT_STATE, (), {}, doc.env, {}, f"{where}: cases")
+    _walk(
+        data["cases"],
+        doc,
+        (),
+        DEFAULT_STATE,
+        (),
+        {},
+        doc.env,
+        {},
+        _timeout(data.get("timeout"), where),
+        f"{where}: cases",
+    )
 
     seen: dict[str, int] = {}
     for case in doc.cases:
@@ -589,6 +627,7 @@ def _walk(
     meta: dict[str, Any],
     env: dict[str, str],
     flags: dict[str, str],
+    timeout: float | int | None,
     where: str,
 ) -> None:
     """グループを再帰的にたどり、ケースを `doc.cases` に順に追加する。"""
@@ -618,10 +657,13 @@ def _walk(
                 {**meta, **_meta(item.get("meta"), loc)},
                 _merge_env(env, _env(item.get("env"), loc)),
                 {**flags, **_flags(item, loc)},
+                _timeout(item["timeout"], loc) if "timeout" in item else timeout,
                 f"{loc}{error('in_group', name=group.name)}.cases",
             )
         else:
-            doc.cases.append(_parse_case(item, doc, groups, state, marks, meta, env, flags, loc))
+            doc.cases.append(
+                _parse_case(item, doc, groups, state, marks, meta, env, flags, timeout, loc)
+            )
 
 
 def _parse_case(
@@ -633,6 +675,7 @@ def _parse_case(
     meta: dict[str, Any],
     env: dict[str, str],
     flags: dict[str, str],
+    timeout: float | int | None,
     loc: str,
 ) -> Case:
     _check_keys(item, _CASE_KEYS, loc)
@@ -670,6 +713,16 @@ def _parse_case(
         raise CasebookError(error("args_only_call", where=loc))
     if command is None and "stdin" in item:
         raise CasebookError(error("stdin_only_command", where=loc))
+    if command is None and "stdin_file" in item:
+        raise CasebookError(error("stdin_file_only_command", where=loc))
+    if "stdin" in item and "stdin_file" in item:
+        raise CasebookError(error("stdin_and_file", where=loc))
+    stdin_file = None
+    if "stdin_file" in item:
+        stdin_file = _str(item["stdin_file"], loc, "stdin_file")
+        # YAML のディレクトリの外（絶対パスや ..）は指せない
+        if not _is_inside(stdin_file):
+            raise CasebookError(error("stdin_file_path", where=loc, name=repr(stdin_file)))
     # ケースに env: を書けるのは command だけ（ファイルやグループから受け継いだ env は、
     # command 以外のケースでは使わないだけで、誤りにはしない）
     if command is None and "env" in item:
@@ -686,14 +739,13 @@ def _parse_case(
     kwargs = item.get("kwargs", {})
     if not (isinstance(kwargs, dict) and all(isinstance(k, str) for k in kwargs)):
         raise CasebookError(error("kwargs_mapping", where=loc))
-    timeout = item.get("timeout")
-    # 0 以下は必ず時間切れになり、.inf や .nan はスレッドを待つところで例外になるので、誤りにする
-    if timeout is not None and (
-        isinstance(timeout, bool)
-        or not isinstance(timeout, int | float)
-        or not 0 < timeout < math.inf
-    ):
-        raise CasebookError(error("timeout_number", where=loc))
+    # ケースに書いた timeout が最優先。なければファイル・グループから受け継いだ既定を使う
+    if "timeout" in item:
+        timeout = _timeout(item["timeout"], loc)
+    if manual is not None:
+        # 手動のケースは実行しないため、受け継いだ既定の timeout は使わない
+        # （ケース自身の timeout: は _MANUAL_FORBIDDEN_KEYS で先に誤りにしている）
+        timeout = None
 
     state = _str(item.get("state"), loc, "state") or state
     if doc.states is None:
@@ -722,6 +774,7 @@ def _parse_case(
         args=args,
         kwargs=kwargs,
         stdin=_str(item.get("stdin"), loc, "stdin") if "stdin" in item else None,
+        stdin_file=stdin_file,
         timeout=timeout,
         env=_merge_env(env, own_env) if command is not None else {},
         state=state,
