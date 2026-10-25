@@ -177,6 +177,7 @@ Add `--casebook-html=report.html` to write the results as a test specification s
 - counts and results per top-level group
 - a list of cases that need attention (links to their rows)
 - a table whose level columns (`levels`) are merged vertically, with case name, action, description, preconditions, expected result, result and time. Failed rows can be expanded to show the diff
+- for cases compared with a golden file, the compared parts of the file, folded under the row (a button opens or closes all of them; [details](#golden-contents-in-the-report) below)
 - preconditions show non-default state names and the case's own `setup:`. Skip and known-bug reasons are shown under the result
 - the time only counts running the case (not session fixtures that build the environment)
 
@@ -195,6 +196,8 @@ The whole report looks like this (made from the cases in [docs/screenshots-en](h
 A failed case can be expanded below its row to show the diff.
 
 ![Diff of a failed case](https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/docs/images/report-failure-en.png)
+
+### Golden contents in the report
 
 A case compared with a golden file (one without `expect:`) also shows the compared parts of its golden file, folded under the case's row in the same way. How much is shown is chosen with the `casebook_html_golden` ini option (`off`: nothing / `summary`: the default, cut at `casebook_html_golden_lines` lines, 40 by default / `full`: everything). A button next to the filter expands or collapses all of them at once. `<…>` in the golden contents, such as `<datetime>`, stands for a value replaced because it changes between runs (a one-line note under the file heading says so). The contents also appear with `--collect-only`, so the plan can be reviewed as a specification with expected values before the implementation.
 
