@@ -415,7 +415,7 @@ def test_html_shows_precondition_and_expected(db_project: pytest.Pytester) -> No
     # 期待出力ファイルの置き場所はファイルごとに1回だけ出し、行にはファイル名だけを出す
     assert "期待出力ファイルの置き場所: golden/casebook_calc/" in page
     assert "期待出力ファイル（golden_case.txt）" in page
-    assert "観察: db.users" in page
+    assert "実行後の値: db.users" in page
 
 
 def test_observed_binary_file_is_size_and_hash(project: pytest.Pytester) -> None:
