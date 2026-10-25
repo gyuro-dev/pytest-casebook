@@ -719,7 +719,7 @@ def _parse_case(
         raise CasebookError(error("stdin_and_file", where=loc))
     stdin_file = None
     if "stdin_file" in item:
-        stdin_file = _str(item["stdin_file"], loc, "stdin_file")
+        stdin_file = _str(item["stdin_file"], loc, "stdin_file", required=True)
         # YAML のディレクトリの外（絶対パスや ..）は指せない
         if not _is_inside(stdin_file):
             raise CasebookError(error("stdin_file_path", where=loc, name=repr(stdin_file)))

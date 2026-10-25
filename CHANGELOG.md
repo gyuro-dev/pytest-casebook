@@ -7,6 +7,25 @@ incompatible change raises the minor version).
 
 ## [Unreleased]
 
+### Added
+
+- `--casebook-update` ends the run with a list of the golden files it rewrote (before, only
+  the HTML report's "updated" badge and git diff showed them).
+- `timeout:` can be written at the top of the case file and on groups as the default for the
+  cases inside; the nearest value wins and a case's own `timeout:` overrides it. Manual
+  cases never run, so the default does not apply to them.
+- `stdin_file:` passes a file to a command's standard input (a relative path inside the
+  YAML's directory, read as UTF-8; cannot be combined with `stdin:`).
+- The README links to a live demo report on GitHub Pages
+  (https://gyuro-dev.github.io/pytest-casebook/), and has a troubleshooting section.
+
+### Changed
+
+- Case names that differ only in letter case (such as `Add` and `add`) are an error: on
+  Windows their golden files are the same file, so a case file written on Linux broke there,
+  and only `--casebook-update` noticed.
+- A group whose `cases:` is an empty list is an error, like the file-level `cases: []`.
+
 ## [0.5.2] - 2026-10-25
 
 ### Changed
