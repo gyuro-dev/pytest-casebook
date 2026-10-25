@@ -9,6 +9,10 @@ incompatible change raises the minor version).
 
 ### Added
 
+- `params:` writes cases that differ only in arguments and expected values as rows. The case
+  becomes a template, and every element is laid over it (replacing its keys wholesale),
+  giving one ordinary case per element named `<case name>-<element name>`. See the
+  `20_params` sample.
 - `--casebook-update` ends the run with a list of the golden files it rewrote (before, only
   the HTML report's "updated" badge and git diff showed them).
 - `timeout:` can be written at the top of the case file and on groups as the default for the
@@ -21,6 +25,10 @@ incompatible change raises the minor version).
 
 ### Changed
 
+- `decimal.Decimal` values are compared and written as numbers (`int` for integral values,
+  `float` otherwise). DynamoDB returns numbers as `Decimal`, so until now an observe hook had
+  to convert them itself, or `price: 300` in the YAML never matched. Golden files that
+  recorded the old `Decimal('…')` text change.
 - Case names that differ only in letter case (such as `Add` and `add`) are an error: on
   Windows their golden files are the same file, so a case file written on Linux broke there,
   and only `--casebook-update` noticed.
