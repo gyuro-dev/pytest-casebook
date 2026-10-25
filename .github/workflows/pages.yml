@@ -1,0 +1,79 @@
+# Build the demo HTML reports from docs/screenshots (ja) and docs/screenshots-en (en) and
+# publish them to GitHub Pages, so the README can link to a report people can actually try
+# (the filter, the failure details) instead of only screenshots.
+# docs/screenshots（日本語）と docs/screenshots-en（英語）からデモの HTML レポートを作り、
+# GitHub Pages に公開する。README からスクショだけでなく、絞り込みや失敗の詳細を実際に
+# 触れるレポートにリンクするため。
+#
+# Security / 安全のために: same as ci.yml (actions pinned to SHAs, no credentials kept by
+# checkout). Only the deploy job gets the Pages permissions (pages: write, id-token: write).
+# ci.yml と同じ（Actions は SHA で固定、checkout で認証情報を残さない）。Pages の権限
+# （pages: write と id-token: write）は deploy のジョブにだけ付ける。
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+# Never run two deployments at the same time; let the running one finish
+# 公開を同時に2つ動かさない（動いているものは最後まで動かす）
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  UV_VERSION: "0.13.4"
+  PYTHONIOENCODING: utf-8
+  # PyYAML has no wheel for Python 3.15 yet; build it without the C extension
+  # PyYAML に 3.15 の wheel がまだないので、C 拡張なしで作る
+  PYYAML_FORCE_LIBYAML: "0"
+
+jobs:
+  build:
+    name: Build the demo reports
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+          enable-cache: false
+      - run: uv sync --frozen
+      # The demo cases deliberately contain one failure, one skip and one xfail, so the
+      # exit code is 1; check the counts instead (same as scripts/screenshots.sh)
+      # デモのケースはわざと失敗・スキップ・既知の不具合を含むので、終了コードではなく
+      # 件数で確かめる（scripts/screenshots.sh と同じ）
+      - run: |
+          mkdir -p site
+          expected="1 failed, 11 passed, 1 skipped, 1 xfailed"
+          uv run --no-sync pytest docs/screenshots -p no:cacheprovider -q \
+            -o casebook_lang=ja --casebook-html=site/demo-ja.html > ja.txt || true
+          uv run --no-sync pytest docs/screenshots-en -p no:cacheprovider -q \
+            -o casebook_lang=en --casebook-html=site/demo-en.html > en.txt || true
+          grep -F "$expected" ja.txt && grep -F "$expected" en.txt
+          cp .github/pages/index.html site/index.html
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site/
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write # publish the artifact to Pages / 作ったものを Pages に公開する
+      id-token: write # Pages の公開は OIDC で本人性を確かめる
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

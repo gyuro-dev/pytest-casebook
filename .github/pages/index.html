@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pytest-casebook demo</title>
+<style>
+:root { --bg: #ffffff; --fg: #1f2328; --muted: #656d76; --info: #0969da; color-scheme: light dark; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0d1117; --fg: #e6edf3; --muted: #8d96a0; --info: #58a6ff; }
+}
+body {
+  margin: 0 auto; max-width: 720px; padding: 48px 16px; background: var(--bg); color: var(--fg);
+  font: 16px/1.7 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Meiryo", sans-serif;
+}
+h1 { font-size: 24px; }
+a { color: var(--info); }
+.muted { color: var(--muted); font-size: 14px; }
+li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<h1>pytest-casebook — demo reports</h1>
+<p>Test specification sheets written by <a href="https://github.com/gyuro-dev/pytest-casebook">pytest-casebook</a>
+from the cases in <code>docs/screenshots</code>. They deliberately contain a failure (expand its row),
+a skip and an expected failure — try the result and text filters at the top.</p>
+<p>pytest-casebook が <code>docs/screenshots</code> のケースから出力した試験項目表です。わざと失敗
+（行を開くと差分が見えます）・スキップ・既知の不具合を含みます。上部の絞り込みも試せます。</p>
+<ul>
+<li><a href="demo-en.html">Demo report (English)</a></li>
+<li><a href="demo-ja.html">デモのレポート（日本語）</a></li>
+</ul>
+<p class="muted">Rebuilt from main by GitHub Actions / main から GitHub Actions で作り直しています</p>
+</body>
+</html>

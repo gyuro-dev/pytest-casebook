@@ -24,6 +24,8 @@ Run `pytest --casebook-html=report.html` and the cases in your YAML come out as 
 
 ![HTML report as a test specification sheet](https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/docs/images/report-top-en.png)
 
+You can also **[try a live demo report](https://gyuro-dev.github.io/pytest-casebook/)** — expand the failure diff and use the filters, which a screenshot cannot show.
+
 This is (part of) the YAML behind the table above; the whole file is [docs/screenshots-en/casebook_demo_en.yaml](https://github.com/gyuro-dev/pytest-casebook/blob/main/docs/screenshots-en/casebook_demo_en.yaml). Nested `group:`s become the category / subcategory / item columns, `description` becomes "What is checked", and `expect:` becomes "Expected result". Cases without `expect:` are compared with golden files.
 
 ```yaml
@@ -186,7 +188,7 @@ To submit "what will be checked" before testing, use it with `--collect-only`. T
 uv run pytest --collect-only --casebook-html=reports/plan.html
 ```
 
-The whole report looks like this (made from the cases in [docs/screenshots-en](https://github.com/gyuro-dev/pytest-casebook/tree/main/docs/screenshots-en)).
+The whole report looks like this (made from the cases in [docs/screenshots-en](https://github.com/gyuro-dev/pytest-casebook/tree/main/docs/screenshots-en); there is also a [live demo](https://gyuro-dev.github.io/pytest-casebook/)).
 
 ![The whole HTML report](https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/docs/images/report-overview-en.png)
 

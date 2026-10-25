@@ -26,6 +26,9 @@ Excel の試験項目表と自動テストを別々に管理して、内容が�
 
 ![試験項目表の HTML レポート](docs/images/report-top.png)
 
+**[デモのレポート（実物）](https://gyuro-dev.github.io/pytest-casebook/)** も触れます。\
+スクショでは分からない、失敗の差分の展開や絞り込みを試してみてください。
+
 > **レポートを日本語にする**: HTML レポートとメッセージ（比較の失敗、YAML の書き方の誤りなど）の既定は英語です。\
 > 日本語にするときは、`pyproject.toml` に一度だけ書きます（[ini の設定](#ini-の設定)）。
 >
@@ -221,7 +224,7 @@ casebook_lang = "ja"
 uv run pytest --collect-only --casebook-html=reports/plan.html
 ```
 
-表の全体はこのようになります（[docs/screenshots](docs/screenshots) のケースから作ったもの）。
+表の全体はこのようになります（[docs/screenshots](docs/screenshots) のケースから作ったもの。[デモの実物](https://gyuro-dev.github.io/pytest-casebook/)もあります）。
 
 ![試験項目表の HTML レポートの全体](docs/images/report-overview.png)
 
