@@ -232,6 +232,11 @@ uv run pytest --collect-only --casebook-html=reports/plan.html
 
 ![失敗したケースの差分](docs/images/report-failure.png)
 
+期待出力ファイルを使うケース（`expect:` のないケース）では、期待出力の比べる部分も、同じようにケースの行の下に折りたたんで出します。\
+出す量は ini の `casebook_html_golden` で選べます（`off`: 出さない / `summary`: 既定。`casebook_html_golden_lines` 行（既定 40）で打ち切る / `full`: 全部）。\
+期待出力の中の `<datetime>` などの `<…>` は、実行ごとに変わる値の置き換えです（その注記を、ファイルの見出しの下に1行出します）。\
+`--collect-only` でも出るので、実装の前に「期待値つきの試験項目表」としてレビューできます。
+
 結果は「成功・更新（`--casebook-update` で書き直した）・手動（`result:` をまだ書いていない[手動のケース](#手動のケース-manual)）・スキップ・想定どおり失敗・想定外に成功・失敗・エラー・未実施」のどれかで表示します。\
 「未実施」は、集めたが実行していないケースです（`-x` で途中で止まったときなど）。\
 pytest-html は要りません（一緒に使うこともできます）。
@@ -1019,6 +1024,8 @@ pytest がテストの場所として受け取るので、JUnit XML（xunit1）�
 | `casebook_encoding` | `utf-8` | command の出力の文字コード |
 | `casebook_builtin_patterns` | `true` | 日時と UUID を `<datetime>` / `<uuid>` に置き換える |
 | `casebook_html_title` | `Test Specification`（`casebook_lang` が `ja` なら `試験項目表`） | HTML レポートの題名 |
+| `casebook_html_golden` | `summary` | HTML レポートに期待出力ファイルの内容をどれだけ出すか。`off`（出さない）・`summary`（行数を打ち切る）・`full`（全部） |
+| `casebook_html_golden_lines` | `40` | `casebook_html_golden` が `summary` のときに出す行数 |
 | `casebook_lang` | `en` | HTML レポートと、メッセージ（比較の失敗、YAML の書き方の誤り、ケースを実行するときの誤り）の言語。`en` か `ja` |
 
 ## つまずいたら

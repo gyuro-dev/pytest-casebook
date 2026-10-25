@@ -37,6 +37,9 @@ TEXTS: dict[str, dict[str, Any]] = {
         "problems": "確認が必要なケース",
         "columns": ("ケース", "確認内容", "前提条件", "期待結果", "結果", "時間"),
         "details": "失敗の詳細",
+        "golden_contents": "期待出力（{name}）",
+        "golden_note": "期待出力の中の <…> は、実行ごとに変わる値の置き換えです",
+        "more_lines": "…（あと {n} 行）",
         "golden_dir": "期待出力ファイルの置き場所: {dir}/",
         "cases": "{n} 件",
         "total": "全 {n} 件",
@@ -86,6 +89,11 @@ TEXTS: dict[str, dict[str, Any]] = {
             "Time",
         ),
         "details": "Failure details",
+        "golden_contents": "Golden file ({name})",
+        "golden_note": (
+            "<…> in the golden contents stands for a value replaced because it changes between runs"
+        ),
+        "more_lines": "… ({n} more lines)",
         "golden_dir": "Golden files: {dir}/",
         "cases": "{n} cases",
         "total": "{n} cases in total",

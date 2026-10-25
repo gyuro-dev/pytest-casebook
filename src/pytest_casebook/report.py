@@ -191,8 +191,8 @@ def _problem_list(texts: dict[str, Any], rows: list[CaseRow]) -> str:
 
 
 def _height(row: CaseRow) -> int:
-    """1件のケースが表で使う行数（失敗の詳細があれば、その下にもう1行使う）。"""
-    return 2 if row.details else 1
+    """1件のケースが表で使う行数（失敗の詳細か期待出力の内容があれば、その下にもう1行使う）。"""
+    return 2 if row.details or row.meta.get("golden_text") else 1
 
 
 def _level_spans(rows: list[CaseRow], depth: int) -> list[list[int | None]]:
@@ -201,7 +201,7 @@ def _level_spans(rows: list[CaseRow], depth: int) -> list[list[int | None]]:
 
     同じグループ（外側の階層まで同じ）が続くケースはセルを縦に結合する。
     結合されて表示しないセルは None にする。グループのない階層は空セルにし、
-    rowspan は負の数（-行数）で表す。rowspan には失敗の詳細の行も数える。
+    rowspan は負の数（-行数）で表す。rowspan には詳細（失敗の詳細・期待出力の内容）の行も数える。
     """
     spans: list[list[int | None]] = [[-_height(row)] * depth for row in rows]
     for level in range(depth):
@@ -223,7 +223,7 @@ def _level_spans(rows: list[CaseRow], depth: int) -> list[list[int | None]]:
 
 
 def _case_table(texts: dict[str, Any], rows: list[CaseRow], labels: list[str]) -> str:
-    """ケースの表（階層の列を縦に結合し、失敗の詳細は次の行に出す）。"""
+    """ケースの表（階層の列を縦に結合し、失敗の詳細と期待出力の内容は次の行に出す）。"""
     depth = len(labels)
     spans = _level_spans(rows, depth)
     # 階層の列のあとに並ぶ列（失敗の詳細の行は、この列すべてにまたがる）
@@ -265,13 +265,21 @@ def _case_table(texts: dict[str, Any], rows: list[CaseRow], labels: list[str]) -
             f"<tr id='{_row_id(row)}' class='{row.outcome}' data-outcome='{row.outcome}'"
             f" data-text='{_e(_search_text(row))}'>{''.join(cells)}</tr>"
         )
-        if row.details:
+        golden_text = meta.get("golden_text") or ""
+        if row.details or golden_text:
             # 詳細は表の幅いっぱいの行に出す（差分の長い行で列の幅が広がらないように）
             details = "".join(
                 f"<details><summary>{_e(texts['details'])}</summary>"
                 f"<pre>{_colorize(text)}</pre></details>"
                 for text in row.details
             )
+            if golden_text:
+                # 期待出力ファイルの比べる部分（失敗の詳細と同じ仕組みの、折りたたみの行）
+                label = texts["golden_contents"].format(name=meta.get("golden_name", ""))
+                details += (
+                    f"<details class='golden'><summary>{_e(label)}</summary>"
+                    f"<pre>{_e(golden_text)}</pre></details>"
+                )
             lines.append(
                 f"<tr class='detail {row.outcome}'><td colspan='{len(columns)}'>{details}</td></tr>"
             )
@@ -373,6 +381,9 @@ def _file_section(texts: dict[str, Any], rows: list[CaseRow]) -> str:
     ]
     desc = f"<p>{_e(first['file_description'])}</p>" if first["file_description"] else ""
     golden = f"<div class='muted'>{_e(texts['golden_dir'].format(dir=first['golden_dir']))}</div>"
+    # 期待出力の内容を出すファイルには、<…>（実行ごとに変わる値の置き換え）の注記を1回だけ出す
+    if any(r.meta.get("golden_text") for r in rows):
+        golden += f"<div class='muted'>{_e(texts['golden_note'])}</div>"
     return (
         f"<section><h2>{_e(first['title'])} <span class='file'>{_e(first['file'])}</span></h2>"
         f"{desc}{golden}"
@@ -490,6 +501,7 @@ tr.detail td { padding: 4px 8px 8px; border-top: none; }
 tr.failed:not(.detail) td:not(.level), tr.error:not(.detail) td:not(.level) { border-bottom: none; }
 details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
 tr.detail.failed summary, tr.detail.error summary { color: var(--ng); font-weight: 600; }
+tr.detail details.golden summary { color: var(--muted); font-weight: normal; }
 pre {
   margin: 6px 0 0; padding: 8px; max-height: 480px; overflow: auto; background: var(--code);
   border-radius: 4px; font: 12px/1.5 ui-monospace, "Cascadia Code", Consolas, monospace;
@@ -533,7 +545,7 @@ a { color: var(--info); }
 # 3. 同じセルに覆われた行が続くところ（同じグループ）は、その最初の行にセルを戻し、
 #    rowspan を見えている行の数（失敗の詳細の行も数える）にする
 # 元のセルをそのまま使い回すので、絞り込みを外すと最初の表とまったく同じになる。
-# 失敗の詳細の行は、ケースの行と一緒に出し入れする。
+# 詳細の行（失敗の詳細・期待出力の内容）は、ケースの行と一緒に出し入れする。
 _JS = r"""
 (() => {
   const bar = document.querySelector("header .filter");
