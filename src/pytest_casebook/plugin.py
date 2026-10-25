@@ -14,11 +14,13 @@ import copy
 import difflib
 import fnmatch
 import hashlib
+import inspect
 import itertools
 import json
 import os
 import shlex
 import sys
+import tempfile
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -108,6 +110,13 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=DEFAULT_GOLDEN_DIR,
         help="where golden files are stored, relative to the case file "
         "(a directory per case file name without the extension is made under it)",
+    )
+    parser.addini(
+        "casebook_golden_description",
+        type="bool",
+        default=False,
+        help="write the case description as a `# description:` line in golden files "
+        "written by --casebook-update",
     )
     parser.addini(
         "casebook_levels",
@@ -479,6 +488,154 @@ class _Outcome:
     observed: dict[str, Any] = field(default_factory=dict)
 
 
+# run_case() が呼ぶ hook の名前 -> 最初の結果だけを使う hook（firstresult）かどうか
+_HOOK_FIRSTRESULT = {
+    "pytest_casebook_run_command": True,
+    "pytest_casebook_request": True,
+    "pytest_casebook_observe": True,
+    "pytest_casebook_setup": False,
+    "pytest_casebook_prepare_call": False,
+    "pytest_casebook_placeholders": False,
+    "pytest_casebook_patterns": False,
+}
+
+
+class _Hooks:
+    """
+    run_case() に渡された hooks を、pytest の `node.ihook` と同じ呼び方で使えるようにする。
+
+    hooks は、hookspecs と同じ名前の関数を属性に持つオブジェクトやモジュール
+    （import した conftest モジュールなど）。実行の共通部分は
+    `hook.pytest_casebook_xxx(**kwargs)` と呼ぶので、その形に合わせる。
+
+    - 関数がなければ、firstresult の hook は None、それ以外は [] を返す（pluggy の既定と同じ）
+    - 関数があれば、conftest の hook と同じく、宣言した引数だけを渡して呼ぶ。
+      firstresult の hook は戻り値をそのまま、それ以外は [戻り値] を返す
+      （pluggy はすべてのプラグインの結果のリストを返すため。None なら [] にする）
+    """
+
+    def __init__(self, hooks: Any) -> None:
+        self._hooks = hooks
+
+    def __getattr__(self, name: str) -> Callable[..., Any]:
+        if name not in _HOOK_FIRSTRESULT:
+            raise AttributeError(name)
+        firstresult = _HOOK_FIRSTRESULT[name]
+        func = getattr(self._hooks, name, None)
+
+        def call(**kwargs: Any) -> Any:
+            if func is None:
+                return None if firstresult else []
+            # conftest の hook と同じく、関数が宣言した引数だけを渡す
+            declared = inspect.signature(func).parameters
+            value = func(**{k: v for k, v in kwargs.items() if k in declared})
+            if firstresult:
+                return value
+            return [] if value is None else [value]
+
+        return call
+
+
+def run_case(
+    doc: CasebookDoc,
+    case: Case,
+    *,
+    env: Any = None,
+    hooks: Any = None,
+    encoding: str = "utf-8",
+    builtin_patterns: bool = True,
+    lang: str = "en",
+    description: bool = False,
+) -> str:
+    """
+    Run one case and return the result as a string in the golden-file format: the same text
+    that `--casebook-update` writes, with changing values already normalized. No comparison
+    is made. Use it to run cases outside pytest, e.g. in a playground script with a
+    `--case <name>` option.
+
+    ```python
+    import conftest  # hooks can be the imported conftest module itself
+    import pytest_casebook
+
+    doc = pytest_casebook.load("tests/casebook_demo.yaml")
+    case = next(c for c in doc.cases if c.name == "add_cli")
+    print(pytest_casebook.run_case(doc, case, hooks=conftest))
+    ```
+
+    An exception from a `call:` case or a non-zero exit code is not an error: as under
+    pytest, it comes back inside the returned text (`----- raises -----` / `# exit_code:`).
+
+    :param doc: the case file loaded with `load()`
+    :param case: a case in `doc`
+    :param env: passed to every hook as `env` (what the `casebook_env` fixture provides
+        under pytest)
+    :param hooks: an object or module whose attributes are functions named
+        `pytest_casebook_*` (e.g. an imported conftest module); as in conftest.py, each
+        function receives only the parameters it declares
+    :param encoding: encoding of the command output (the `casebook_encoding` ini under
+        pytest)
+    :param builtin_patterns: replace datetimes and UUIDs with `<datetime>` / `<uuid>`
+        (the `casebook_builtin_patterns` ini under pytest)
+    :param lang: language of the error messages: `en` or `ja`
+    :param description: write a `# description:` line when the case has a description
+        (the `casebook_golden_description` ini under pytest)
+    :return: the result in the golden-file format (with the trailing newline)
+    :raises CasebookRunError: when the case cannot be run (a manual case, a command that is
+        not found, a timeout, a missing request hook, ...)
+    :raises ValueError: when `lang` is not supported
+
+    ケースを1件実行し、期待出力ファイルの形式の文字列にして返す。`--casebook-update` が
+    書くものと同じ文字列で、実行ごとに変わる値は正規化済み。比較はしない。pytest の外で
+    ケースを動かすとき（`--case <名前>` を持つお試しスクリプトなど）に使う。
+
+    ```python
+    import conftest  # hooks には import した conftest モジュールをそのまま渡せる
+    import pytest_casebook
+
+    doc = pytest_casebook.load("tests/casebook_demo.yaml")
+    case = next(c for c in doc.cases if c.name == "add_cli")
+    print(pytest_casebook.run_case(doc, case, hooks=conftest))
+    ```
+
+    call: のケースの例外や 0 以外の終了コードは誤りではなく、pytest と同じく、返す文字列の
+    中に入る（`----- raises -----` / `# exit_code:`）。
+
+    :param doc: `load()` で読んだケースファイル
+    :param case: `doc` の中のケース
+    :param env: 各 hook に `env` として渡す値（pytest では `casebook_env` fixture が渡すもの）
+    :param hooks: `pytest_casebook_*` という名前の関数を属性に持つオブジェクトやモジュール
+        （import した conftest モジュールなど）。conftest.py と同じく、各関数には宣言した
+        引数だけが渡る
+    :param encoding: command の出力の文字コード（pytest では ini の `casebook_encoding`）
+    :param builtin_patterns: 日時と UUID を `<datetime>` / `<uuid>` に置き換えるか
+        （pytest では ini の `casebook_builtin_patterns`）
+    :param lang: 実行の誤りのメッセージの言語。`en` か `ja`
+    :param description: ケースに description があれば `# description:` の行を書く
+        （pytest では ini の `casebook_golden_description`）
+    :return: 期待出力ファイルの形式の文字列（末尾の改行を含む）
+    :raises CasebookRunError: ケースを実行できないとき（手動のケース、コマンドが見つからない、
+        時間切れ、request hook がない、など）
+    :raises ValueError: `lang` が対応していない言語のとき
+    """
+    if lang not in TEXTS:
+        raise ValueError(f"lang must be one of {' / '.join(LANGS)}: {lang}")
+    with language(lang):
+        if case.manual is not None:
+            raise CasebookRunError(error("manual_not_runnable", name=case.name))
+        hook = _Hooks(hooks)
+        # 作業ディレクトリは、正規化（そのパスを <tmp> に置き換える）が終わるまで消さない
+        with contextlib.ExitStack() as stack:
+            workdir: Path | None = None
+            if case.needs_workdir:
+                tmp = stack.enter_context(tempfile.TemporaryDirectory())
+                # あとから resolve() しても変わらないよう、作った直後に resolve しておく
+                # （Windows の 8.3 形式のパスや macOS の /var の symlink で変わりうる）
+                workdir = Path(tmp).resolve()
+            outcome = _execute_case(doc, case, env, hook, workdir, None, encoding)
+            normalizer = _normalizer(None, hook, doc, env, workdir, builtin_patterns)
+            return _render_golden(case, outcome, normalizer, description)
+
+
 def _run_case(
     request: pytest.FixtureRequest,
     doc: CasebookDoc,
@@ -489,12 +646,7 @@ def _run_case(
     """
     ケースを実行して期待値と比べる。
 
-    1. 作業ディレクトリが要るケースでは、それを作り、files（状態とケースの setup: の両方）を置く
-    2. 状態とケースの setup: を重ねた内容で準備をする（pytest_casebook_setup hook）
-    3. command を実行する、関数を呼ぶ、または request を送る
-    4. observe の対象を取り出す
-    5. 後片付けをする（2 で返されたコンテキストマネージャを抜ける）
-    6. expect: があればそれと、なければ期待出力ファイルと比べる
+    実行（_execute_case）が済んだら、expect: があればそれと、なければ期待出力ファイルと比べる。
     """
     config = request.config
     # このケースの YAML のパスに効く conftest.py の hook だけを呼ぶ
@@ -503,29 +655,11 @@ def _run_case(
     workdir: Path | None = None
     run_error: str | None = None
     try:
-        with contextlib.ExitStack() as stack:
-            if case.needs_workdir:
-                workdir = tmp_path_factory.mktemp(f"casebook-{case.name}")
-                _write_files(workdir, case.setup_files)
-            # setup: がないケースでも呼ぶ（data は空）。後片付けが毎回行われ、
-            # 前のケースで増えた DB の行などが次のケースに残らないようにするため
-            for cm in hook.pytest_casebook_setup(
-                case=case,
-                data=copy.deepcopy(case.setup or {}),
-                env=env,
-                workdir=workdir,
-                config=config,
-            ):
-                if cm is not None:
-                    stack.enter_context(cm)
-            if case.command is not None:
-                outcome = _execute_command(config, hook, doc, case, env, workdir)
-            elif case.request is not None:
-                outcome = _execute_request(config, hook, case, env, workdir)
-            else:
-                outcome = _execute_call(config, hook, doc, case, env, workdir)
-            for target in case.observe_targets:
-                outcome.observed[target] = _observe(config, hook, case, target, env, workdir)
+        if case.needs_workdir:
+            workdir = tmp_path_factory.mktemp(f"casebook-{case.name}")
+        outcome = _execute_case(
+            doc, case, env, hook, workdir, config, config.getini("casebook_encoding")
+        )
     except CasebookRunError as e:
         run_error = str(e)
     # 失敗にするのは except の外で（中で pytest.fail を呼ぶと、元の例外もつながって表示され、
@@ -533,18 +667,67 @@ def _run_case(
     if run_error is not None:
         pytest.fail(f"[{case.name}] {run_error}", pytrace=False)
 
+    normalizer = _normalizer(
+        config, hook, doc, env, workdir, config.getini("casebook_builtin_patterns")
+    )
+    lang = config.getini("casebook_lang")
+    if case.uses_golden:
+        _compare_golden(request, doc, case, outcome, normalizer, lang)
+    else:
+        _compare_expect(case, outcome, normalizer, lang)
+
+
+def _execute_case(
+    doc: CasebookDoc,
+    case: Case,
+    env: Any,
+    hook: Any,
+    workdir: Path | None,
+    config: pytest.Config | None,
+    encoding: str,
+) -> _Outcome:
+    """
+    ケースを実行して結果を返す（pytest のテストと run_case() で共通の部分）。
+
+    1. 作業ディレクトリ（要るケースでは作って渡される）に files を置く
+       （状態とケースの setup: の両方）
+    2. 状態とケースの setup: を重ねた内容で準備をする（pytest_casebook_setup hook）
+    3. command を実行する、関数を呼ぶ、または request を送る
+    4. observe の対象を取り出す
+    5. 後片付けをする（2 で返されたコンテキストマネージャを抜ける）
+
+    :raises CasebookRunError: 実行できないとき（コマンドが見つからないなど）
+    """
+    with contextlib.ExitStack() as stack:
+        if workdir is not None:
+            _write_files(workdir, case.setup_files)
+        # setup: がないケースでも呼ぶ（data は空）。後片付けが毎回行われ、
+        # 前のケースで増えた DB の行などが次のケースに残らないようにするため
+        for cm in hook.pytest_casebook_setup(
+            case=case,
+            data=copy.deepcopy(case.setup or {}),
+            env=env,
+            workdir=workdir,
+            config=config,
+        ):
+            if cm is not None:
+                stack.enter_context(cm)
+        if case.command is not None:
+            outcome = _execute_command(config, hook, doc, case, env, workdir, encoding)
+        elif case.request is not None:
+            outcome = _execute_request(config, hook, case, env, workdir)
+        else:
+            outcome = _execute_call(config, hook, doc, case, env, workdir)
+        for target in case.observe_targets:
+            outcome.observed[target] = _observe(config, hook, case, target, env, workdir)
+
     if doc.states is not None:
         # 実行内容（command / call / request と引数）のあと、結果（exit_code / status）の前に置く
         keys = [key for key, _ in outcome.header]
         results = [i for i, key in enumerate(keys) if key in ("exit_code", "status")]
         index = results[0] if results else len(keys)
         outcome.header.insert(index, ("state", case.state))
-    normalizer = _normalizer(config, hook, doc, env, workdir)
-    lang = config.getini("casebook_lang")
-    if case.uses_golden:
-        _compare_golden(request, doc, case, outcome, normalizer, lang)
-    else:
-        _compare_expect(case, outcome, normalizer, lang)
+    return outcome
 
 
 def _write_files(workdir: Path, files: dict[str, str]) -> None:
@@ -560,7 +743,13 @@ def _in_dir(workdir: Path | None) -> contextlib.AbstractContextManager[Any]:
 
 
 def _execute_command(
-    config: pytest.Config, hook: Any, doc: CasebookDoc, case: Case, env: Any, workdir: Path | None
+    config: pytest.Config | None,
+    hook: Any,
+    doc: CasebookDoc,
+    case: Case,
+    env: Any,
+    workdir: Path | None,
+    encoding: str,
 ) -> _Outcome:
     # {casebook_dir} は YAML のあるディレクトリ（作業ディレクトリで実行するときに、
     # YAML の隣のスクリプトなどを指すのに使う）
@@ -587,7 +776,7 @@ def _execute_command(
             cwd=cwd,
             stdin=stdin,
             timeout=case.timeout,
-            encoding=config.getini("casebook_encoding"),
+            encoding=encoding,
             # argv と同じく、env の値の中の {casebook_dir} も YAML のディレクトリにする
             env={k: v.replace(CASEBOOK_DIR_TOKEN, yaml_dir) for k, v in case.env.items()},
         )
@@ -602,7 +791,12 @@ def _execute_command(
 
 
 def _execute_call(
-    config: pytest.Config, hook: Any, doc: CasebookDoc, case: Case, env: Any, workdir: Path | None
+    config: pytest.Config | None,
+    hook: Any,
+    doc: CasebookDoc,
+    case: Case,
+    env: Any,
+    workdir: Path | None,
 ) -> _Outcome:
     # YAML と同じディレクトリのモジュールを、conftest.py なしで import できるようにする
     # （pytest がテストのファイルのディレクトリを sys.path に加えるのと同じ）
@@ -638,7 +832,7 @@ def _execute_call(
 
 
 def _execute_request(
-    config: pytest.Config, hook: Any, case: Case, env: Any, workdir: Path | None
+    config: pytest.Config | None, hook: Any, case: Case, env: Any, workdir: Path | None
 ) -> _Outcome:
     request = case.request
     assert request is not None
@@ -670,7 +864,7 @@ def _execute_request(
 
 
 def _observe(
-    config: pytest.Config, hook: Any, case: Case, target: str, env: Any, workdir: Path | None
+    config: pytest.Config | None, hook: Any, case: Case, target: str, env: Any, workdir: Path | None
 ) -> Any:
     """observe の対象を取り出す（files は作業ディレクトリを読み、ほかは hook に任せる）。"""
     if target == FILES_TARGET:
@@ -728,17 +922,14 @@ def _render_observed(target: str, value: Any, no_files: str = MESSAGES["en"]["no
 # =============================================================================
 
 
-def _compare_golden(
-    request: pytest.FixtureRequest,
-    doc: CasebookDoc,
-    case: Case,
-    outcome: _Outcome,
-    normalizer: Normalizer,
-    lang: str,
-) -> None:
-    """期待出力ファイルと比べる（`--casebook-update` のときは期待出力を書き直す）。"""
-    config = request.config
-    m = MESSAGES[lang]
+def _render_golden(case: Case, outcome: _Outcome, normalizer: Normalizer, description: bool) -> str:
+    """
+    実行した結果を、正規化して期待出力の形式の文字列にする
+    （pytest の比較・更新と run_case() で共通の部分）。
+
+    :param description: ケースに description があれば、`# case:` の直後に
+        `# description:` の行を書く（ini の casebook_golden_description）
+    """
     sections: list[tuple[str, str]] = []
     if outcome.response is not None:
         # JSON の本文は整形して書き、それ以外はそのまま書く
@@ -757,11 +948,25 @@ def _compare_golden(
     for target, value in outcome.observed.items():
         sections.append((f"observe: {target}", _render_observed(target, value)))
 
-    actual = render(
-        case,
-        [(key, normalizer(value)) for key, value in outcome.header],
-        [(title, normalizer(body)) for title, body in sections],
-    )
+    header = [(key, normalizer(value)) for key, value in outcome.header]
+    if description and case.description:
+        # description は出力ではなく YAML に書いたものなので、正規化はせず1行にだけする
+        header.insert(0, ("description", one_line(case.description)))
+    return render(case, header, [(title, normalizer(body)) for title, body in sections])
+
+
+def _compare_golden(
+    request: pytest.FixtureRequest,
+    doc: CasebookDoc,
+    case: Case,
+    outcome: _Outcome,
+    normalizer: Normalizer,
+    lang: str,
+) -> None:
+    """期待出力ファイルと比べる（`--casebook-update` のときは期待出力を書き直す）。"""
+    config = request.config
+    m = MESSAGES[lang]
+    actual = _render_golden(case, outcome, normalizer, config.getini("casebook_golden_description"))
     path = doc.golden_path(case)
     label = Path(os.path.relpath(path, doc.path.parent)).as_posix()
     # 比べるのは結果だけ（# case: などの説明のヘッダーは比べない）
@@ -947,7 +1152,12 @@ def _title(case: Case, lang: str) -> str:
 
 
 def _normalizer(
-    config: pytest.Config, hook: Any, doc: CasebookDoc, env: Any, workdir: Path | None
+    config: pytest.Config | None,
+    hook: Any,
+    doc: CasebookDoc,
+    env: Any,
+    workdir: Path | None,
+    builtin_patterns: bool,
 ) -> Normalizer:
     """
     このケースの出力の正規化を組み立てる。
@@ -971,6 +1181,6 @@ def _normalizer(
         pair for pairs in hook.pytest_casebook_patterns(env=env, config=config) for pair in pairs
     )
     patterns += doc.normalize
-    if config.getini("casebook_builtin_patterns"):
+    if builtin_patterns:
         patterns += BUILTIN_PATTERNS
     return Normalizer(placeholders, patterns)

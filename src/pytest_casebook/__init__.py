@@ -20,7 +20,8 @@ from pathlib import Path
 
 from .http import HttpRequest, HttpResponse
 from .model import Case, CasebookDoc, CasebookError, Group, load
-from .runner import CommandResult, run_in_process
+from .plugin import run_case
+from .runner import CasebookRunError, CommandResult, run_in_process
 
 __version__ = "0.6.0"
 
@@ -33,11 +34,13 @@ __all__ = [
     "Case",
     "CasebookDoc",
     "CasebookError",
+    "CasebookRunError",
     "CommandResult",
     "Group",
     "HttpRequest",
     "HttpResponse",
     "__version__",
     "load",
+    "run_case",
     "run_in_process",
 ]

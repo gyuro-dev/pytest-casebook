@@ -501,6 +501,19 @@ for case in doc.cases:
 
 `load()` performs the same validation as pytest collection and returns a `CasebookDoc` (`title`, `levels`, `states`, `meta`, `env`, `cases`, …). Mistakes raise `pytest_casebook.CasebookError`.
 
+A loaded case can also be run with `run_case()`, e.g. in a playground script with a `--case <name>` option.
+
+```python
+import conftest  # hooks can be the imported conftest module itself
+import pytest_casebook
+
+doc = pytest_casebook.load("tests/casebook_demo.yaml")
+case = next(c for c in doc.cases if c.name == "add_cli")
+print(pytest_casebook.run_case(doc, case, hooks=conftest))
+```
+
+`run_case()` runs one case (setup hook → action → observe → cleanup) and returns exactly the text that `--casebook-update` writes, with changing values already normalized — no comparison is made. `hooks` is any object or module whose functions are named `pytest_casebook_*`, such as an imported conftest module. Manual cases cannot be run and raise `pytest_casebook.CasebookRunError`, as do failures such as a command that is not found; an exception from a `call:` case or a non-zero exit code is not a failure and comes back inside the returned text.
+
 ### Preconditions (setup)
 
 - With `setup.files`, a temporary working directory is created per case, the files are placed there, and both commands and calls run in that directory. The directory's path in the output is replaced with `<tmp>`
@@ -555,6 +568,8 @@ Only the results are compared: `# exit_code:` (`# status:` for requests) and the
 - A heading you did not write is expected to be empty (without a stderr heading, stderr must be empty)
 - `--casebook-update` only rewrites a file when the results changed. Hand-written golden files keep their form as long as the results are the same
 - If a golden file is left over after its case was removed, the `golden_orphans` check fails (subdirectories are checked too). It looks at `.txt` files and at files with any extension used in `golden:` (e.g. `.json`), so other files you keep there, such as notes, are not reported. Golden files used by other case files in the same directory count as used, so sharing `golden_dir:` between several YAML files does not cause false alarms. To turn the check off, write `check_orphans: false` in the YAML
+
+With `casebook_golden_description = true` in the ini, golden files written by `--casebook-update` also get a `# description: <the case's description>` line right after `# case:` (only for cases that have a description; a multi-line description becomes one line). Like the other `#` explanation lines it is never compared, so turning the option on does not fail or rewrite existing files: each file picks the line up the next time it is rewritten. To regenerate everything at once, delete the golden directory and run `--casebook-update`.
 
 ### HTTP APIs (request)
 
@@ -849,6 +864,7 @@ All options start with `--casebook-`. Generic names such as `--update-golden` ma
 |---|---|---|
 | `casebook_files` | `casebook_*.yaml` `casebook_*.yml` `*.casebook.yaml` `*.casebook.yml` | file name patterns to collect |
 | `casebook_golden_dir` | `golden` | where golden files live. A directory per case file name is created under it |
+| `casebook_golden_description` | `false` | write the case's `description:` as a `# description:` line in golden files written by `--casebook-update` |
 | `casebook_levels` | depends on `casebook_lang` (`en`: `Category` `Subcategory` `Item`, `ja`: `大項目` `中項目` `小項目`) | names of the levels |
 | `casebook_command_prefix` | (none) | arguments prepended to commands |
 | `casebook_encoding` | `utf-8` | encoding of command output |

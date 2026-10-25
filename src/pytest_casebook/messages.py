@@ -315,6 +315,7 @@ ERRORS: dict[str, dict[str, str]] = {
             "（pytest_casebook_observe hook がないか、None を返しました）"
         ),
         "did_you_mean": "。expect の {key} の書き間違いではありませんか？",
+        "manual_not_runnable": "手動のケースは実行できません: {name}",
     },
     "en": {
         "line": " (line {line})",
@@ -437,6 +438,7 @@ ERRORS: dict[str, dict[str, str]] = {
             "(there is no pytest_casebook_observe hook, or it returned None)"
         ),
         "did_you_mean": ". Did you mean {key} in expect?",
+        "manual_not_runnable": "a manual case cannot be run: {name}",
     },
 }
 

@@ -355,6 +355,70 @@ def test_html_diff_lines_are_colored(project: pytest.Pytester) -> None:
 
 
 # =============================================================================
+# ini の casebook_golden_description（# description: の行）
+# =============================================================================
+
+
+DESCRIBED_CASES = """
+cases:
+  - name: add
+    description: 1 と 2 を足す
+    call: calc:add
+    args: [1, 2]
+  - name: plain
+    call: calc:add
+    args: [3, 4]
+"""
+
+
+def test_update_writes_description_when_enabled(project: pytest.Pytester) -> None:
+    write_casebook(project, DESCRIBED_CASES)
+    project.runpytest(
+        "--casebook-update", "-o", "casebook_golden_description=true"
+    ).assert_outcomes(passed=3)
+    assert golden(project, "add").startswith(
+        "# case: add\n# description: 1 と 2 を足す\n# call: calc:add\n"
+    )
+    # description のないケースには書かない
+    assert "# description:" not in golden(project, "plain")
+    # 行は説明で比べないので、設定の on / off どちらでも比較は成功する
+    project.runpytest("-o", "casebook_golden_description=true").assert_outcomes(passed=3)
+    project.runpytest().assert_outcomes(passed=3)
+
+
+def test_description_does_not_rewrite_unchanged_golden(project: pytest.Pytester) -> None:
+    """設定を入れても、結果が変わらない限り既存のファイルは書き直さない（行も足さない）。"""
+    write_casebook(project, DESCRIBED_CASES)
+    project.runpytest("--casebook-update").assert_outcomes(passed=3)
+    assert "# description:" not in golden(project, "add")
+    result = project.runpytest("--casebook-update", "-o", "casebook_golden_description=true")
+    result.assert_outcomes(passed=3)
+    assert "書き直した期待出力" not in result.stdout.str()
+    assert "# description:" not in golden(project, "add")
+    # 行のないファイルのままでも、設定を入れた比較は成功する
+    project.runpytest("-o", "casebook_golden_description=true").assert_outcomes(passed=3)
+
+
+def test_multiline_description_becomes_one_line(project: pytest.Pytester) -> None:
+    write_casebook(
+        project,
+        """
+        cases:
+          - name: add
+            description: |
+              1 と 2 を
+              足す
+            call: calc:add
+            args: [1, 2]
+        """,
+    )
+    project.runpytest(
+        "--casebook-update", "-o", "casebook_golden_description=true"
+    ).assert_outcomes(passed=2)
+    assert "# description: 1 と 2 を 足す\n" in golden(project, "add")
+
+
+# =============================================================================
 # to_jsonable の Decimal
 # =============================================================================
 

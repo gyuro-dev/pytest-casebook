@@ -7,6 +7,18 @@ incompatible change raises the minor version).
 
 ## [Unreleased]
 
+### Added
+
+- `pytest_casebook.run_case()` runs one case outside pytest and returns the result as a
+  string in the golden-file format: the same text `--casebook-update` writes, with changing
+  values already normalized (no comparison is made). `hooks` takes any object or module with
+  `pytest_casebook_*` functions, e.g. an imported conftest module. Failures while running
+  raise `pytest_casebook.CasebookRunError` (now exported); manual cases cannot be run.
+- The `casebook_golden_description` ini option (default `false`): golden files written by
+  `--casebook-update` get a `# description: <the case's description>` line right after
+  `# case:` for cases that have a description. The line is an explanation and is never
+  compared, so existing files pick it up the next time they are rewritten.
+
 ## [0.6.0] - 2026-10-25
 
 ### Added

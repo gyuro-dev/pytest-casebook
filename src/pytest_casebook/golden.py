@@ -31,8 +31,8 @@ from pathlib import Path
 from .messages import MESSAGES
 from .model import Case
 
-# 比べない（説明のための）ヘッダー。description は render では書かないが、手で書いた期待出力に
-# あれば読み飛ばす
+# 比べない（説明のための）ヘッダー。description は ini の casebook_golden_description を
+# 有効にしたときだけ書くが、どの版で書かれたファイルでも説明として読み飛ばす
 INFO_KEYS = frozenset(
     {"case", "description", "command", "call", "args", "kwargs", "request", "state"}
 )
