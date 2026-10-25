@@ -9,6 +9,11 @@ incompatible change raises the minor version).
 
 ### Added
 
+- The HTML report shows the compared parts of each golden file, folded under the case like
+  the failure details (`casebook_html_golden = off / summary / full`, default `summary`;
+  `casebook_html_golden_lines`, default 40). With `--collect-only --casebook-html` the plan
+  report becomes a reviewable specification with expected values. A note explains the `<…>`
+  notation for replaced values.
 - `pytest_casebook.run_case()` runs one case outside pytest and returns the result as a
   string in the golden-file format: the same text `--casebook-update` writes, with changing
   values already normalized (no comparison is made). `hooks` takes any object or module with
