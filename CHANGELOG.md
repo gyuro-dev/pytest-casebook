@@ -7,6 +7,11 @@ incompatible change raises the minor version).
 
 ## [Unreleased]
 
+### Changed
+
+- In the Japanese HTML report, the observed-targets line in the expected-result column reads
+  「実行後の値: …」 instead of 「観察: …」, matching the README. Golden files are unaffected.
+
 ## [0.7.0] - 2026-10-25
 
 ### Added
