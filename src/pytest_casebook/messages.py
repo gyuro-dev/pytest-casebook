@@ -40,6 +40,8 @@ TEXTS: dict[str, dict[str, Any]] = {
         "golden_contents": "期待出力（{name}）",
         "golden_note": "期待出力の中の <…> は、実行ごとに変わる値の置き換えです",
         "more_lines": "…（あと {n} 行）",
+        "golden_open_all": "期待出力をすべて開く",
+        "golden_close_all": "期待出力をすべて閉じる",
         "golden_dir": "期待出力ファイルの置き場所: {dir}/",
         "cases": "{n} 件",
         "total": "全 {n} 件",
@@ -94,6 +96,8 @@ TEXTS: dict[str, dict[str, Any]] = {
             "<…> in the golden contents stands for a value replaced because it changes between runs"
         ),
         "more_lines": "… ({n} more lines)",
+        "golden_open_all": "Expand all golden files",
+        "golden_close_all": "Collapse all golden files",
         "golden_dir": "Golden files: {dir}/",
         "cases": "{n} cases",
         "total": "{n} cases in total",

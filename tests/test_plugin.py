@@ -1035,6 +1035,33 @@ def test_expect_and_manual_cases_show_no_golden_contents(project: pytest.Pyteste
     assert "<tr class='detail" not in page
 
 
+def test_golden_contents_have_an_open_all_button(project: pytest.Pytester) -> None:
+    """
+    期待出力の内容を出すときは、絞り込みの欄に「すべて開く」ボタンが出る。
+
+    押すたびに開く・閉じるが入れ替わる（動きは埋め込みの JavaScript。ここでは、ボタンと
+    その2つの表記が HTML にあることと、出さないときに出ないことを確かめる）。
+    """
+    write_casebook(project, "cases:\n  - {name: add, call: calc:add, args: [1, 2]}\n")
+    project.runpytest("--casebook-update")
+    report = project.path / "report.html"
+    project.runpytest(f"--casebook-html={report}")
+    page = report.read_text(encoding="utf-8")
+    assert (
+        '<button type="button" class="golden-toggle" aria-pressed="false"'
+        ' data-open="期待出力をすべて開く" data-close="期待出力をすべて閉じる">'
+        "期待出力をすべて開く</button>"
+    ) in page
+
+    project.runpytest("-o", "casebook_lang=en", f"--casebook-html={report}")
+    page = report.read_text(encoding="utf-8")
+    assert 'data-close="Collapse all golden files">Expand all golden files</button>' in page
+
+    # 期待出力の内容を出さないとき（off）はボタンも出さない
+    project.runpytest("-o", "casebook_html_golden=off", f"--casebook-html={report}")
+    assert 'class="golden-toggle"' not in report.read_text(encoding="utf-8")
+
+
 def test_html_golden_value_must_be_known(project: pytest.Pytester) -> None:
     write_casebook(project, "cases:\n  - {name: add, call: calc:add, args: [1, 2]}\n")
     result = project.runpytest("-o", "casebook_html_golden=both", "--casebook-html=report.html")

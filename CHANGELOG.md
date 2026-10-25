@@ -7,6 +7,12 @@ incompatible change raises the minor version).
 
 ## [Unreleased]
 
+### Added
+
+- The HTML report has a button next to the filter that expands or collapses every golden
+  file at once (shown only when golden contents are shown). Rows hidden by the filter follow
+  too, and the button label stays in sync when golden files are opened one by one.
+
 ### Changed
 
 - In the Japanese HTML report, the observed-targets line in the expected-result column reads

@@ -315,7 +315,8 @@ def _filter_bar(texts: dict[str, Any], rows: list[CaseRow]) -> str:
     ページ上部の絞り込み（結果の切り替えと、文字の入力欄）。
 
     JavaScript が動くときだけ出す（hidden を外す）。JavaScript が動かなければ、
-    今までどおり件数だけを出し、表は全部見える。
+    今までどおり件数だけを出し、表は全部見える。期待出力の内容を出すケースがあれば、
+    それをすべて開く・閉じるボタンも並べる（押すたびに開く・閉じるが入れ替わる）。
     """
     counts = Counter(r.outcome for r in rows)
     all_button = (
@@ -329,12 +330,21 @@ def _filter_bar(texts: dict[str, Any], rows: list[CaseRow]) -> str:
         for o in OUTCOMES
         if counts[o]
     ]
+    golden_toggle = ""
+    if any(r.meta.get("golden_text") for r in rows):
+        golden_toggle = (
+            '<button type="button" class="golden-toggle" aria-pressed="false"'
+            f' data-open="{_e(texts["golden_open_all"])}"'
+            f' data-close="{_e(texts["golden_close_all"])}">'
+            f"{_e(texts['golden_open_all'])}</button>"
+        )
     return (
         '<div class="filter" hidden>'
         f'<div class="toggles" role="group" aria-label="{_e(texts["result"])}">'
         f"{''.join(buttons)}</div>"
         f'<input type="search" aria-label="{_e(texts["filter"])}"'
         f' placeholder="{_e(texts["filter_placeholder"])}">'
+        f"{golden_toggle}"
         f'<span class="shown muted" aria-live="polite"'
         f' data-template="{_e(texts["filter_shown"])}" data-none="{_e(texts["filter_none"])}">'
         "</span></div>"
@@ -534,6 +544,12 @@ a { color: var(--info); }
   border-radius: 6px; background: var(--bg); color: var(--fg); font: inherit; font-size: 13px;
 }
 .filter input:focus { outline: 2px solid var(--info); outline-offset: -1px; }
+.filter button.golden-toggle {
+  padding: 2px 10px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
+  background: var(--bg); color: var(--fg); font: inherit; font-size: 12px; white-space: nowrap;
+}
+.filter button.golden-toggle[aria-pressed="true"] { background: var(--head); }
+.filter button.golden-toggle:focus-visible { outline: 2px solid var(--info); outline-offset: 1px; }
 """
 
 # ページ上部の絞り込み。外部のファイルを読まず、HTML に埋め込む。
@@ -546,12 +562,19 @@ a { color: var(--info); }
 #    rowspan を見えている行の数（失敗の詳細の行も数える）にする
 # 元のセルをそのまま使い回すので、絞り込みを外すと最初の表とまったく同じになる。
 # 詳細の行（失敗の詳細・期待出力の内容）は、ケースの行と一緒に出し入れする。
+#
+# 期待出力をすべて開く・閉じるボタンは、最初に覚えておいた details.golden をまとめて
+# 開け閉めする（絞り込みで表から外れている行の分も。表に戻したとき、ほかの行とそろう）。
+# 1つずつ開け閉めしたときもボタンの表示を合わせる（toggle は親に伝わらないので、
+# document で捕捉の段階に受ける）。
+# 埋め込みの JavaScript とCSS にはコメントを書かない（英語のレポートに日本語が入らないように）。
 _JS = r"""
 (() => {
   const bar = document.querySelector("header .filter");
   if (!bar) return;
   const input = bar.querySelector("input");
-  const buttons = Array.from(bar.querySelectorAll("button"));
+  const toggles = bar.querySelector(".toggles");
+  const buttons = Array.from(toggles.querySelectorAll("button"));
   const shown = bar.querySelector(".shown");
   const selected = new Set();
   const tables = Array.from(document.querySelectorAll("table.cases")).map((table) => {
@@ -624,7 +647,7 @@ _JS = r"""
     }
   };
 
-  bar.addEventListener("click", (event) => {
+  toggles.addEventListener("click", (event) => {
     const button = event.target.closest("button");
     if (!button) return;
     const o = button.dataset.outcome;
@@ -634,6 +657,26 @@ _JS = r"""
     apply();
   });
   input.addEventListener("input", apply);
+
+  const goldenToggle = bar.querySelector(".golden-toggle");
+  if (goldenToggle) {
+    const golden = Array.from(document.querySelectorAll("details.golden"));
+    const sync = () => {
+      const allOpen = golden.length > 0 && golden.every((d) => d.open);
+      goldenToggle.setAttribute("aria-pressed", String(allOpen));
+      goldenToggle.textContent = allOpen
+        ? goldenToggle.dataset.close
+        : goldenToggle.dataset.open;
+    };
+    goldenToggle.addEventListener("click", () => {
+      const open = !golden.every((d) => d.open);
+      golden.forEach((d) => (d.open = open));
+      sync();
+    });
+    document.addEventListener("toggle", (event) => {
+      if (event.target.matches && event.target.matches("details.golden")) sync();
+    }, true);
+  }
   document.querySelector("header > .counts").hidden = true;
   bar.hidden = false;
   apply();
