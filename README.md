@@ -812,7 +812,7 @@ A failed case shows the line in the YAML where it is written (`[wrong] (line 8)`
 
 | Option | Meaning |
 |---|---|
-| `--casebook-update` | rewrite golden files from the current output (only those whose results changed; `expect:` cases are only compared) |
+| `--casebook-update` | rewrite golden files from the current output (only those whose results changed; `expect:` cases are only compared), and list the rewritten files at the end of the run |
 | `--casebook-html=PATH` | write the results as HTML |
 
 All options start with `--casebook-`. Generic names such as `--update-golden` may already be defined by a project's conftest.py, and a duplicate name stops pytest from starting.
