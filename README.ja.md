@@ -566,6 +566,23 @@ for case in doc.cases:
 `load()` は pytest で集めるときと同じ検証をして、`CasebookDoc`（`title`・`levels`・`states`・`meta`・`env`・`cases` など）を返します。\
 書き方に誤りがあれば `pytest_casebook.CasebookError` を出します。
 
+読んだケースは `run_case()` で実行もできます（`--case <名前>` を持つお試しスクリプトなど）。
+
+```python
+import conftest  # hooks には import した conftest モジュールをそのまま渡せる
+import pytest_casebook
+
+doc = pytest_casebook.load("tests/casebook_demo.yaml")
+case = next(c for c in doc.cases if c.name == "add_cli")
+print(pytest_casebook.run_case(doc, case, hooks=conftest))
+```
+
+`run_case()` はケースを1件実行し（setup hook → 操作 → observe → 後片付け）、`--casebook-update` が書くものと同じ文字列を返します。\
+実行ごとに変わる値は正規化済みで、比較はしません。\
+`hooks` は、`pytest_casebook_*` という名前の関数を持つオブジェクトやモジュールで、import した conftest モジュールをそのまま渡せます。\
+手動のケースは実行できず、`pytest_casebook.CasebookRunError` を出します。コマンドが見つからないなどの実行の誤りも同じです。\
+`call:` のケースの例外や 0 以外の終了コードは誤りではなく、返す文字列の中に入ります。
+
 ### 前提条件 (setup)
 
 - `setup.files` があると、ケースごとに一時的な作業ディレクトリを作ってファイルを置き、command も call もそのディレクトリで実行します。\
@@ -631,6 +648,10 @@ apple x 3 = 324 円
   調べるのは `.txt` と、`golden:` で使った拡張子（`.json` など）のファイルです。置き場所に置いたメモなど、ほかのファイルは知らせません。\
   同じディレクトリのほかのケースファイルが使う期待出力は「使われている」と数えるので、複数の YAML で `golden_dir:` を共有しても、消し忘れと誤って報告しません。\
   この確認を止めるときは、YAML に `check_orphans: false` を書きます
+
+ini に `casebook_golden_description = true` を書くと、`--casebook-update` が書く期待出力ファイルの `# case:` の直後に、`# description: <ケースの description>` の行が入ります（description のあるケースだけ。複数行の description は1行にします）。\
+ほかの `#` の説明の行と同じく比べないので、設定を入れても、既存のファイルが失敗したり書き直されたりはしません。\
+既存のファイルには、次に書き直されたときにこの行が入ります。全部をすぐ作り直すときは、期待出力の置き場所のディレクトリを消して `--casebook-update` を実行します。
 
 ### HTTP の API (request)
 
@@ -992,6 +1013,7 @@ pytest がテストの場所として受け取るので、JUnit XML（xunit1）�
 |---|---|---|
 | `casebook_files` | `casebook_*.yaml` `casebook_*.yml` `*.casebook.yaml` `*.casebook.yml` | 集めるファイル名のパターン |
 | `casebook_golden_dir` | `golden` | 期待出力ファイルの置き場所。その下に、ケースファイル名（拡張子なし）のディレクトリを作る |
+| `casebook_golden_description` | `false` | `--casebook-update` が書く期待出力ファイルに、ケースの `description:` を `# description:` の行として書く |
 | `casebook_levels` | `Category` `Subcategory` `Item`（`casebook_lang` が `ja` なら `大項目` `中項目` `小項目`） | 階層の呼び名 |
 | `casebook_command_prefix` | （なし） | command の前に付ける引数 |
 | `casebook_encoding` | `utf-8` | command の出力の文字コード |
