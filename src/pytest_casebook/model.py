@@ -566,6 +566,13 @@ def parse_document(
     duplicates = sorted(name for name, count in seen.items() if count > 1)
     if duplicates:
         raise CasebookError(error("duplicate_names", where=where, names=", ".join(duplicates)))
+    # 大文字小文字だけが違う名前は、Windows で期待出力が同じファイルになるため誤りにする
+    folded: dict[str, set[str]] = {}
+    for name in seen:
+        folded.setdefault(name.casefold(), set()).add(name)
+    collided = sorted(" / ".join(sorted(names)) for names in folded.values() if len(names) > 1)
+    if collided:
+        raise CasebookError(error("duplicate_names_case", where=where, names=", ".join(collided)))
     # 同じ名前のテストが2つになり、-k や結果で区別できなくなるため
     if doc.check_orphans and ORPHANS_TEST_NAME in seen:
         raise CasebookError(error("reserved_name", where=where, name=ORPHANS_TEST_NAME))
@@ -587,6 +594,9 @@ def _walk(
     """グループを再帰的にたどり、ケースを `doc.cases` に順に追加する。"""
     if not isinstance(items, list):
         raise CasebookError(error("items_list", where=where))
+    if not items:
+        # グループの cases: が空リスト（ファイルの cases: [] と同じ扱い）
+        raise CasebookError(error("no_cases", where=where))
     for i, item in enumerate(items):
         # 書き方の誤りを知らせるときに、YAML の何行目かも出す
         line = doc._source_lines.get(id(item)) if isinstance(item, dict) else None
