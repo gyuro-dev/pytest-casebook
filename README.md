@@ -830,6 +830,17 @@ All options start with `--casebook-`. Generic names such as `--update-golden` ma
 | `casebook_html_title` | depends on `casebook_lang` (`en`: `Test Specification`, `ja`: `試験項目表`) | title of the HTML report |
 | `casebook_lang` | `en` | language of the HTML report and the messages (failed comparisons, mistakes in the YAML, errors while running a case): `en` or `ja` |
 
+## Troubleshooting
+
+Things that commonly trip people up on the first run.
+
+- **No cases are collected (collected 0 items)** — the file name must match one of the `casebook_files` patterns (`casebook_*.yaml`, `casebook_*.yml`, `*.casebook.yaml`, `*.casebook.yml`); a file like `mycases.yaml` is silently ignored. Rename the file, or add a pattern to `casebook_files` ([ini options](#ini-options))
+- **Garbled output on Windows** — the command under test writes cp932 or another non-UTF-8 encoding; set `casebook_encoding` to that encoding ([ini options](#ini-options)). When the child process is Python, its output is already forced to `casebook_encoding` via `PYTHONIOENCODING`
+- **A `\` disappears from `command:`** — a string `command:` is split like a shell command, so `\` is lost. Write a list to keep it: `command: ['C:\data\in.csv']`
+- **A value with `: ` or ` #` breaks the YAML** — quote the whole value, e.g. `description: "setup: explanation"`. Editor validation catches this as you type ([Editor completion and validation](#editor-completion-and-validation))
+- **"The golden file … does not exist"** — the first run needs `pytest --casebook-update` to create the golden files; review them before committing ([Golden files](#golden-files))
+- **The report and messages are not in your language** — they are in English by default; set `casebook_lang = "ja"` in the ini for Japanese ([ini options](#ini-options))
+
 ## Development (for people working on this repository)
 
 A script checks every combination of Python 3.11–3.15 and pytest 8 / 9 with the same steps. Dependencies are installed exactly as in uv.lock, with a separate virtual environment per combination (`.venvs/`). Results go to `reports/check/summary.txt` together with the OS and tool versions.
