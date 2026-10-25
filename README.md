@@ -196,6 +196,8 @@ A failed case can be expanded below its row to show the diff.
 
 ![Diff of a failed case](https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/docs/images/report-failure-en.png)
 
+A case compared with a golden file (one without `expect:`) also shows the compared parts of its golden file, folded under the case's row in the same way. How much is shown is chosen with the `casebook_html_golden` ini option (`off`: nothing / `summary`: the default, cut at `casebook_html_golden_lines` lines, 40 by default / `full`: everything). `<…>` in the golden contents, such as `<datetime>`, stands for a value replaced because it changes between runs (a one-line note under the file heading says so). The contents also appear with `--collect-only`, so the plan can be reviewed as a specification with expected values before the implementation.
+
 Results are one of: passed, updated (rewritten by `--casebook-update`), manual (a [manual case](#manual-cases-manual) without `result:` yet), skipped, expected failure, unexpected pass, failed, error, not run (labels follow `casebook_lang`). "Not run" is a case that was collected but not run (e.g. after `-x` stopped the session). pytest-html is not required (they can be used together).
 
 ## How do I...?
@@ -870,6 +872,8 @@ All options start with `--casebook-`. Generic names such as `--update-golden` ma
 | `casebook_encoding` | `utf-8` | encoding of command output |
 | `casebook_builtin_patterns` | `true` | replace timestamps and UUIDs with `<datetime>` / `<uuid>` |
 | `casebook_html_title` | depends on `casebook_lang` (`en`: `Test Specification`, `ja`: `試験項目表`) | title of the HTML report |
+| `casebook_html_golden` | `summary` | how much of each golden file is shown in the HTML report: `off` (nothing), `summary` (cut at the line limit) or `full` (everything) |
+| `casebook_html_golden_lines` | `40` | number of lines shown when `casebook_html_golden` is `summary` |
 | `casebook_lang` | `en` | language of the HTML report and the messages (failed comparisons, mistakes in the YAML, errors while running a case): `en` or `ja` |
 
 ## Troubleshooting

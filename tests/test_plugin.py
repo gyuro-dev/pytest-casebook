@@ -720,16 +720,17 @@ def test_html_report_has_levels_and_merged_cells(project: pytest.Pytester) -> No
     assert "計算ツール" in page
     for label in ("大項目", "中項目", "小項目"):
         assert f"<th class='level'>{label}</th>" in page
-    # 縦に結合する行数には、失敗した div の下の詳細の行も数える
-    # 「計算」は add1・add2・div（＋詳細）の4行、「割り算」は div（＋詳細）の2行
-    assert "rowspan='4'><div class='group'>計算</div><div class='muted'>四則演算</div>" in page
-    assert "rowspan='2'><div class='group'>足し算</div>" in page
-    assert "rowspan='2'><div class='group'>整数</div>" in page
+    # 縦に結合する行数には、各ケースの下の詳細の行（失敗の詳細・期待出力の内容）も数える。
+    # どのケースも期待出力の内容の行を持つので、「計算」は add1・add2・div の6行、
+    # 「割り算」は div の2行
+    assert "rowspan='6'><div class='group'>計算</div><div class='muted'>四則演算</div>" in page
+    assert "rowspan='4'><div class='group'>足し算</div>" in page
+    assert "rowspan='4'><div class='group'>整数</div>" in page
     assert "rowspan='2'><div class='group'>割り算</div><td class='level empty' rowspan='2'>" in (
         page.replace("</td>", "")
     )
     # グループのないケースは階層の列が空になる
-    empty = "<td class='level empty' rowspan='1'></td>"
+    empty = "<td class='level empty' rowspan='2'></td>"
     # 行の属性のあと（data-outcome・data-text は絞り込み用）に、空の階層のセルが3つ続く
     assert re.search(rf"<tr id='case-\d+' class='passed'[^>]*>({empty}){{3}}", page)
     # 失敗の一覧と、表の幅いっぱいの詳細の行
@@ -738,7 +739,7 @@ def test_html_report_has_levels_and_merged_cells(project: pytest.Pytester) -> No
     assert (
         "<tr class='detail failed'><td colspan='6'><details><summary>失敗の詳細</summary>" in page
     )
-    assert page.count("<tr class='detail") == 1
+    assert page.count("<tr class='detail") == 4  # 期待出力の内容の行が add1・add2・plain にも付く
     assert '<span class="badge failed">失敗 1</span>' in page
 
 
@@ -941,6 +942,104 @@ def test_html_report_marks_updated(project: pytest.Pytester) -> None:
     assert '<span class="badge updated">更新 1</span>' in report.read_text(encoding="utf-8")
     project.runpytest("--casebook-update", f"--casebook-html={report}")
     assert '<span class="badge passed">成功 1</span>' in report.read_text(encoding="utf-8")
+
+
+def test_html_report_shows_golden_contents(project: pytest.Pytester) -> None:
+    """期待出力ファイルを使うケースは、比べる部分がケースの行の下に折りたたんで出る。"""
+    write_casebook(project, "cases:\n  - {name: add, call: calc:add, args: [1, 2]}\n")
+    report = project.path / "report.html"
+    # 期待出力はケースを集めるときに読むので、--casebook-update で作ったあとの実行で出る
+    project.runpytest("--casebook-update")
+    project.runpytest(f"--casebook-html={report}")
+    page = report.read_text(encoding="utf-8")
+    assert "<details class='golden'><summary>期待出力（add.txt）</summary>" in page
+    assert "<pre>----- return -----\n3</pre>" in page
+    assert "# case:" not in page  # 説明のヘッダーは出さない（比べる部分だけを出す）
+    # <…>（実行ごとに変わる値の置き換え）の注記が、ファイルの見出しの下に1回だけ出る
+    assert page.count("期待出力の中の &lt;…&gt; は、実行ごとに変わる値の置き換えです") == 1
+
+
+# 期待出力の比べる部分が 52 行（# exit_code・見出し・0〜49）になるケース
+LONG_GOLDEN_CASE = f"""
+command_prefix: [{PY}, -c]
+cases:
+  - name: long
+    command: "'[print(i) for i in range(50)]'"
+"""
+
+
+def test_golden_contents_summary_is_cut(project: pytest.Pytester) -> None:
+    """summary（既定）は casebook_html_golden_lines 行で打ち切り、残りの行数を添える。"""
+    write_casebook(project, LONG_GOLDEN_CASE)
+    report = project.path / "report.html"
+    project.runpytest("--casebook-update")
+    project.runpytest(f"--casebook-html={report}")
+    page = report.read_text(encoding="utf-8")
+    assert "…（あと 12 行）</pre>" in page  # 52 行を既定の 40 行で打ち切る
+    assert "49</pre>" not in page
+
+    project.runpytest("-o", "casebook_html_golden_lines=5", f"--casebook-html={report}")
+    page = report.read_text(encoding="utf-8")
+    assert "…（あと 47 行）</pre>" in page
+
+
+def test_golden_contents_off_and_full(project: pytest.Pytester) -> None:
+    """off なら内容も注記も出さず、full なら打ち切らずに全部出す。"""
+    write_casebook(project, LONG_GOLDEN_CASE)
+    project.runpytest("--casebook-update")
+    report = project.path / "report.html"
+    project.runpytest("-o", "casebook_html_golden=off", f"--casebook-html={report}")
+    page = report.read_text(encoding="utf-8")
+    assert "<details class='golden'" not in page
+    assert "<tr class='detail" not in page
+    assert "実行ごとに変わる値の置き換えです" not in page
+
+    project.runpytest("-o", "casebook_html_golden=full", f"--casebook-html={report}")
+    page = report.read_text(encoding="utf-8")
+    assert "…（あと" not in page
+    assert "49</pre>" in page
+
+
+def test_collect_only_shows_golden_contents(project: pytest.Pytester) -> None:
+    """`--collect-only` の計画の表にも期待出力の内容が出る（実装の前のレビューに使える）。"""
+    write_casebook(project, "cases:\n  - {name: add, call: calc:add, args: [1, 2]}\n")
+    report = project.path / "plan.html"
+    # 期待出力がまだない（--casebook-update の前）なら、何も出さない（エラーにもしない）
+    result = project.runpytest("--collect-only", f"--casebook-html={report}")
+    assert result.ret == pytest.ExitCode.OK
+    assert "<details class='golden'" not in report.read_text(encoding="utf-8")
+
+    project.runpytest("--casebook-update")
+    result = project.runpytest("--collect-only", f"--casebook-html={report}")
+    assert result.ret == pytest.ExitCode.OK
+    page = report.read_text(encoding="utf-8")
+    assert "<details class='golden'><summary>期待出力（add.txt）</summary>" in page
+    assert "<pre>----- return -----\n3</pre>" in page
+
+
+def test_expect_and_manual_cases_show_no_golden_contents(project: pytest.Pytester) -> None:
+    """expect: のケースと手動のケースには、期待出力の内容の行を出さない。"""
+    write_casebook(
+        project,
+        """
+        check_orphans: false
+        cases:
+          - {name: add, call: calc:add, args: [1, 2], expect: {return: 3}}
+          - {name: by_hand, manual: 画面で確かめる, expect: 表示どおり}
+        """,
+    )
+    report = project.path / "report.html"
+    project.runpytest(f"--casebook-html={report}")
+    page = report.read_text(encoding="utf-8")
+    assert "<details class='golden'" not in page
+    assert "<tr class='detail" not in page
+
+
+def test_html_golden_value_must_be_known(project: pytest.Pytester) -> None:
+    write_casebook(project, "cases:\n  - {name: add, call: calc:add, args: [1, 2]}\n")
+    result = project.runpytest("-o", "casebook_html_golden=both", "--casebook-html=report.html")
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    result.stderr.fnmatch_lines(["*casebook_html_golden*off / summary / full*both*"])
 
 
 PLAN_CASES = """

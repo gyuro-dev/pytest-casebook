@@ -399,7 +399,10 @@ def test_html_shows_precondition_and_expected(db_project: pytest.Pytester) -> No
         """,
     )
     report = db_project.path / "report.html"
-    db_project.runpytest("--casebook-update", f"--casebook-html={report}")
+    # 期待出力の内容は出さない（観察した db.users に鈴木が出て、状態の中身の確認と紛れるため）
+    db_project.runpytest(
+        "--casebook-update", "-o", "casebook_html_golden=off", f"--casebook-html={report}"
+    )
     page = report.read_text(encoding="utf-8")
     assert "<th>前提条件</th><th>期待結果</th>" in page
     # 既定の状態は出さず、それ以外の状態は名前だけを出す（中身は出さない）

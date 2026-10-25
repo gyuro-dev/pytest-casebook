@@ -70,6 +70,10 @@ from .serialize import compact, describe_exception, render_rows, serialize, to_j
 
 CASEBOOK_DIR_TOKEN = "{casebook_dir}"
 DEFAULT_FILE_PATTERNS = ["casebook_*.yaml", "casebook_*.yml", "*.casebook.yaml", "*.casebook.yml"]
+# ini の casebook_html_golden（HTML レポートに期待出力の内容をどれだけ出すか）の値
+HTML_GOLDEN_VALUES = ("off", "summary", "full")
+# 期待出力で、見出しのない本文を何として扱うか（ケースの種類 -> 既定の見出し）
+DEFAULT_SECTIONS = {"command": "stdout", "call": "return", "request": "json"}
 
 # レポートでケースを YAML に書いた順に並べるための通し番号
 _order = itertools.count()
@@ -143,6 +147,18 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         help="title of the HTML report (default: that of casebook_lang, e.g. Test Specification)",
     )
     parser.addini(
+        "casebook_html_golden",
+        default="summary",
+        help="how much of each golden file is shown in the HTML report "
+        f"({' / '.join(HTML_GOLDEN_VALUES)})",
+    )
+    # addini は type="int" に対応していないので、文字列で受けて int() にする
+    parser.addini(
+        "casebook_html_golden_lines",
+        default="40",
+        help="number of lines of a golden file shown when casebook_html_golden is summary",
+    )
+    parser.addini(
         "casebook_lang",
         default="en",
         help=f"language of the HTML report and the messages ({' / '.join(LANGS)})",
@@ -157,9 +173,26 @@ def _texts(config: pytest.Config) -> dict[str, Any]:
     return TEXTS[lang]
 
 
+def _html_golden_options(config: pytest.Config) -> tuple[str, int]:
+    """ini の casebook_html_golden（期待出力をどれだけ出すか）と、summary のときの行数。"""
+    mode = config.getini("casebook_html_golden")
+    if mode not in HTML_GOLDEN_VALUES:
+        raise pytest.UsageError(
+            f"casebook_html_golden must be one of {' / '.join(HTML_GOLDEN_VALUES)}: {mode}"
+        )
+    lines = config.getini("casebook_html_golden_lines")
+    try:
+        limit = int(lines)
+    except ValueError:
+        raise pytest.UsageError(f"casebook_html_golden_lines must be an integer: {lines}") from None
+    return mode, limit
+
+
 def pytest_configure(config: pytest.Config) -> None:
     texts = _texts(config)
     html = config.getoption("--casebook-html")
+    if html:
+        _html_golden_options(config)  # 値の誤りを、ケースを集める前に知らせる
     # pytest-xdist のワーカーでは書かない（結果はまとめ役のプロセスに集まる）
     if html and not hasattr(config, "workerinput"):
         title = config.getini("casebook_html_title") or texts["title"]
@@ -235,6 +268,10 @@ class CasebookFile(pytest.File):
 
         file_label = Path(os.path.relpath(self.path, config.rootpath)).as_posix()
         texts = _texts(config)
+        # 期待出力の内容は HTML レポートに使うときだけ読む（レポートがなければファイルを読まない）
+        html_golden = ("off", 0)
+        if config.getoption("--casebook-html"):
+            html_golden = _html_golden_options(config)
         for case in doc.cases:
             test = _make_manual_test(case) if case.manual is not None else _make_test(doc, case)
             item = CasebookItem.from_parent(self, name=case.name, callobj=test)
@@ -249,7 +286,7 @@ class CasebookFile(pytest.File):
                 _mark_manual(item, case, config)
             # -k でグループ名でも絞り込めるようにする
             item.extra_keyword_matches.update(case.path)
-            meta = _report_meta(doc, case, file_label, texts)
+            meta = _report_meta(doc, case, file_label, texts, *html_golden)
             item.user_properties.append(("casebook", meta))
             yield item
         if doc.check_orphans:
@@ -325,8 +362,36 @@ def _text_expect_line(label: str, value: Any, texts: dict[str, Any]) -> str:
     return _shorten(f"{label} = {compact(to_jsonable(value))}")
 
 
+def _golden_text(doc: CasebookDoc, case: Case, mode: str, limit: int, texts: dict[str, Any]) -> str:
+    """
+    HTML レポートに出す、期待出力ファイルの内容（レポートで、ケースの行の下に折りたたんで出す）。
+
+    比較と同じ、比べる部分だけを出す（`# case:` などの説明のヘッダーは出さない）。
+    summary なら limit 行で打ち切り、「…（あと n 行）」を添える。ファイルがない
+    （`--casebook-update` の前など）か読めなければ、空にする（エラーにしない）。
+    """
+    if mode == "off" or not case.uses_golden:
+        return ""
+    try:
+        content = parse_golden(read_golden(doc.golden_path(case)), DEFAULT_SECTIONS[case.kind])
+    except (OSError, ValueError):
+        return ""
+    text = comparable_text(content, content, content).rstrip("\n")
+    if not text:
+        return ""
+    lines = text.split("\n")
+    if mode == "summary" and len(lines) > limit:
+        lines = [*lines[:limit], texts["more_lines"].format(n=len(lines) - limit)]
+    return "\n".join(lines)
+
+
 def _report_meta(
-    doc: CasebookDoc, case: Case, file_label: str, texts: dict[str, Any]
+    doc: CasebookDoc,
+    case: Case,
+    file_label: str,
+    texts: dict[str, Any],
+    golden_mode: str,
+    golden_lines: int,
 ) -> dict[str, Any]:
     """HTML レポート用の情報（pytest-xdist でも送れるよう、文字列・数値・リストだけにする）。"""
     return {
@@ -346,6 +411,9 @@ def _report_meta(
         "manual_pending": case.manual is not None and case.result is None,
         "precondition": _precondition_lines(doc, case, texts),
         "expected": _expected_lines(case, texts),
+        # 期待出力ファイルの名前と、レポートに出すその内容（出すものがなければ空）
+        "golden_name": case.golden_file if case.uses_golden else "",
+        "golden_text": _golden_text(doc, case, golden_mode, golden_lines, texts),
     }
 
 
@@ -970,7 +1038,7 @@ def _compare_golden(
     path = doc.golden_path(case)
     label = Path(os.path.relpath(path, doc.path.parent)).as_posix()
     # 比べるのは結果だけ（# case: などの説明のヘッダーは比べない）
-    default_section = {"command": "stdout", "call": "return", "request": "json"}[case.kind]
+    default_section = DEFAULT_SECTIONS[case.kind]
     got = parse_golden(actual, default_section)
     expected = parse_golden(read_golden(path), default_section) if path.exists() else None
     if config.getoption("--casebook-update"):
