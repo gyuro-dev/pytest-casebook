@@ -210,6 +210,10 @@ ERRORS: dict[str, dict[str, str]] = {
         "states_mapping": "{where}: states は 状態名 -> 内容 のマッピングで書いてください",
         "no_cases": "{where}: cases にケースがありません",
         "duplicate_names": "{where}: ケース名が重複しています: {names}",
+        "duplicate_names_case": (
+            "{where}: 大文字小文字だけが違うケース名があります"
+            "（Windows では期待出力が同じファイルになります）: {names}"
+        ),
         "reason_string": (
             "{where}: {key} には理由を文字列で書いてください（例: {key}: 不具合 #12 の修正待ち）"
         ),
@@ -320,6 +324,10 @@ ERRORS: dict[str, dict[str, str]] = {
         "states_mapping": "{where}: states must be a mapping of state name -> contents",
         "no_cases": "{where}: there are no cases in cases",
         "duplicate_names": "{where}: duplicate case names: {names}",
+        "duplicate_names_case": (
+            "{where}: case names differ only in letter case "
+            "(on Windows their golden files are the same file): {names}"
+        ),
         "reason_string": (
             "{where}: write the reason for {key} as a string "
             "(e.g. {key}: waiting for the fix of #12)"

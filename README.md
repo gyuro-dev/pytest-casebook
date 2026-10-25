@@ -397,7 +397,7 @@ You can select by group name, e.g. `-k Pricing`. The HTML report only shows as m
 
 | Key | Meaning |
 |---|---|
-| `name` | Case name. It becomes the golden file name, so use letters, digits, `_`, `-`, `.` (the first character must not be `.` or `-`) |
+| `name` | Case name. It becomes the golden file name, so use letters, digits, `_`, `-`, `.` (the first character must not be `.` or `-`). Names that differ only in letter case (such as `Add` and `add`) are errors, because their golden files collide on Windows |
 | `description` | What is checked |
 | `command` | Arguments to run as a CLI (split like a shell command), appended to `command_prefix`. May be empty (`""`) if `command_prefix` is set. A list (`[a, 'b c']`) is passed as is without splitting |
 | `stdin` | Standard input for the command |

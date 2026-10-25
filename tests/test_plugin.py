@@ -429,6 +429,11 @@ def test_groups_can_be_selected_with_k(project: pytest.Pytester) -> None:
     ("text", "message"),
     [
         ("cases:\n  - name: a\n    call: m:f\n  - name: a\n    call: m:f\n", "ケース名が重複"),
+        (
+            "cases:\n  - name: Add\n    call: m:f\n  - name: add\n    call: m:f\n",
+            "大文字小文字だけが違うケース名",
+        ),
+        ("cases:\n  - group: g\n    cases: []\n", "cases にケースがありません"),
         ("cases:\n  - name: a\n    call: m:f\n    arg: [1]\n", "知らないキーがあります: arg"),
         ("cases:\n  - name: a\n", "command・call・request・manual のどれか1つ"),
         ("cases:\n  - name: a\n    call: m:f\n    state: x\n", "states がないのに state"),
@@ -459,6 +464,17 @@ def test_invalid_casebook_is_a_collection_error(
     result = project.runpytest()
     result.assert_outcomes(errors=1)
     result.stdout.fnmatch_lines([f"*{message}*"])
+
+
+def test_distinct_names_are_not_a_case_collision(project: pytest.Pytester) -> None:
+    """大文字小文字の確かめは、本当に違う名前（日本語の名前など）には影響しない。"""
+    write_casebook(
+        project,
+        "cases:\n"
+        "  - {name: 足し算, call: calc:add, args: [1, 2], expect: {return: 3}}\n"
+        "  - {name: 引き算, call: calc:add, args: [1, -2], expect: {return: -1}}\n",
+    )
+    project.runpytest().assert_outcomes(passed=3)
 
 
 def test_golden_orphans_is_a_case_name_without_the_check(project: pytest.Pytester) -> None:
