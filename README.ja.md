@@ -964,6 +964,25 @@ pytest がテストの場所として受け取るので、JUnit XML（xunit1）�
 | `casebook_html_title` | `Test Specification`（`casebook_lang` が `ja` なら `試験項目表`） | HTML レポートの題名 |
 | `casebook_lang` | `en` | HTML レポートと、メッセージ（比較の失敗、YAML の書き方の誤り、ケースを実行するときの誤り）の言語。`en` か `ja` |
 
+## つまずいたら
+
+最初に引っかかりやすいところです。
+
+- **ケースが集まらない（collected 0 items）** — ファイル名が `casebook_files` のパターン（`casebook_*.yaml`・`casebook_*.yml`・`*.casebook.yaml`・`*.casebook.yml`）に合っていません。\
+  `mycases.yaml` のような名前は、黙って無視されます。\
+  ファイル名を変えるか、`casebook_files` にパターンを足してください（[ini の設定](#ini-の設定)）
+- **Windows で出力が文字化けする** — 確かめるコマンドが cp932 などの文字コードで出力しています。\
+  `casebook_encoding` にその文字コードを書いてください（[ini の設定](#ini-の設定)）。\
+  子プロセスが Python なら、出力は `PYTHONIOENCODING` で `casebook_encoding` にそろえます
+- **`command:` の `\` が消える** — 文字列の command は shell と同じ書き方で区切るため、`\` が消えます。\
+  `command: ['C:\data\in.csv']` のようにリストで書きます
+- **値に `: ` や ` #` を書いたら YAML が壊れた** — 値全体を `"` で囲みます（`description: "setup: の説明"`）。\
+  エディタの検証を使うと、入力中に気づけます（[エディタでの補完と検証](#エディタでの補完と検証)）
+- **「期待出力ファイル … がありません」と出る** — 初回は `pytest --casebook-update` で期待出力ファイルを作ります。\
+  中身を確かめてから commit してください（[期待出力ファイル](#期待出力ファイル)）
+- **レポートやメッセージが英語で出る** — 既定が英語です。\
+  ini に `casebook_lang = "ja"` を書いてください（[ini の設定](#ini-の設定)）
+
 ## 開発（このリポジトリで作業する人向け）
 
 Python 3.11〜3.15 と pytest 8 / 9 の組み合わせを、同じ手順で確かめるスクリプトがあります。\
