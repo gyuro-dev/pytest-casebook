@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import datetime
+import decimal
 import enum
 import json
 from pathlib import PurePath
@@ -18,11 +19,15 @@ def to_jsonable(value: Any) -> Any:
     - dataclass は `__type__`（クラス名）とフィールドの辞書にする
     - set / frozenset は順序が実行ごとに変わらないよう並べ替える
     - Enum は `クラス名.メンバー名`、日時は ISO 形式、パスは `/` 区切りにする
+    - Decimal は数にする（DynamoDB の数は Decimal で返るため。整数なら int、そうでなければ float）
     - `model_dump()`（pydantic など）を持つものはその結果を使う
     - bytes とそれ以外は repr() にする
     """
     if value is None or isinstance(value, bool | int | float | str):
         return value
+    if isinstance(value, decimal.Decimal):
+        # YAML に書いた 300 や 1.5 と比べられるようにする（float は近い値への丸めを含む）
+        return int(value) if value == value.to_integral_value() else float(value)
     if isinstance(value, enum.Enum):
         return f"{type(value).__name__}.{value.name}"
     if dataclasses.is_dataclass(value) and not isinstance(value, type):

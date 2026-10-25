@@ -856,8 +856,8 @@ moto（AWS のモック）での注意です。
 - moto の `mock_aws()` は、pytest のプロセスの中でしか効きません。\
   `call:` と `request:`（と `run_in_process` を使う `command:`）はモックになりますが、`command:` で別プロセスとして動かす CLI はモックになりません。\
   そのときは、moto のサーバーか LocalStack を立て、`env:` で `AWS_ENDPOINT_URL` を渡します
-- DynamoDB は数を `Decimal` で返します。\
-  observe の hook で `int` / `float` にしないと、`price: 300` と一致しません
+- DynamoDB は数を `Decimal` で返しますが、pytest-casebook が数にします。\
+  YAML の `price: 300` がそのまま一致します
 - DynamoDB の scan と SQS の受信は、順番が決まっていません。\
   hook で並べるか、`expect:` に `$unordered` を使います
 - SQS は1回で 10 件までしか受け取れません。\

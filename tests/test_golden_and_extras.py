@@ -5,6 +5,7 @@ async の関数・skip / xfail・HTML の時間の確認。
 
 from __future__ import annotations
 
+import decimal
 import re
 import textwrap
 from pathlib import Path
@@ -13,6 +14,7 @@ import pytest
 from helpers import PY, golden, write_casebook
 
 from pytest_casebook.golden import parse_golden
+from pytest_casebook.serialize import to_jsonable
 
 
 def write_golden_file(pytester: pytest.Pytester, case: str, text: str) -> Path:
@@ -350,3 +352,46 @@ def test_html_diff_lines_are_colored(project: pytest.Pytester) -> None:
     page = report.read_text(encoding="utf-8")
     assert "<span class='diff-del'>-4</span>" in page
     assert "<span class='diff-add'>+3</span>" in page
+
+
+# =============================================================================
+# to_jsonable の Decimal
+# =============================================================================
+
+
+def test_decimal_becomes_a_number(project: pytest.Pytester) -> None:
+    """
+    Decimal は数として比べられる（DynamoDB の数は Decimal で返るため）。
+
+    整数なら int、そうでなければ float にする。observe の hook が Decimal を返しても、
+    YAML の `price: 300` がそのまま一致する。
+    """
+    assert to_jsonable(decimal.Decimal("300")) == 300
+    assert isinstance(to_jsonable(decimal.Decimal("300")), int)
+    assert to_jsonable(decimal.Decimal("1.5")) == 1.5
+    assert isinstance(to_jsonable(decimal.Decimal("1.5")), float)
+    assert to_jsonable({"price": decimal.Decimal("300")}) == {"price": 300}
+    assert to_jsonable([decimal.Decimal("3E+2")]) == [300]
+
+    project.makeconftest(
+        """
+        import decimal
+
+        def pytest_casebook_observe(target):
+            return [{"id": "1", "price": decimal.Decimal("300")}]
+        """
+    )
+    write_casebook(
+        project,
+        """
+        cases:
+          - name: rows
+            call: calc:add
+            args: [1, 2]
+            observe: [db.rows]
+            expect:
+              return: 3
+              db.rows: [{id: "1", price: 300}]
+        """,
+    )
+    project.runpytest().assert_outcomes(passed=2)

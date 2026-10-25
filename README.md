@@ -747,7 +747,7 @@ pytest-casebook does not talk to AWS itself. Put inputs in with `pytest_casebook
 Things to know with moto (a mock of AWS):
 
 - moto's `mock_aws()` only works inside the pytest process. `call:` and `request:` (and `command:` with `run_in_process`) are mocked; a CLI run as a subprocess by `command:` is not. For that, start moto's server or LocalStack and pass `AWS_ENDPOINT_URL` with `env:`
-- DynamoDB returns numbers as `Decimal`. Turn them into `int` / `float` in the observe hook, or `price: 300` does not match
+- DynamoDB returns numbers as `Decimal`; pytest-casebook turns them into numbers, so `price: 300` in the YAML matches as is
 - DynamoDB scans and SQS receives have no fixed order. Sort in the hook, or use `$unordered` in `expect:`
 - SQS returns at most 10 messages per call. Receive until the queue is empty, and delete what you received (otherwise the messages come back in a later case after the visibility timeout)
 
