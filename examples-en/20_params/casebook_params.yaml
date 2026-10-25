@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
+# Write cases that differ only in arguments and expected values as rows with params. This YAML is all you write.
+# Each params element is laid over the template case, giving one case per element (<case name>-<element name>).
+title: Rows of similar cases
+
+cases:
+  - name: shipping
+    description: Shipping fee
+    call: shipping_fee_en:fee
+    params:
+      - {name: "0",    description: 0 yen ships for 500 yen,     args: [0],    expect: {return: 500}}
+      - {name: "2999", description: 2999 yen ships for 500 yen,  args: [2999], expect: {return: 500}}
+      - {name: "3000", description: Free shipping from 3000 yen, args: [3000], expect: {return: 0}}

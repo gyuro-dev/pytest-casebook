@@ -223,6 +223,12 @@ ERRORS: dict[str, dict[str, str]] = {
         ),
         "items_list": "{where}: ケースまたはグループのリストで書いてください",
         "item_mapping": "{where}: ケースまたはグループをマッピングで書いてください",
+        "params_list": (
+            "{where}: params は、ケースに重ねる内容のマッピングを1つ以上並べたリストで"
+            "書いてください"
+        ),
+        "params_name": "{where}: params の各要素には name（ケース名に足す名前）を書いてください",
+        "params_nested": "{where}: params の中に params は書けません",
         "bad_name": ("{where}: name に使えるのは英数字・_・-・. で、先頭は英数字か _ です: {name}"),
         "one_action": "{where}: command・call・request・manual のどれか1つだけを書いてください",
         "manual_keys": "{where}: manual のケースには {keys} を書けません",
@@ -344,6 +350,9 @@ ERRORS: dict[str, dict[str, str]] = {
         ),
         "items_list": "{where}: must be a list of cases or groups",
         "item_mapping": "{where}: each case or group must be a mapping",
+        "params_list": "{where}: params must be a list of one or more mappings laid over the case",
+        "params_name": "{where}: every params element needs a name (appended to the case name)",
+        "params_nested": "{where}: params cannot be nested inside params",
         "bad_name": (
             "{where}: name can only contain letters, digits, _, - and ., and must not"
             " start with . or -: {name}"

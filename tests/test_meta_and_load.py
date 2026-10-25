@@ -146,6 +146,39 @@ def test_load_reports_errors(tmp_path: Path) -> None:
         pytest_casebook.load(quoted, lang="fr")
 
 
+PARAMS_CASEBOOK = """\
+cases:
+  - name: shipping
+    description: 送料の計算
+    call: shop:shipping
+    params:
+      - {name: "0", args: [0], expect: {return: 500}}
+      - {name: "2999", description: 2999 円は送料 500 円, args: [2999], expect: {return: 500}}
+      - {name: "3000", description: 3000 円から送料無料, args: [3000], expect: {return: 0}}
+"""
+
+
+def test_params_expands_a_template_into_cases(tmp_path: Path) -> None:
+    """params の要素ごとに1件のケースになり、要素のキーがテンプレートを丸ごと上書きする。"""
+    path = tmp_path / "casebook_params.yaml"
+    path.write_text(PARAMS_CASEBOOK, encoding="utf-8")
+    doc = pytest_casebook.load(path)
+    # 名前は <テンプレート名>-<要素名> で、要素の順に並ぶ
+    assert [c.name for c in doc.cases] == ["shipping-0", "shipping-2999", "shipping-3000"]
+    # description は、要素に書けば置き換わり、書かなければテンプレートの値を受け継ぐ
+    assert [c.description for c in doc.cases] == [
+        "送料の計算",
+        "2999 円は送料 500 円",
+        "3000 円から送料無料",
+    ]
+    assert all(c.call == "shop:shipping" for c in doc.cases)
+    assert [c.args for c in doc.cases] == [[0], [2999], [3000]]
+    # 深い併合はせず、要素の expect がテンプレートの expect 全体を置き換える
+    assert [c.expect for c in doc.cases] == [{"return": 500}, {"return": 500}, {"return": 0}]
+    # 行番号は、テンプレートではなく要素自身の行（0 から数える）
+    assert [c.line for c in doc.cases] == [5, 6, 7]
+
+
 def test_load_levels_follow_lang(tmp_path: Path) -> None:
     """levels を書かなければ、階層の呼び名は lang の言語の既定になる。"""
     path = tmp_path / "casebook_x.yaml"

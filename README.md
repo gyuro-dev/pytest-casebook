@@ -210,6 +210,7 @@ Every row has a ready-to-run sample in [examples-en](https://github.com/gyuro-de
 | Call a Python function and check the return value | YAML | `call: module:function` and `args` / `kwargs` | [02_function](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/02_function) |
 | Check that an exception is raised | YAML | `expect: {raises: ValueError}` | [03_exception](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/03_exception) |
 | Write the expected result directly in YAML | YAML | `expect:` ([how](#expected-results-expect)) | [04_expect](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/04_expect) |
+| Write many cases that differ only in arguments | YAML | `params:` ([how](#rows-of-similar-cases-params)) | [20_params](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/20_params) |
 | Classify cases into categories and subcategories | YAML | nested `group:` ([how](#groups)) | [05_groups](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/05_groups) |
 | Put input files in place / check the files produced | YAML | `setup: {files: ...}` and `observe: [files]` | [06_files](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/06_files) |
 | Check the same action "normally" and "during an outage" | YAML + conftest.py | `states:` + `pytest_casebook_setup` | [07_states](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/07_states) |
@@ -421,8 +422,28 @@ You can select by group name, e.g. `-k Pricing`. The HTML report only shows as m
 | `skip` / `xfail` | Reason to skip / reason it is known to fail. Shown in the terminal (`pytest -rsx`) and in the HTML result column |
 | `meta` | Free-form information (see [meta](#meta)) |
 | `golden` | Expected-output file name (default `<name>.txt`) |
+| `params` | Rows laid over this case, one case per element ([how](#rows-of-similar-cases-params)) |
 
 Write exactly one of `command`, `call`, `request` and `manual`. Keys not in this table are errors, to catch typos. Put your own information under `meta:`.
+
+### Rows of similar cases (params)
+
+Writing many cases that differ only in arguments and expected values repeats the shared keys. Write the shared part once and put the differing rows in `params:`; the case is then a template that expands into one ordinary case per element.
+
+```yaml
+cases:
+  - name: shipping
+    description: Shipping fee
+    call: shop:shipping
+    params:
+      - {name: "0",    description: 0 yen ships for 500 yen,     args: [0],    expect: {return: 500}}
+      - {name: "2999", description: 2999 yen ships for 500 yen,  args: [2999], expect: {return: 500}}
+      - {name: "3000", description: Free shipping from 3000 yen, args: [3000], expect: {return: 0}}
+```
+
+This expands into three cases named `shipping-0`, `shipping-2999` and `shipping-3000`. Every element needs a `name` (the case name becomes `<case name>-<element name>`) and usually has its own `description`, so each row of the HTML test specification sheet stays readable on its own.
+
+An element's keys replace the template's keys wholesale (there is no deep merge): an element's `expect:` replaces the whole template `expect:`. The merged result is validated like any other case. To share other parts of the YAML, anchors (`&` / `*` / `<<:`) remain an alternative.
 
 ### Environment variables (env)
 
