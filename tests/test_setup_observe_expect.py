@@ -134,6 +134,31 @@ def test_call_runs_in_workdir(project: pytest.Pytester) -> None:
     project.runpytest().assert_outcomes(passed=2)
 
 
+def test_empty_setup_files_runs_each_case_in_a_fresh_workdir(project: pytest.Pytester) -> None:
+    """
+    files: {} でも作業ディレクトリを作る。空でない出力先を受け付けない CLI のように、
+    out/ を作るケースが2件続いても、2件目は前のケースの out/ のない場所で動く。
+    """
+    write_casebook(
+        project,
+        f"""
+        command_prefix: ["{PY}", -c, "import os; os.mkdir('out'); print(os.getcwd())"]
+        cases:
+          - name: first
+            setup: {{files: {{}}}}
+            command: ""
+            expect: {{exit_code: 0, stdout: {{contains: "<tmp>"}}}}
+          - name: second
+            setup: {{files: {{}}}}
+            command: ""
+            expect: {{exit_code: 0, stdout: {{contains: "<tmp>"}}}}
+        """,
+    )
+    project.runpytest().assert_outcomes(passed=3)
+    # YAML のディレクトリには作られていない
+    assert not (project.path / "out").exists()
+
+
 @pytest.mark.parametrize("name", ["/etc/passwd", "../outside.txt", "C:/x.txt", "a/../../b.txt"])
 def test_setup_files_must_stay_in_workdir(project: pytest.Pytester, name: str) -> None:
     write_casebook(
