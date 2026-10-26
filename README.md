@@ -574,7 +574,7 @@ Only the results are compared: `# exit_code:` (`# status:` for requests) and the
 - `--casebook-update` only rewrites a file when the results changed. Hand-written golden files keep their form as long as the results are the same
 - If a golden file is left over after its case was removed, the `golden_orphans` check fails (subdirectories are checked too). It looks at `.txt` files and at files with any extension used in `golden:` (e.g. `.json`), so other files you keep there, such as notes, are not reported. Golden files used by other case files in the same directory count as used, so sharing `golden_dir:` between several YAML files does not cause false alarms. To turn the check off, write `check_orphans: false` in the YAML
 
-With `casebook_golden_description = true` in the ini, golden files written by `--casebook-update` also get a `# description: <the case's description>` line right after `# case:` (only for cases that have a description; a multi-line description becomes one line). Like the other `#` explanation lines it is never compared, so turning the option on does not fail or rewrite existing files: each file picks the line up the next time it is rewritten. To regenerate everything at once, delete the golden directory and run `--casebook-update`.
+With `casebook_golden_description = true` in the ini, golden files written by `--casebook-update` also get a `# description: <the case's description>` line right after `# case:` (only for cases that have a description; a multi-line description becomes one line). Like the other `#` explanation lines it is never compared, so turning the option on does not fail or rewrite existing files: each file picks the line up the next time it is rewritten. To add it to every existing file at once, run `pytest --casebook-update-headers`: it rewrites the headers of the golden files whose results still match (a file whose results differ still fails and is left as is). Since only the results are compared, hand-written golden files that omit the headers are rewritten into the full form too.
 
 ### HTTP APIs (request)
 
@@ -858,7 +858,8 @@ A failed case shows the line in the YAML where it is written (`[wrong] (line 8)`
 
 | Option | Meaning |
 |---|---|
-| `--casebook-update` | rewrite golden files from the current output (only those whose results changed; `expect:` cases are only compared), and list the rewritten files at the end of the run |
+| `--casebook-update` | rewrite golden files from the current output (only those whose results changed; `expect:` cases are only compared), and list the rewritten files at the end of the run (an `exit_code 0 → 2` style note marks files whose result headers changed) |
+| `--casebook-update-headers` | rewrite the headers (`# case:`, `# description:`, ...) of golden files whose results still match, and list them like `--casebook-update`; a file whose results differ still fails. Ignored together with `--casebook-update` |
 | `--casebook-html=PATH` | write the results as HTML |
 
 All options start with `--casebook-`. Generic names such as `--update-golden` may already be defined by a project's conftest.py, and a duplicate name stops pytest from starting.
@@ -869,7 +870,7 @@ All options start with `--casebook-`. Generic names such as `--update-golden` ma
 |---|---|---|
 | `casebook_files` | `casebook_*.yaml` `casebook_*.yml` `*.casebook.yaml` `*.casebook.yml` | file name patterns to collect |
 | `casebook_golden_dir` | `golden` | where golden files live. A directory per case file name is created under it |
-| `casebook_golden_description` | `false` | write the case's `description:` as a `# description:` line in golden files written by `--casebook-update` |
+| `casebook_golden_description` | `false` | write the case's `description:` as a `# description:` line in golden files written by `--casebook-update` or `--casebook-update-headers` |
 | `casebook_levels` | depends on `casebook_lang` (`en`: `Category` `Subcategory` `Item`, `ja`: `大項目` `中項目` `小項目`) | names of the levels |
 | `casebook_command_prefix` | (none) | arguments prepended to commands |
 | `casebook_encoding` | `utf-8` | encoding of command output |

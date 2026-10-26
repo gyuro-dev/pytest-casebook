@@ -3,7 +3,8 @@ pytest-casebook の本体（pytest11 entry point から読み込まれる）。
 
 - ini の `casebook_files` に合う YAML ファイルを集め、ケースごとにテストを作る
 - ケースを実行し、正規化した結果を期待値と比べる。期待値は YAML の `expect:` に書くか、
-  期待出力ファイルに置く（`--casebook-update` で書き直す）
+  期待出力ファイルに置く（`--casebook-update` で書き直す。`--casebook-update-headers` は
+  結果が同じファイルのヘッダーだけを書き直す）
 - `--casebook-html` を付けると、グループの階層の表で結果を HTML に出力する
 """
 
@@ -77,7 +78,8 @@ DEFAULT_SECTIONS = {"command": "stdout", "call": "return", "request": "json"}
 
 # レポートでケースを YAML に書いた順に並べるための通し番号
 _order = itertools.count()
-# --casebook-update で、期待出力ファイル（normcase したパス）-> (先に使ったテストの nodeid, 結果)
+# --casebook-update / --casebook-update-headers で、
+# 期待出力ファイル（normcase したパス）-> (先に使ったテストの nodeid, 結果)
 _GOLDEN_OWNERS = pytest.StashKey[dict[str, tuple[str, GoldenContent]]]()
 
 
@@ -96,6 +98,14 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=False,
         help="rewrite golden files with the current output (only those whose results changed; "
         "no comparison failures)",
+    )
+    group.addoption(
+        "--casebook-update-headers",
+        action="store_true",
+        default=False,
+        help="rewrite the headers (# case:, # description:, ...) of golden files whose results "
+        "still match; a golden file whose results differ still fails "
+        "(ignored with --casebook-update, which already rewrites what changed)",
     )
     group.addoption(
         "--casebook-html",
@@ -120,7 +130,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         type="bool",
         default=False,
         help="write the case description as a `# description:` line in golden files "
-        "written by --casebook-update",
+        "written by --casebook-update or --casebook-update-headers",
     )
     parser.addini(
         "casebook_levels",
@@ -204,7 +214,10 @@ def pytest_configure(config: pytest.Config) -> None:
 def pytest_terminal_summary(
     terminalreporter: pytest.TerminalReporter, config: pytest.Config
 ) -> None:
-    """`--casebook-update` で書き直した期待出力ファイルの一覧を、実行の最後に出す。"""
+    """
+    `--casebook-update`（と `--casebook-update-headers`）で書き直した期待出力ファイルの一覧を、
+    実行の最後に出す。
+    """
     # 書き直したテストの user_properties から、期待出力のパスの表記を集める
     # （pytest-xdist でも、ワーカーの結果はまとめ役の stats に集まる）
     labels = {
@@ -1031,7 +1044,12 @@ def _compare_golden(
     normalizer: Normalizer,
     lang: str,
 ) -> None:
-    """期待出力ファイルと比べる（`--casebook-update` のときは期待出力を書き直す）。"""
+    """
+    期待出力ファイルと比べる（`--casebook-update` のときは期待出力を書き直す）。
+
+    `--casebook-update-headers` のときは、ふつうに比べて、結果が同じファイルだけを
+    今の形（ヘッダーを含む）で書き直す。
+    """
     config = request.config
     m = MESSAGES[lang]
     actual = _render_golden(case, outcome, normalizer, config.getini("casebook_golden_description"))
@@ -1042,24 +1060,11 @@ def _compare_golden(
     got = parse_golden(actual, default_section)
     expected = parse_golden(read_golden(path), default_section) if path.exists() else None
     if config.getoption("--casebook-update"):
-        # 同じ期待出力ファイルを使う2つのケースの結果が違うと、あとのケースが黙って上書きし、
-        # 次の実行で先のケースが失敗する。golden: で同じファイルを指したときや、Windows で
-        # 大文字小文字だけが違うケース名（Add と add）のときに起きる
-        owners = config.stash.setdefault(_GOLDEN_OWNERS, {})
-        nodeid = request.node.nodeid
-        owner = owners.setdefault(os.path.normcase(path.resolve()), (nodeid, got))
-        if owner[0] != nodeid and golden_differs(owner[1], got):
-            pytest.fail(
-                m["golden_shared"].format(name=case.name, label=label, other=owner[0]),
-                pytrace=False,
-            )
+        _claim_golden(request, case, path, label, got, m)
         # 結果が同じなら書き直さない（手で書いた期待出力の書き方を崩さず、
         # ヘッダーだけの違いで差分が出ないようにする）
         if (expected is None or golden_differs(expected, got)) and write_golden(path, actual):
-            # 値は rootdir からのパスの表記（実行の最後の一覧に出す。HTML レポートは
-            # 真偽しか見ないので、空でない文字列でも「更新」と出る）
-            updated = Path(os.path.relpath(path, config.rootpath)).as_posix()
-            request.node.user_properties.append(("casebook_updated", updated))
+            _record_update(request, path, _result_changes(expected, got))
         return
     if expected is None:
         pytest.fail(m["golden_missing"].format(name=case.name, label=label), pytrace=False)
@@ -1071,6 +1076,75 @@ def _compare_golden(
             lang,
         )
         pytest.fail(f"{_title(case, lang)}\n{m['golden_differs']}\n{diff}", pytrace=False)
+    # --casebook-update-headers: 結果が同じなので、ヘッダーを今の形にそろえる。
+    # 比べるのは結果だけなので、ヘッダーを省いて手で書いた期待出力も、ここで
+    # --casebook-update が書くのと同じ形（# case: などを含む）に書き直される。
+    # 同じファイルを使うほかのケースが先に書いていれば書かない（# case: の違いで、
+    # ケースごとに書き直し合わないように）
+    if (
+        config.getoption("--casebook-update-headers")
+        and _claim_golden(request, case, path, label, got, m)
+        and write_golden(path, actual)
+    ):
+        _record_update(request, path, "")
+
+
+def _claim_golden(
+    request: pytest.FixtureRequest,
+    case: Case,
+    path: Path,
+    label: str,
+    got: GoldenContent,
+    m: dict[str, str],
+) -> bool:
+    """
+    期待出力ファイルを書く前に、同じファイルを使うほかのケースと結果が食い違わないか確かめる。
+
+    同じ期待出力ファイルを使う2つのケースの結果が違うと、あとのケースが黙って上書きし、
+    次の実行で先のケースが失敗する。golden: で同じファイルを指したときや、Windows で
+    大文字小文字だけが違うケース名（Add と add）のときに起きる。食い違えば失敗にする。
+
+    :return: このケースが、そのファイルを最初に使ったケースなら True
+    """
+    owners = request.config.stash.setdefault(_GOLDEN_OWNERS, {})
+    nodeid: str = request.node.nodeid
+    owner = owners.setdefault(os.path.normcase(path.resolve()), (nodeid, got))
+    if owner[0] != nodeid and golden_differs(owner[1], got):
+        pytest.fail(
+            m["golden_shared"].format(name=case.name, label=label, other=owner[0]),
+            pytrace=False,
+        )
+    return owner[0] == nodeid
+
+
+def _result_changes(expected: GoldenContent | None, got: GoldenContent) -> str:
+    """
+    書き直す期待出力の、結果のヘッダー（exit_code / status）の変わり方の注記
+    （` (exit_code 0 → 2)` の形。変わっていなければ空）。
+
+    0 で終わっていたコマンドが失敗するようになったのに、それが新しい期待出力として
+    黙って書かれるのを、一覧で目立たせるため。古いファイルに書いていないキーは、
+    比べていなかったので注記しない。新しい結果から消えたキーは `-` と書く。
+    """
+    if expected is None:
+        return ""
+    changes = [
+        f"{key} {old} → {got.results.get(key, '-')}"
+        for key, old in expected.results.items()
+        if got.results.get(key) != old
+    ]
+    return f" ({', '.join(changes)})" if changes else ""
+
+
+def _record_update(request: pytest.FixtureRequest, path: Path, note: str) -> None:
+    """
+    期待出力を書き直したことを、テストの user_properties に残す。
+
+    値は rootdir からのパスの表記に注記を添えたもの（実行の最後の一覧に出す。HTML レポートは
+    真偽しか見ないので、空でない文字列でも「更新」と出る）。
+    """
+    updated = Path(os.path.relpath(path, request.config.rootpath)).as_posix()
+    request.node.user_properties.append(("casebook_updated", updated + note))
 
 
 def _is_instance_of(error: BaseException, name: str) -> bool:
