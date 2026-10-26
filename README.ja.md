@@ -576,15 +576,22 @@ for case in doc.cases:
 `load()` は pytest で集めるときと同じ検証をして、`CasebookDoc`（`title`・`levels`・`states`・`meta`・`env`・`cases` など）を返します。\
 書き方に誤りがあれば `pytest_casebook.CasebookError` を出します。
 
+`load()` は、そのままでは ini の設定を読みません。\
+`load(path, ini=True)` とすると、pytest の設定ファイルから `casebook_*` の設定を読み、pytest で動かすときと同じ設定になります。\
+`casebook_golden_dir`・`casebook_levels`・`casebook_command_prefix`・`casebook_lang` は読んだファイルに当て、`casebook_lang`・`casebook_encoding`・`casebook_builtin_patterns`・`casebook_golden_description` は `run_case()` の既定になります。\
+設定ファイルは YAML のディレクトリから上へ探し、ディレクトリごとに `pytest.ini`・`pyproject.toml`（`[tool.pytest.ini_options]` があるときだけ）・`tox.ini`（`[pytest]` があるときだけ）・`setup.cfg`（`[tool:pytest]` があるときだけ）の順で、最初に見つかったものを使います。\
+`load()` や `run_case()` に渡した引数は、ini の値より優先します。\
+pytest の探し方を簡単にしたもので、`-c`・`--rootdir`・`-o` は考えません。
+
 読んだケースは `run_case()` で実行もできます（`--case <名前>` を持つお試しスクリプトなど）。
 
 ```python
 import conftest  # hooks には import した conftest モジュールをそのまま渡せる
 import pytest_casebook
 
-doc = pytest_casebook.load("tests/casebook_demo.yaml")
+doc = pytest_casebook.load("tests/casebook_demo.yaml", ini=True)
 case = next(c for c in doc.cases if c.name == "add_cli")
-print(pytest_casebook.run_case(doc, case, hooks=conftest))
+print(pytest_casebook.run_case(doc, case, hooks=conftest), end="")  # 文字列は改行で終わる
 ```
 
 `run_case()` はケースを1件実行し（setup hook → 操作 → observe → 後片付け）、`--casebook-update` が書くものと同じ文字列を返します。\
@@ -595,8 +602,10 @@ print(pytest_casebook.run_case(doc, case, hooks=conftest))
 
 ### 前提条件 (setup)
 
-- `setup.files` があると、ケースごとに一時的な作業ディレクトリを作ってファイルを置き、command も call もそのディレクトリで実行します。\
-  出力に出るそのディレクトリのパスは `<tmp>` に置き換えます
+- `setup`（またはケースの状態）に `files:` を書くと、ケースごとに新しい一時的な作業ディレクトリを作ってファイルを置き、command も call もそのディレクトリで実行します。\
+  空の `files: {}` でも同じで、ケースごとにまっさらなディレクトリで動かせます（空でない出力先を受け付けない CLI など）。\
+  `files:` を書かなければ（`observe:` / `expect:` で `files` を取り出すときを除き）、YAML のディレクトリで実行します。\
+  出力に出る作業ディレクトリのパスは `<tmp>` に置き換えます
 - 作業ディレクトリは YAML のディレクトリとは別の場所です。\
   YAML の隣のスクリプトなどは `{casebook_dir}` を付けて指します（例: `command_prefix: [python, "{casebook_dir}/tool.py"]`）。\
   出力に出る YAML のディレクトリのパスは `{casebook_dir}` に置き換えます
@@ -813,7 +822,7 @@ expect:
 呼ぶ前に設定したコンテキスト変数（`contextvars`）は、関数からも読めます（複製を渡します）。
 
 カレントディレクトリは、プロセス全体で1つです。\
-`setup.files` のあるケースは専用の作業ディレクトリで動き、ケースが終わるとそのディレクトリから戻ります。\
+`setup.files` のある（`files: {}` も含む）ケースは専用の作業ディレクトリで動き、ケースが終わるとそのディレクトリから戻ります。\
 そのため、時間切れのあとも動き続ける関数からは、カレントディレクトリが別の場所（元のディレクトリや、あとのケースの作業ディレクトリ）に見えます。\
 相対パスでファイルを読み書きすると、違うファイルを触ることがあります（あとのケースの `files` の比較が壊れることもあります）。\
 時間切れになりうる関数では、絶対パスを使ってください。

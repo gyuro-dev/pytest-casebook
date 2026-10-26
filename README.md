@@ -506,22 +506,24 @@ for case in doc.cases:
 
 `load()` performs the same validation as pytest collection and returns a `CasebookDoc` (`title`, `levels`, `states`, `meta`, `env`, `cases`, …). Mistakes raise `pytest_casebook.CasebookError`.
 
+By default `load()` ignores the ini options. With `load(path, ini=True)` it reads the `casebook_*` options from the pytest configuration file, so the result follows the project settings as under pytest: `casebook_golden_dir`, `casebook_levels`, `casebook_command_prefix` and `casebook_lang` apply to the loaded file, and `casebook_lang`, `casebook_encoding`, `casebook_builtin_patterns` and `casebook_golden_description` become the defaults of `run_case()`. The file is looked up from the YAML's directory upwards; in each directory the first of `pytest.ini`, `pyproject.toml` (only with `[tool.pytest.ini_options]`), `tox.ini` (only with `[pytest]`) and `setup.cfg` (only with `[tool:pytest]`) is used. Arguments passed to `load()` or `run_case()` win over the ini values. This is a simplified version of pytest's lookup: `-c`, `--rootdir` and `-o` are not taken into account.
+
 A loaded case can also be run with `run_case()`, e.g. in a playground script with a `--case <name>` option.
 
 ```python
 import conftest  # hooks can be the imported conftest module itself
 import pytest_casebook
 
-doc = pytest_casebook.load("tests/casebook_demo.yaml")
+doc = pytest_casebook.load("tests/casebook_demo.yaml", ini=True)
 case = next(c for c in doc.cases if c.name == "add_cli")
-print(pytest_casebook.run_case(doc, case, hooks=conftest))
+print(pytest_casebook.run_case(doc, case, hooks=conftest), end="")  # the text ends with a newline
 ```
 
 `run_case()` runs one case (setup hook → action → observe → cleanup) and returns exactly the text that `--casebook-update` writes, with changing values already normalized — no comparison is made. `hooks` is any object or module whose functions are named `pytest_casebook_*`, such as an imported conftest module. Manual cases cannot be run and raise `pytest_casebook.CasebookRunError`, as do failures such as a command that is not found; an exception from a `call:` case or a non-zero exit code is not a failure and comes back inside the returned text.
 
 ### Preconditions (setup)
 
-- With `setup.files`, a temporary working directory is created per case, the files are placed there, and both commands and calls run in that directory. The directory's path in the output is replaced with `<tmp>`
+- Writing `files:` in `setup` (or in the case's state) makes the case run in a fresh temporary working directory: the files are placed there, and both commands and calls run in that directory. This holds even for an empty `files: {}`, which gives each case a clean directory (e.g. for a CLI that refuses a non-empty output directory). Without `files:` (and without fetching `files` in `observe:` / `expect:`), the case runs in the YAML's directory. The working directory's path in the output is replaced with `<tmp>`
 - The working directory is not the YAML's directory. Refer to scripts next to the YAML with `{casebook_dir}` (e.g. `command_prefix: [python, "{casebook_dir}/tool.py"]`). The YAML directory's path in the output is replaced with `{casebook_dir}`
 - Everything except `files` is passed to `pytest_casebook_setup`. If the hook returns a context manager, it is exited after observe (use it for cleanup)
 - Preparation is applied for every case. Nothing carries over from the previous case
@@ -702,7 +704,7 @@ When to use which:
 
 Without `timeout:`, the function and the hook run in the test's own thread, as before. With it, they run in another thread, so objects that can only be used from the thread that created them (e.g. an `sqlite3` connection made in `pytest_casebook_setup`) cannot be used. Context variables (`contextvars`) set before the call are visible to the function (it receives a copy).
 
-The current directory is shared by the whole process. A case with `setup.files` runs in its own working directory, and that directory is left when the case ends. A function that keeps running after a timeout therefore sees another current directory: the original one, or the working directory of a later case. If it reads or writes files with relative paths, it can touch the wrong files (and break the `files` comparison of a later case). In a function that may time out, use absolute paths.
+The current directory is shared by the whole process. A case with `setup.files` (even `files: {}`) runs in its own working directory, and that directory is left when the case ends. A function that keeps running after a timeout therefore sees another current directory: the original one, or the working directory of a later case. If it reads or writes files with relative paths, it can touch the wrong files (and break the `files` comparison of a later case). In a function that may time out, use absolute paths.
 
 ### Manual cases (manual)
 

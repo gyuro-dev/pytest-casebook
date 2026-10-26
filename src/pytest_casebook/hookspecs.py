@@ -165,8 +165,8 @@ def pytest_casebook_setup(
     observe).
 
     :param data: the state and the case's setup: merged, without files
-    :param workdir: the per-case working directory (None unless the case has setup files or
-        fetches `files` in observe: or expect:)
+    :param workdir: the per-case working directory (None unless the case writes setup
+        `files:`, even `files: {}`, or fetches `files` in observe: or expect:)
     :return: a context manager for cleanup, or None. Every implementation is called and every
         returned context manager is entered
 
@@ -179,8 +179,8 @@ def pytest_casebook_setup(
     後片付けが要るときはコンテキストマネージャを返す（observe のあとに抜ける）。
 
     :param data: 状態とケースの setup: を重ねた内容から files を除いたもの
-    :param workdir: ケースごとの作業ディレクトリ（setup の files も、observe: / expect: の
-        files もなければ None）
+    :param workdir: ケースごとの作業ディレクトリ（setup に files: を書いておらず
+        （`files: {}` も書いたうちに入る）、observe: / expect: の files もなければ None）
     :return: 後片付け用のコンテキストマネージャか None。すべての実装を呼び、返したものを
         すべて使う
     """

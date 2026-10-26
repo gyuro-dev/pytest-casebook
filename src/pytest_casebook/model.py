@@ -63,6 +63,7 @@ import yaml
 
 from .expect import find_matcher_errors
 from .http import HttpRequest
+from .inifile import IniValue, ini_bool, ini_lines, read_ini
 from .messages import TEXTS, error, language
 
 # ケース名は期待出力のファイル名になるため、ファイル名に使える文字だけにする。
@@ -217,6 +218,8 @@ class Case:
     setup: dict[str, Any] | None = None
     # 状態とケースの setup: の files を重ねたもの（作業ディレクトリからの相対パス -> 内容）
     setup_files: dict[str, str] = field(default_factory=dict)
+    # 状態かケースの setup: に files を書いたか。空（files: {}）でも作業ディレクトリを作る
+    has_setup_files: bool = False
     # ケースに書いた setup:（状態を重ねる前。レポートの「前提条件」に出す）
     own_setup: dict[str, Any] | None = None
     observe: tuple[str, ...] = ()
@@ -280,12 +283,15 @@ class Case:
     @property
     def needs_workdir(self) -> bool:
         """
-        Whether a per-case working directory is created (when the case has setup files or
-        fetches `files`).
+        Whether a per-case working directory is created: when `files:` is written in the
+        state or the case's setup (even `files: {}`), or when the case fetches `files`.
 
-        ケースごとの作業ディレクトリを作るか（setup の files があるか、files を取り出すとき）。
+        ケースごとの作業ディレクトリを作るか。状態かケースの setup に `files:` を書いたとき
+        （`files: {}` でも）と、files を取り出すとき。
         """
-        return bool(self.setup_files) or FILES_TARGET in self.observe_targets
+        return (
+            self.has_setup_files or bool(self.setup_files) or FILES_TARGET in self.observe_targets
+        )
 
     @property
     def golden_file(self) -> str:
@@ -328,6 +334,9 @@ class CasebookDoc:
     meta: dict[str, Any] = field(default_factory=dict)
     # ファイル全体の env（どの command のケースにも重ねる環境変数）
     env: dict[str, str] = field(default_factory=dict)
+    # load(ini=True) で読んだ ini の casebook_* の値。run_case() の既定に使う
+    # （lang・encoding・builtin_patterns・description。ini=False なら空）
+    options: dict[str, Any] = field(default_factory=dict)
     # YAML のマッピング（id）-> 始まる行。ケースの行番号を求めるのに、読み込み中だけ使う
     # （id は読み終えると別のオブジェクトに使われうるので、読み終えたら空にする）
     _source_lines: dict[int, int] = field(default_factory=dict, repr=False, compare=False)
@@ -426,8 +435,9 @@ def load(
     *,
     golden_dir: str | Path | None = None,
     levels: tuple[str, ...] | None = None,
-    command_prefix: tuple[str, ...] = (),
-    lang: str = "en",
+    command_prefix: tuple[str, ...] | None = None,
+    lang: str | None = None,
+    ini: bool = False,
 ) -> CasebookDoc:
     """
     Load a case file. Call this to use the same YAML as the tests from outside pytest
@@ -436,25 +446,40 @@ def load(
     ```python
     import pytest_casebook
 
-    doc = pytest_casebook.load("tests/casebook_demo.yaml")
+    doc = pytest_casebook.load("tests/casebook_demo.yaml", ini=True)
     for case in doc.cases:
         if case.meta.get("demo"):
             print(case.name, case.command)
     ```
 
+    With `ini=True`, the `casebook_*` options are read from the pytest configuration file,
+    so the result follows the project settings as under pytest. The file is looked up from
+    the case file's directory upwards; in each directory the first of `pytest.ini`,
+    `pyproject.toml` (with `[tool.pytest.ini_options]`), `tox.ini` (with `[pytest]`) and
+    `setup.cfg` (with `[tool:pytest]`) is used. This is a simplified version of pytest's
+    lookup: `-c`, `--rootdir` and `-o` are not taken into account. `casebook_golden_dir`,
+    `casebook_levels`, `casebook_command_prefix` and `casebook_lang` apply here;
+    `casebook_lang`, `casebook_encoding`, `casebook_builtin_patterns` and
+    `casebook_golden_description` are kept in `doc.options` and used by `run_case()`.
+    The arguments given here win over the ini values.
+
     :param path: path to the case file
     :param golden_dir: where golden files are stored when the YAML has no `golden_dir`
         (defaults to `<file's directory>/golden/<file name without extension>`, the same as
-        the pytest default)
+        the pytest default; with `ini=True`, `casebook_golden_dir` replaces `golden`)
     :param levels: names of the hierarchy levels when the YAML has no `levels` (defaults to
-        those of `lang`: `Category / Subcategory / Item` for `en`)
+        `casebook_levels` with `ini=True`, else those of `lang`: `Category / Subcategory /
+        Item` for `en`)
     :param command_prefix: arguments put before the command when the YAML has no
-        `command_prefix`
+        `command_prefix` (defaults to `casebook_command_prefix` with `ini=True`, else none)
     :param lang: language of the error messages and the default `levels`: `en` or `ja`
+        (defaults to `casebook_lang` with `ini=True`, else `en`)
+    :param ini: read the `casebook_*` options from the pytest configuration file
     :return: the validated contents of the case file
     :raises CasebookError: when the file cannot be read as YAML or is written incorrectly
     :raises OSError: when the file cannot be read
     :raises UnicodeDecodeError: when the file is not UTF-8
+    :raises ValueError: when `lang` is not supported, or an ini value is invalid
 
     ケースファイルを読み込む。pytest の外（デモ用のスクリプトなど）から、
     テストと同じ YAML を使うときに呼ぶ。
@@ -462,28 +487,66 @@ def load(
     ```python
     import pytest_casebook
 
-    doc = pytest_casebook.load("tests/casebook_demo.yaml")
+    doc = pytest_casebook.load("tests/casebook_demo.yaml", ini=True)
     for case in doc.cases:
         if case.meta.get("demo"):
             print(case.name, case.command)
     ```
 
+    `ini=True` にすると、pytest の設定ファイルから `casebook_*` の設定を読み、pytest で
+    動かすときと同じ設定になる。設定ファイルはケースファイルのディレクトリから上へ探し、
+    ディレクトリごとに `pytest.ini`・`pyproject.toml`（`[tool.pytest.ini_options]` が
+    あるもの）・`tox.ini`（`[pytest]` があるもの）・`setup.cfg`（`[tool:pytest]` が
+    あるもの）の順で最初に見つかったものを使う。pytest の探し方を簡単にしたもので、
+    `-c`・`--rootdir`・`-o` は考えない。`casebook_golden_dir`・`casebook_levels`・
+    `casebook_command_prefix`・`casebook_lang` はここで使い、`casebook_lang`・
+    `casebook_encoding`・`casebook_builtin_patterns`・`casebook_golden_description` は
+    `doc.options` に入れて `run_case()` が使う。ここで渡した引数は ini の値より優先する。
+
     :param path: ケースファイルのパス
     :param golden_dir: YAML に `golden_dir` がないときの期待出力の置き場所
         （省略時は pytest の既定と同じ
-        `<ファイルのディレクトリ>/golden/<拡張子を除いたファイル名>`）
-    :param levels: YAML に `levels` がないときの階層の呼び名（省略時は `lang` の言語の既定。
+        `<ファイルのディレクトリ>/golden/<拡張子を除いたファイル名>`。
+        `ini=True` なら `golden` の代わりに `casebook_golden_dir`）
+    :param levels: YAML に `levels` がないときの階層の呼び名（省略時は、`ini=True` なら
+        `casebook_levels`、それもなければ `lang` の言語の既定。
         `en` なら `Category / Subcategory / Item`）
     :param command_prefix: YAML に `command_prefix` がないときに command の前に付ける引数
+        （省略時は、`ini=True` なら `casebook_command_prefix`、それ以外はなし）
     :param lang: 書き方の誤りのメッセージと、`levels` の既定の言語。`en` か `ja`
+        （省略時は、`ini=True` なら `casebook_lang`、それ以外は `en`）
+    :param ini: pytest の設定ファイルから `casebook_*` の設定を読む
     :return: 検証済みのケースファイルの内容
     :raises CasebookError: YAML として読めない、または書き方に誤りがあるとき
     :raises OSError: ファイルを読めないとき
     :raises UnicodeDecodeError: UTF-8 でないとき
+    :raises ValueError: `lang` が対応していない言語のとき、または ini の値が正しくないとき
     """
+    path = Path(path)
+    # ini=True なら pytest の設定ファイルの値（引数で渡したものが優先、なければ組み込みの既定）
+    values: dict[str, IniValue] = read_ini(path.resolve().parent)[1] if ini else {}
+    if lang is None:
+        lang = str(values.get("casebook_lang", "en"))
     if lang not in TEXTS:
         raise ValueError(f"lang must be one of {' / '.join(TEXTS)}: {lang}")
-    path = Path(path)
+    if golden_dir is None and "casebook_golden_dir" in values:
+        golden_dir = path.parent / str(values["casebook_golden_dir"]) / path.stem
+    if levels is None and "casebook_levels" in values:
+        levels = tuple(ini_lines(values["casebook_levels"])) or None
+    if command_prefix is None:
+        command_prefix = tuple(shlex.split(str(values.get("casebook_command_prefix", ""))))
+    options: dict[str, Any] = {}
+    if ini:
+        options = {
+            "lang": lang,
+            "encoding": str(values.get("casebook_encoding", "utf-8")),
+            "builtin_patterns": ini_bool(
+                "casebook_builtin_patterns", values.get("casebook_builtin_patterns", "true")
+            ),
+            "description": ini_bool(
+                "casebook_golden_description", values.get("casebook_golden_description", "false")
+            ),
+        }
     with language(lang):
         loader = _LineLoader(path.read_text(encoding="utf-8"))
         try:
@@ -496,7 +559,7 @@ def load(
             raise CasebookError(error("yaml_error", where=path.name, error=e, hint=hint)) from None
         finally:
             loader.dispose()
-        return parse_document(
+        doc = parse_document(
             data,
             path,
             golden_dir=(
@@ -506,6 +569,8 @@ def load(
             command_prefix=command_prefix,
             source_lines=loader.lines,
         )
+    doc.options = options
+    return doc
 
 
 class _LineLoader(yaml.SafeLoader):
@@ -797,7 +862,9 @@ def _parse_case(
     base, base_files = _parse_setup(state_data, loc)
     own, own_files = _parse_setup(item.get("setup"), loc)
     setup = None if base is None and own is None else {**(base or {}), **(own or {})}
-    setup_files = {**base_files, **own_files}
+    # files: を書いたか（空でも）は、None かどうかで分かる
+    has_setup_files = base_files is not None or own_files is not None
+    setup_files = {**(base_files or {}), **(own_files or {})}
 
     return Case(
         name=name,
@@ -819,6 +886,7 @@ def _parse_case(
         golden=_golden_name(item.get("golden"), loc),
         setup=setup,
         setup_files=setup_files,
+        has_setup_files=has_setup_files,
         own_setup=item.get("setup"),
         observe=_str_list(item.get("observe"), loc, "observe"),
         expect=(
@@ -909,14 +977,21 @@ def _merge_env(outer: dict[str, str], inner: dict[str, str | None]) -> dict[str,
     return merged
 
 
-def _parse_setup(value: Any, loc: str) -> tuple[dict[str, Any] | None, dict[str, str]]:
-    """setup: を (hook に渡す部分, files) に分ける。"""
+def _parse_setup(value: Any, loc: str) -> tuple[dict[str, Any] | None, dict[str, str] | None]:
+    """
+    setup: を (hook に渡す部分, files) に分ける。
+
+    files: を書いていなければ files は None。空（`files: {}`）なら {} で、
+    作業ディレクトリを作る印になる。
+    """
     if value is None:
-        return None, {}
+        return None, None
     if not (isinstance(value, dict) and all(isinstance(k, str) for k in value)):
         raise CasebookError(error("setup_mapping", where=loc))
     data = dict(value)
-    files = data.pop("files", None) or {}
+    if "files" not in data:
+        return data, None
+    files = data.pop("files") or {}
     if not (
         isinstance(files, dict)
         and all(isinstance(k, str) and isinstance(v, str) for k, v in files.items())

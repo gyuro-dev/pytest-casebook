@@ -623,10 +623,10 @@ def run_case(
     *,
     env: Any = None,
     hooks: Any = None,
-    encoding: str = "utf-8",
-    builtin_patterns: bool = True,
-    lang: str = "en",
-    description: bool = False,
+    encoding: str | None = None,
+    builtin_patterns: bool | None = None,
+    lang: str | None = None,
+    description: bool | None = None,
 ) -> str:
     """
     Run one case and return the result as a string in the golden-file format: the same text
@@ -638,13 +638,17 @@ def run_case(
     import conftest  # hooks can be the imported conftest module itself
     import pytest_casebook
 
-    doc = pytest_casebook.load("tests/casebook_demo.yaml")
+    doc = pytest_casebook.load("tests/casebook_demo.yaml", ini=True)
     case = next(c for c in doc.cases if c.name == "add_cli")
-    print(pytest_casebook.run_case(doc, case, hooks=conftest))
+    print(pytest_casebook.run_case(doc, case, hooks=conftest), end="")
     ```
 
     An exception from a `call:` case or a non-zero exit code is not an error: as under
     pytest, it comes back inside the returned text (`----- raises -----` / `# exit_code:`).
+
+    `encoding`, `builtin_patterns`, `lang` and `description` default to the ini options
+    that `load(path, ini=True)` read (`doc.options`), and otherwise to the built-in
+    defaults. Arguments given here win.
 
     :param doc: the case file loaded with `load()`
     :param case: a case in `doc`
@@ -653,13 +657,14 @@ def run_case(
     :param hooks: an object or module whose attributes are functions named
         `pytest_casebook_*` (e.g. an imported conftest module); as in conftest.py, each
         function receives only the parameters it declares
-    :param encoding: encoding of the command output (the `casebook_encoding` ini under
-        pytest)
+    :param encoding: encoding of the command output (the `casebook_encoding` ini; default
+        `utf-8`)
     :param builtin_patterns: replace datetimes and UUIDs with `<datetime>` / `<uuid>`
-        (the `casebook_builtin_patterns` ini under pytest)
-    :param lang: language of the error messages: `en` or `ja`
+        (the `casebook_builtin_patterns` ini; default True)
+    :param lang: language of the error messages: `en` or `ja` (the `casebook_lang` ini;
+        default `en`)
     :param description: write a `# description:` line when the case has a description
-        (the `casebook_golden_description` ini under pytest)
+        (the `casebook_golden_description` ini; default False)
     :return: the result in the golden-file format (with the trailing newline)
     :raises CasebookRunError: when the case cannot be run (a manual case, a command that is
         not found, a timeout, a missing request hook, ...)
@@ -673,13 +678,17 @@ def run_case(
     import conftest  # hooks には import した conftest モジュールをそのまま渡せる
     import pytest_casebook
 
-    doc = pytest_casebook.load("tests/casebook_demo.yaml")
+    doc = pytest_casebook.load("tests/casebook_demo.yaml", ini=True)
     case = next(c for c in doc.cases if c.name == "add_cli")
-    print(pytest_casebook.run_case(doc, case, hooks=conftest))
+    print(pytest_casebook.run_case(doc, case, hooks=conftest), end="")
     ```
 
     call: のケースの例外や 0 以外の終了コードは誤りではなく、pytest と同じく、返す文字列の
     中に入る（`----- raises -----` / `# exit_code:`）。
+
+    `encoding`・`builtin_patterns`・`lang`・`description` は、省略すると
+    `load(path, ini=True)` で読んだ ini の値（`doc.options`）を使い、なければ組み込みの
+    既定を使う。ここで渡した引数が優先する。
 
     :param doc: `load()` で読んだケースファイル
     :param case: `doc` の中のケース
@@ -687,17 +696,28 @@ def run_case(
     :param hooks: `pytest_casebook_*` という名前の関数を属性に持つオブジェクトやモジュール
         （import した conftest モジュールなど）。conftest.py と同じく、各関数には宣言した
         引数だけが渡る
-    :param encoding: command の出力の文字コード（pytest では ini の `casebook_encoding`）
+    :param encoding: command の出力の文字コード（ini の `casebook_encoding`。既定は `utf-8`）
     :param builtin_patterns: 日時と UUID を `<datetime>` / `<uuid>` に置き換えるか
-        （pytest では ini の `casebook_builtin_patterns`）
+        （ini の `casebook_builtin_patterns`。既定は True）
     :param lang: 実行の誤りのメッセージの言語。`en` か `ja`
+        （ini の `casebook_lang`。既定は `en`）
     :param description: ケースに description があれば `# description:` の行を書く
-        （pytest では ini の `casebook_golden_description`）
+        （ini の `casebook_golden_description`。既定は False）
     :return: 期待出力ファイルの形式の文字列（末尾の改行を含む）
     :raises CasebookRunError: ケースを実行できないとき（手動のケース、コマンドが見つからない、
         時間切れ、request hook がない、など）
     :raises ValueError: `lang` が対応していない言語のとき
     """
+    # 引数 > load(ini=True) で読んだ ini の値 > 組み込みの既定
+    options = doc.options
+    if encoding is None:
+        encoding = str(options.get("encoding", "utf-8"))
+    if builtin_patterns is None:
+        builtin_patterns = bool(options.get("builtin_patterns", True))
+    if lang is None:
+        lang = str(options.get("lang", "en"))
+    if description is None:
+        description = bool(options.get("description", False))
     if lang not in TEXTS:
         raise ValueError(f"lang must be one of {' / '.join(LANGS)}: {lang}")
     with language(lang):
