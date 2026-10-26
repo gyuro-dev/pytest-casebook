@@ -6,6 +6,7 @@ async の関数・skip / xfail・HTML の時間の確認。
 from __future__ import annotations
 
 import decimal
+import math
 import re
 import textwrap
 from pathlib import Path
@@ -596,6 +597,10 @@ def test_decimal_becomes_a_number(project: pytest.Pytester) -> None:
     assert isinstance(to_jsonable(decimal.Decimal("1.5")), float)
     assert to_jsonable({"price": decimal.Decimal("300")}) == {"price": 300}
     assert to_jsonable([decimal.Decimal("3E+2")]) == [300]
+    # 整数にできない NaN・Infinity でも落ちない
+    assert math.isnan(to_jsonable(decimal.Decimal("NaN")))
+    assert to_jsonable(decimal.Decimal("-Infinity")) == float("-inf")
+    assert to_jsonable(decimal.Decimal("sNaN")) == "Decimal('sNaN')"
 
     project.makeconftest(
         """
@@ -619,3 +624,22 @@ def test_decimal_becomes_a_number(project: pytest.Pytester) -> None:
         """,
     )
     project.runpytest().assert_outcomes(passed=2)
+
+
+def test_html_shows_the_golden_written_by_update(project: pytest.Pytester) -> None:
+    """--casebook-update と --casebook-html を一緒に使うと、書き直したあとの期待出力を出す。"""
+    write_casebook(project, "cases:\n  - name: add\n    call: calc:add\n    args: [1, 2]\n")
+    report = project.path / "report.html"
+
+    def shown() -> list[str]:
+        page = report.read_text(encoding="utf-8")
+        return re.findall(r"<details class='golden'.*?<pre>(.*?)</pre>", page, re.S)
+
+    # 集めるときにはまだ期待出力がない
+    project.runpytest("--casebook-update", f"--casebook-html={report}")
+    assert shown() == ["----- return -----\n3"]
+    # 集めるときの古い内容（4）ではなく、書き直した内容（3）を出す
+    path = project.path / "golden" / "casebook_calc" / "add.txt"
+    path.write_text("4\n", encoding="utf-8")
+    project.runpytest("--casebook-update", f"--casebook-html={report}")
+    assert shown() == ["----- return -----\n3"]

@@ -135,7 +135,7 @@ For cases without `expect:` (here `greet`), `tests/golden/casebook_hello/<case n
 Hello, Alice
 ```
 
-Only the results are compared (`# exit_code:` and everything below the `-----` headings). Lines like `# case:` and `# command:` are explanations for readers, so you can omit them when writing a golden file by hand (the `# …:` lines must stay at the very top of the file). If there is only one output, the body alone is enough (see [Golden files](#golden-files)).
+Only the results are compared (`# exit_code:` and everything below the `-----` headings). Lines like `# case:` and `# command:` are explanations for readers, so you can omit them when writing a golden file by hand (any `# …:` lines you keep, such as `# exit_code:`, must stay at the very top of the file). If there is only one output, the body alone is enough (see [Golden files](#golden-files)).
 
 ```text
 Hello, Alice

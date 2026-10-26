@@ -501,7 +501,7 @@ def _sibling_docs(config: pytest.Config, doc: CasebookDoc) -> list[CasebookDoc]:
         # 名前がパターンに合うディレクトリ（casebook_data.yaml/ など）は読まない
         if not path.is_file():
             continue
-        # 書き方の誤り・読めないファイル（OSError）・UTF-8 でないファイル（ValueError）は、
+        # 書き方の誤り・UTF-8 でないファイル（CasebookError）・読めないファイル（OSError）は、
         # そのファイル自身を集めるときに知らせるので、ここでは無視する
         with contextlib.suppress(CasebookError, OSError, ValueError):
             docs.append(_load_doc(config, path))
@@ -1092,6 +1092,7 @@ def _compare_golden(
         # ヘッダーだけの違いで差分が出ないようにする）
         if (expected is None or golden_differs(expected, got)) and write_golden(path, actual):
             _record_update(request, path, _result_changes(expected, got))
+            _refresh_report_golden(request, doc, case)
         return
     if expected is None:
         pytest.fail(m["golden_missing"].format(name=case.name, label=label), pytrace=False)
@@ -1114,6 +1115,21 @@ def _compare_golden(
         and write_golden(path, actual)
     ):
         _record_update(request, path, "")
+
+
+def _refresh_report_golden(request: pytest.FixtureRequest, doc: CasebookDoc, case: Case) -> None:
+    """
+    HTML レポートに出す期待出力の内容を、書き直したあとのものにする。
+
+    内容は集めるときに読んでいるので、`--casebook-update` で作った・書き直した
+    期待出力は、ここで読み直さないとレポートに出ない（または古いまま出る）。
+    """
+    config = request.config
+    if not config.getoption("--casebook-html"):
+        return
+    meta = dict(request.node.user_properties).get("casebook")
+    if isinstance(meta, dict):
+        meta["golden_text"] = _golden_text(doc, case, *_html_golden_options(config), _texts(config))
 
 
 def _claim_golden(

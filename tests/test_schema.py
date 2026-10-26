@@ -55,6 +55,8 @@ def test_examples_follow_schema(path: Path) -> None:
         {"cases": [{"name": "a"}]},  # 操作がない
         {"cases": [{"name": "a b", "call": "m:f"}]},  # 名前に空白
         {"cases": [{"name": "a", "call": "f"}]},  # モジュールがない
+        {"cases": [{"name": "a", "call": ".m:f"}]},  # 相対 import
+        {"cases": [{"name": "a", "command": "x", "stdin": "a", "stdin_file": "in.txt"}]},
         {"cases": [{"name": "a", "request": "users"}]},  # / で始まらない
         {"cases": [{"name": "a", "request": {"path": "/x", "json": {}, "body": "b"}}]},
         {"cases": [{"name": "a", "call": "m:f", "expect": {"return": 1, "raises": "E"}}]},
@@ -212,3 +214,8 @@ def test_request_string_schema_matches_model(request_text: str, tmp_path: Path) 
     except pytest_casebook.CasebookError:
         model_ok = False
     assert (errors(doc) == []) == model_ok
+
+
+def test_schema_accepts_empty_setup_files() -> None:
+    """files: の下を空（null）にしても読み込みと同じく通す。"""
+    assert errors({"cases": [{"name": "a", "call": "m:f", "setup": {"files": None}}]}) == []

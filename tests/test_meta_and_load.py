@@ -5,6 +5,7 @@ meta:（利用する側が自由に使う情報）・env:（環境変数）の�
 from __future__ import annotations
 
 import json
+import re
 import textwrap
 from pathlib import Path
 
@@ -199,3 +200,77 @@ def test_project_can_keep_its_own_update_golden_option(project: pytest.Pytester)
     write_casebook(project, "cases:\n  - name: add\n    call: calc:add\n    args: [1, 2]\n")
     project.runpytest("--update-golden").assert_outcomes(passed=1, failed=1)
     project.runpytest("--casebook-update").assert_outcomes(passed=2)
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        # 空白だけの command は、区切ると引数が1つもない
+        ("cases:\n  - {name: a, command: '   '}\n", "command is empty"),
+        # クォートの閉じ忘れは、実行の前に YAML の誤りにする
+        ('cases:\n  - {name: a, command: "add \'apple"}\n', "cannot split command into"),
+        ('command_prefix: "store \'a"\ncases: []\n', "cannot split command_prefix into"),
+        # call: のモジュール名・関数名の空・空白・相対 import
+        ("cases:\n  - {name: a, call: ':f'}\n", "call must be 'module:function'"),
+        ("cases:\n  - {name: a, call: 'm:'}\n", "call must be 'module:function'"),
+        ("cases:\n  - {name: a, call: '.m:f'}\n", "call must be 'module:function'"),
+        ("cases:\n  - {name: a, call: 'm : f'}\n", "call must be 'module:function'"),
+        # 偽になる不正な値（[]・""・false）を省略と取り違えない
+        ("cases:\n  - {name: a, call: 'm:f', setup: {files: []}}\n", "setup.files must be"),
+        ("cases:\n  - {name: a, call: 'm:f', setup: {files: false}}\n", "setup.files must be"),
+        ("cases:\n  - {name: a, request: {path: /x, query: []}}\n", "request.query must be"),
+        ("cases:\n  - {name: a, request: {path: /x, query: ''}}\n", "request.query must be"),
+        ("cases:\n  - {name: a, call: 'm:f', state: ''}\n", "state must be a string"),
+        ("cases:\n  - {name: a, call: 'm:f', state: null}\n", "state must be a string"),
+        ("cases:\n  - {name: a, call: 'm:f', golden: ''}\n", "golden must be a string"),
+        (
+            "cases:\n  - group: g\n    state: ''\n    cases: [{name: a, call: 'm:f'}]\n",
+            "state must be a string",
+        ),
+    ],
+)
+def test_load_rejects_edge_cases(tmp_path: Path, text: str, message: str) -> None:
+    path = tmp_path / "casebook_x.yaml"
+    path.write_text(text, encoding="utf-8")
+    with pytest.raises(pytest_casebook.CasebookError, match=re.escape(message)):
+        pytest_casebook.load(path)
+
+
+def test_setup_files_can_be_empty(tmp_path: Path) -> None:
+    """files: の下を空（null）にしたときは、置くファイルがないだけ。"""
+    path = tmp_path / "casebook_x.yaml"
+    path.write_text("cases:\n  - name: a\n    call: m:f\n    setup:\n      files:\n", "utf-8")
+    assert pytest_casebook.load(path).cases[0].setup_files == {}
+
+
+def test_params_errors_point_to_the_element(tmp_path: Path) -> None:
+    """params の要素の誤りは、テンプレートではなく要素の行を出す。"""
+    path = tmp_path / "casebook_x.yaml"
+    path.write_text(
+        "cases:\n  - name: t\n    call: m:f\n    params:\n      - {name: a}\n      - {nam: b}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(pytest_casebook.CasebookError, match=r"cases\[0\] \(line 6\).*needs a name"):
+        pytest_casebook.load(path)
+
+
+def test_load_reports_a_file_that_is_not_utf8(project: pytest.Pytester) -> None:
+    """UTF-8 でない（Shift_JIS などで保存した）ファイルは、集めるときの誤りとして知らせる。"""
+    path = project.path / "casebook_sjis.yaml"
+    path.write_bytes("cases:\n  - {name: 足し算, call: 'calc:add'}\n".encode("cp932"))
+    with pytest.raises(pytest_casebook.CasebookError, match="cannot read as UTF-8"):
+        pytest_casebook.load(path)
+    result = project.runpytest()
+    result.assert_outcomes(errors=1)
+    result.stdout.fnmatch_lines(["*casebook_sjis.yaml: UTF-8 で読めません*"])
+    result.stdout.no_fnmatch_line("*Traceback*")
+
+
+def test_load_makes_a_relative_golden_dir_absolute(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "casebook_x.yaml"
+    path.write_text("cases:\n  - {name: a, call: 'm:f'}\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    doc = pytest_casebook.load(path, golden_dir="g")
+    assert doc.golden_dir == tmp_path / "g"

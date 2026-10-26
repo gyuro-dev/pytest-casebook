@@ -94,6 +94,9 @@ def run_subprocess(
         )
     except FileNotFoundError:
         raise CasebookRunError(error("command_not_found", program=argv[0])) from None
+    except OSError as e:
+        # 実行の権限がない・ディレクトリを指したなど
+        raise CasebookRunError(error("command_start_failed", program=argv[0], error=e)) from None
     with proc:
         try:
             stdout, stderr = proc.communicate(stdin, timeout=timeout)
@@ -261,7 +264,8 @@ def import_callable(spec: str) -> Callable[..., Any]:
     module_name, _, attr_path = spec.partition(":")
     try:
         obj: Any = importlib.import_module(module_name)
-    except ImportError as e:
+    except (ImportError, ValueError, TypeError) as e:
+        # ValueError は空のモジュール名、TypeError は相対 import（.mod）
         raise CasebookRunError(error("import_failed", module=module_name, error=e)) from e
     for attr in attr_path.split("."):
         try:

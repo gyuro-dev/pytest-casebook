@@ -239,6 +239,12 @@
     },
     "caseProperties": {
       "description": "The keys of a case other than name and params, shared by a case and a params element / ケースのキーのうち name と params 以外（ケースと params の要素で共通）",
+      "not": {
+        "required": [
+          "stdin",
+          "stdin_file"
+        ]
+      },
       "properties": {
         "description": {
           "type": "string",
@@ -276,7 +282,7 @@
         },
         "call": {
           "type": "string",
-          "pattern": "^[^:\\s]+:[^:\\s]+$",
+          "pattern": "^[^:\\s.][^:\\s]*:[^:\\s]+$",
           "description": "module:function / モジュール:関数"
         },
         "args": {
@@ -360,7 +366,10 @@
       "description": "Preconditions. files are put in the working directory; everything else is passed to pytest_casebook_setup / 前提条件。files は作業ディレクトリに置くファイル、それ以外は pytest_casebook_setup に渡す",
       "properties": {
         "files": {
-          "type": "object",
+          "type": [
+            "object",
+            "null"
+          ],
           "additionalProperties": {
             "type": "string"
           }

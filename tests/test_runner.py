@@ -98,3 +98,16 @@ def test_timeout_also_stops_grandchildren(tmp_path: Path) -> None:
     assert time.monotonic() - begin < 2.5  # 孫が終わるのを待っていない
     time.sleep(3)
     assert not finished.exists()  # 孫も止まった
+
+
+def test_program_that_cannot_start_is_reported(tmp_path: Path) -> None:
+    """見つかっても起動できない（ディレクトリを指したなど）ときも、実行の誤りにする。"""
+    with pytest.raises(runner.CasebookRunError, match="cannot start the command"):
+        runner.run_subprocess([str(tmp_path)], cwd=tmp_path)
+
+
+@pytest.mark.parametrize("spec", [":f", ".m:f"])
+def test_bad_module_name_is_reported(spec: str) -> None:
+    """空のモジュール名（ValueError）・相対 import（TypeError）も import の誤りにする。"""
+    with pytest.raises(runner.CasebookRunError, match="cannot import module"):
+        runner.import_callable(spec)
