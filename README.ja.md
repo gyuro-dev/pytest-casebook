@@ -251,7 +251,7 @@ pytest-html は要りません（一緒に使うこともできます）。
 ほとんどのことは YAML だけでできます。\
 DB を使うときや、テスト用の環境を渡したいときだけ、conftest.py に hook（決まった名前の関数）を足します。
 
-表の各行には、そのまま動くサンプルを [examples](examples) に用意しています（カバレッジの行を除く）。\
+表の各行には、そのまま動くサンプルを [examples](examples) に用意しています（サンプルの列が「—」の行を除く）。\
 サンプルのディレクトリをコピーして、名前を書き換えるところから始められます。
 
 | やりたいこと | 書く場所 | 書くもの | サンプル |
@@ -270,6 +270,7 @@ DB を使うときや、テスト用の環境を渡したいときだけ、conft
 | ケースに自分用の情報を付け、同じ YAML を pytest の外でも使いたい | YAML ＋ Python | `meta:` と `pytest_casebook.load()` | [11_meta_load](examples/11_meta_load) |
 | 期待出力ファイルを手で書きたい | 期待出力ファイル | 本文だけ（ヘッダーは省ける） | [12_handwritten_golden](examples/12_handwritten_golden) |
 | 理由を付けてケースを止めたい / 既知の不具合を書いておきたい | YAML | `skip: 理由` / `xfail: 理由` | [13_skip_xfail](examples/13_skip_xfail) |
+| 環境に足りないもの（ディスクイメージ・テスト用のデータ・サービス）があるときだけ、ケースを止めたい | YAML ＋ conftest.py | `marks: [needs_disk]` ＋ `pytest_collection_modifyitems` でスキップを足す（または `-m "not needs_disk"`）（[やり方](#環境によってスキップする)） | — |
 | HTTP の API を呼んで、ステータスやレスポンスを確かめたい | YAML ＋ conftest.py | `request:` ＋ `pytest_casebook_request` | [14_http_hook](examples/14_http_hook) |
 | FastAPI の API と DB を確かめたい | YAML ＋ conftest.py | `request:`・`setup:`・`expect:` ＋ TestClient | [15_fastapi](examples/15_fastapi) |
 | Flask の API と DB を確かめたい | YAML ＋ conftest.py | `request:`・`setup:`・`expect:` ＋ test_client | [16_flask](examples/16_flask) |
@@ -483,6 +484,42 @@ HTML レポートの階層の列は、実際に使われているグループの
 `command`・`call`・`request`・`manual` は、どれか1つだけを書きます。\
 上の表にないキーは、打ち間違いを見つけるためにエラーにします。\
 自分で使う情報は `meta:` の中に書きます。
+
+### 環境によってスキップする
+
+`skip:` は、いつでもスキップします。\
+環境に足りないもの（ディスクイメージ・テスト用のデータ・サービス）があるときだけスキップしたいときは、YAML だけでは書けません。\
+`marks:` に書けるのはマークの名前だけなので、`skipif(条件)` は書けないためです。\
+ケースにマークを付け、スキップは conftest.py で足します。
+
+```yaml
+- group: ディスクイメージ
+  marks: [needs_disk]
+  cases: [...]
+```
+
+```python
+# conftest.py
+from pathlib import Path
+import pytest
+
+
+def pytest_collection_modifyitems(config, items):
+    if not Path("data/disk.img").exists():
+        skip = pytest.mark.skip(reason="data/disk.img がない")
+        for item in items:
+            if "needs_disk" in item.keywords:
+                item.add_marker(skip)
+```
+
+- casebook のケースはふつうの pytest のテストなので、pytest のスキップのやり方はどれも使えます（理由は HTML の結果の列に出ます）
+- スキップではなく、実行の対象から外したいときは `-m "not needs_disk"` で除きます（除いたケースはレポートに出ません）
+- 知らないマークの警告が出ないよう、ini にマークを登録しておきます
+
+```toml
+[tool.pytest.ini_options]
+markers = ["needs_disk: data/disk.img が必要"]
+```
 
 ### 表の形で同じケースを並べる (params)
 
@@ -1055,6 +1092,9 @@ pytest がテストの場所として受け取るので、JUnit XML（xunit1）�
 - **Windows で出力が文字化けする** — 確かめるコマンドが cp932 などの文字コードで出力しています。\
   `casebook_encoding` にその文字コードを書いてください（[ini の設定](#ini-の設定)）。\
   子プロセスが Python なら、出力は `PYTHONIOENCODING` で `casebook_encoding` にそろえます
+- **Windows の Git Bash や VS Code のターミナルで、pytest の出力が文字化けする**（「書き直した期待出力」のような casebook の日本語のメッセージも） — Python は、パイプやターミナルへの出力をロケールの文字コード（cp932）で書きますが、これらのターミナルは UTF-8 を期待しています。\
+  環境変数に `PYTHONUTF8=1`（または `PYTHONIOENCODING=utf-8`）を設定してください。\
+  casebook に限った話ではありません（cmd.exe では正しく出ます）
 - **`command:` の `\` が消える** — 文字列の command は shell と同じ書き方で区切るため、`\` が消えます。\
   `command: ['C:\data\in.csv']` のようにリストで書きます
 - **値に `: ` や ` #` を書いたら YAML が壊れた** — 値全体を `"` で囲みます（`description: "setup: の説明"`）。\

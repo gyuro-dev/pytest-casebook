@@ -253,7 +253,9 @@ def _case_table(texts: dict[str, Any], rows: list[CaseRow], labels: list[str]) -
         cells.append(f"<td class='case'><div class='name'>{_e(meta['name'])}</div>{run}</td>")
         cells.append(f"<td class='desc'>{_e(meta['description'])}</td>")
         cells.append(f"<td class='cond'>{_list(meta['precondition'])}</td>")
-        cells.append(f"<td class='cond'>{_list(meta['expected'])}</td>")
+        golden_text = meta.get("golden_text") or ""
+        golden_id = f"{_row_id(row)}-golden"
+        cells.append(f"<td class='cond'>{_expected(texts, meta, golden_id)}</td>")
         note = f"<div class='muted note'>{_e(row.note)}</div>" if row.note else ""
         cells.append(f"<td class='result'>{_badge(texts, row.outcome)}{note}</td>")
         # 実行していないケース（未実施・手動）には時間を出さない
@@ -265,7 +267,6 @@ def _case_table(texts: dict[str, Any], rows: list[CaseRow], labels: list[str]) -
             f"<tr id='{_row_id(row)}' class='{row.outcome}' data-outcome='{row.outcome}'"
             f" data-text='{_e(_search_text(row))}'>{''.join(cells)}</tr>"
         )
-        golden_text = meta.get("golden_text") or ""
         if row.details or golden_text:
             # 詳細は表の幅いっぱいの行に出す（差分の長い行で列の幅が広がらないように）
             details = "".join(
@@ -277,7 +278,7 @@ def _case_table(texts: dict[str, Any], rows: list[CaseRow], labels: list[str]) -
                 # 期待出力ファイルの比べる部分（失敗の詳細と同じ仕組みの、折りたたみの行）
                 label = texts["golden_contents"].format(name=meta.get("golden_name", ""))
                 details += (
-                    f"<details class='golden'><summary>{_e(label)}</summary>"
+                    f"<details class='golden' id='{golden_id}'><summary>{_e(label)}</summary>"
                     f"<pre>{_e(golden_text)}</pre></details>"
                 )
             lines.append(
@@ -377,6 +378,25 @@ def _list(lines: list[str]) -> str:
     if not lines:
         return "<span class='muted'>—</span>"
     return "".join(f"<div class='line'>{_e(line)}</div>" for line in lines)
+
+
+def _expected(texts: dict[str, Any], meta: dict[str, Any], golden_id: str) -> str:
+    """
+    期待結果の列。
+
+    期待出力の内容を下の行に出すケースでは、最初の行（「期待出力ファイル（…）」）を、
+    その折りたたみを開くリンク（golden_see）にする（同じファイル名が2回並ばないように）。
+    内容を出すのは期待出力ファイルと比べるケース（expect: がなく、手動でもない）だけで、
+    その期待結果の最初の行は、いつも期待出力ファイルの行（plugin の _expected_lines）。
+    内容を出さないとき（casebook_html_golden が off・ファイルがない）は、今までどおりの文字にする。
+    """
+    lines = list(meta["expected"])
+    if not meta.get("golden_text") or not lines:
+        return _list(lines)
+    label = texts["golden_see"].format(name=meta.get("golden_name", ""))
+    link = f"<div class='line'><a class='golden-link' href='#{golden_id}'>{_e(label)}</a></div>"
+    rest = _list(lines[1:]) if lines[1:] else ""
+    return link + rest
 
 
 def _file_section(texts: dict[str, Any], rows: list[CaseRow]) -> str:
@@ -524,6 +544,7 @@ pre .diff-file { color: var(--muted); }
 .problems { margin: 8px 0 12px; }
 .problems ul { margin: 0; padding-left: 20px; }
 a { color: var(--info); }
+a.golden-link { font-size: 12px; }
 [hidden] { display: none !important; }
 .filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 8px 0; }
 .filter .toggles { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -567,9 +588,20 @@ a { color: var(--info); }
 # 開け閉めする（絞り込みで表から外れている行の分も。表に戻したとき、ほかの行とそろう）。
 # 1つずつ開け閉めしたときもボタンの表示を合わせる（toggle は親に伝わらないので、
 # document で捕捉の段階に受ける）。
+#
+# 期待結果の列の「下の期待出力を見る」のリンク（a.golden-link）は、# のリンクなので
+# JavaScript がなくても折りたたみの行まで飛ぶが、それだけでは閉じたまま。そこで押したときに
+# 行き先の details を開く（open を変えるので toggle が起き、すべて開く・閉じるボタンの表示も
+# 合う）。移動はブラウザに任せる（preventDefault しない）。この部分は絞り込みの欄がなくても動かす。
 # 埋め込みの JavaScript とCSS にはコメントを書かない（英語のレポートに日本語が入らないように）。
 _JS = r"""
 (() => {
+  document.addEventListener("click", (event) => {
+    const link = event.target.closest && event.target.closest("a.golden-link");
+    if (!link) return;
+    const target = document.getElementById(link.hash.slice(1));
+    if (target && target.tagName === "DETAILS") target.open = true;
+  });
   const bar = document.querySelector("header .filter");
   if (!bar) return;
   const input = bar.querySelector("input");

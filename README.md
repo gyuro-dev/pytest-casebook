@@ -225,6 +225,7 @@ Every row has a ready-to-run sample in [examples-en](https://github.com/gyuro-de
 | Attach your own information to cases and use the same YAML outside pytest | YAML + Python | `meta:` and `pytest_casebook.load()` | [11_meta_load](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/11_meta_load) |
 | Write golden files by hand | golden file | the body only (headers can be omitted) | [12_handwritten_golden](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/12_handwritten_golden) |
 | Skip a case with a reason / record a known bug | YAML | `skip: reason` / `xfail: reason` | [13_skip_xfail](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/13_skip_xfail) |
+| Skip cases when the environment lacks something (disk images, test data, a service) | YAML + conftest.py | `marks: [needs_disk]` + add a skip in `pytest_collection_modifyitems` (or `-m "not needs_disk"`) ([how](#skipping-by-environment)) | — |
 | Call an HTTP API and check the status and response | YAML + conftest.py | `request:` + `pytest_casebook_request` | [14_http_hook](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/14_http_hook) |
 | Test a FastAPI API together with its DB | YAML + conftest.py | `request:`, `setup:`, `expect:` + TestClient | [15_fastapi](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/15_fastapi) |
 | Test a Flask API together with its DB | YAML + conftest.py | `request:`, `setup:`, `expect:` + test_client | [16_flask](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/16_flask) |
@@ -430,6 +431,39 @@ You can select by group name, e.g. `-k Pricing`. The HTML report only shows as m
 | `params` | Rows laid over this case, one case per element ([how](#rows-of-similar-cases-params)) |
 
 Write exactly one of `command`, `call`, `request` and `manual`. Keys not in this table are errors, to catch typos. Put your own information under `meta:`.
+
+### Skipping by environment
+
+`skip:` always skips. To skip only when the environment lacks something (a disk image, test data, a service), YAML alone is not enough: `marks:` takes mark names only, so it cannot express `skipif(condition)`. Put a mark on the cases instead, and add the skip in conftest.py:
+
+```yaml
+- group: Disk images
+  marks: [needs_disk]
+  cases: [...]
+```
+
+```python
+# conftest.py
+from pathlib import Path
+import pytest
+
+
+def pytest_collection_modifyitems(config, items):
+    if not Path("data/disk.img").exists():
+        skip = pytest.mark.skip(reason="data/disk.img is missing")
+        for item in items:
+            if "needs_disk" in item.keywords:
+                item.add_marker(skip)
+```
+
+- casebook cases are ordinary pytest items, so any pytest technique for skipping works on them (the reason is shown in the HTML result column)
+- To leave the cases out instead of skipping them, deselect them with `-m "not needs_disk"` (deselected cases do not appear in the report)
+- Register the mark in the ini to avoid pytest's unknown-mark warning:
+
+```toml
+[tool.pytest.ini_options]
+markers = ["needs_disk: needs data/disk.img"]
+```
 
 ### Rows of similar cases (params)
 
@@ -888,6 +922,7 @@ Things that commonly trip people up on the first run.
 
 - **No cases are collected (collected 0 items)** — the file name must match one of the `casebook_files` patterns (`casebook_*.yaml`, `casebook_*.yml`, `*.casebook.yaml`, `*.casebook.yml`); a file like `mycases.yaml` is silently ignored. Rename the file, or add a pattern to `casebook_files` ([ini options](#ini-options))
 - **Garbled output on Windows** — the command under test writes cp932 or another non-UTF-8 encoding; set `casebook_encoding` to that encoding ([ini options](#ini-options)). When the child process is Python, its output is already forced to `casebook_encoding` via `PYTHONIOENCODING`
+- **pytest's own output is garbled in Git Bash or the VS Code terminal on Windows** (including casebook's Japanese messages such as 「書き直した期待出力」) — Python writes to a pipe or terminal in the locale encoding (cp932), while these terminals expect UTF-8. Set `PYTHONUTF8=1` (or `PYTHONIOENCODING=utf-8`) in the environment. This is not specific to casebook, and cmd.exe shows the output correctly
 - **A `\` disappears from `command:`** — a string `command:` is split like a shell command, so `\` is lost. Write a list to keep it: `command: ['C:\data\in.csv']`
 - **A value with `: ` or ` #` breaks the YAML** — quote the whole value, e.g. `description: "setup: explanation"`. Editor validation catches this as you type ([Editor completion and validation](#editor-completion-and-validation))
 - **"The golden file … does not exist"** — the first run needs `pytest --casebook-update` to create the golden files; review them before committing ([Golden files](#golden-files))
