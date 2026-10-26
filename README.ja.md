@@ -661,7 +661,9 @@ apple x 3 = 324 円
 
 ini に `casebook_golden_description = true` を書くと、`--casebook-update` が書く期待出力ファイルの `# case:` の直後に、`# description: <ケースの description>` の行が入ります（description のあるケースだけ。複数行の description は1行にします）。\
 ほかの `#` の説明の行と同じく比べないので、設定を入れても、既存のファイルが失敗したり書き直されたりはしません。\
-既存のファイルには、次に書き直されたときにこの行が入ります。全部をすぐ作り直すときは、期待出力の置き場所のディレクトリを消して `--casebook-update` を実行します。
+既存のファイルには、次に書き直されたときにこの行が入ります。\
+既存のファイル全部にすぐ入れるときは、`pytest --casebook-update-headers` を実行します。結果が同じ期待出力ファイルのヘッダーを書き直します（結果が違うファイルは、書き直さずに失敗します）。\
+比べるのは結果だけなので、ヘッダーを省いて手で書いた期待出力ファイルも、`--casebook-update` が書くのと同じ形に書き直されます。
 
 ### HTTP の API (request)
 
@@ -1011,7 +1013,8 @@ pytest がテストの場所として受け取るので、JUnit XML（xunit1）�
 
 | オプション | 内容 |
 |---|---|
-| `--casebook-update` | 期待出力ファイルを、今の出力で書き直す（結果が変わったものだけ。`expect:` のケースは比べるだけ。最後に書き直したファイルの一覧を出す） |
+| `--casebook-update` | 期待出力ファイルを、今の出力で書き直す（結果が変わったものだけ。`expect:` のケースは比べるだけ。最後に書き直したファイルの一覧を出す。結果のヘッダーが変わったファイルには `exit_code 0 → 2` のような注記が付く） |
+| `--casebook-update-headers` | 結果が同じ期待出力ファイルの、ヘッダー（`# case:`・`# description:` など）を書き直し、`--casebook-update` と同じく一覧を出す。結果が違うファイルは失敗する。`--casebook-update` と一緒に付けたときは効かない |
 | `--casebook-html=PATH` | 結果を HTML に出力する |
 
 オプションの名前はすべて `--casebook-` で始めています。\
@@ -1023,7 +1026,7 @@ pytest がテストの場所として受け取るので、JUnit XML（xunit1）�
 |---|---|---|
 | `casebook_files` | `casebook_*.yaml` `casebook_*.yml` `*.casebook.yaml` `*.casebook.yml` | 集めるファイル名のパターン |
 | `casebook_golden_dir` | `golden` | 期待出力ファイルの置き場所。その下に、ケースファイル名（拡張子なし）のディレクトリを作る |
-| `casebook_golden_description` | `false` | `--casebook-update` が書く期待出力ファイルに、ケースの `description:` を `# description:` の行として書く |
+| `casebook_golden_description` | `false` | `--casebook-update`・`--casebook-update-headers` が書く期待出力ファイルに、ケースの `description:` を `# description:` の行として書く |
 | `casebook_levels` | `Category` `Subcategory` `Item`（`casebook_lang` が `ja` なら `大項目` `中項目` `小項目`） | 階層の呼び名 |
 | `casebook_command_prefix` | （なし） | command の前に付ける引数 |
 | `casebook_encoding` | `utf-8` | command の出力の文字コード |

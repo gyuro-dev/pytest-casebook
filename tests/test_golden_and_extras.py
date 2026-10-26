@@ -185,6 +185,43 @@ def test_update_list_header_in_english(project: pytest.Pytester) -> None:
     )
 
 
+# 引数1つ目を出力し、2つ目の終了コードで終わるコマンド
+ECHO_EXIT = f"""
+command_prefix:
+  - {PY}
+  - -c
+  - "import sys; print(sys.argv[1]); sys.exit(int(sys.argv[2]))"
+cases:
+  - name: fails
+    command: "a {{fails}}"
+  - name: text
+    command: "{{text}} 0"
+  - name: hand
+    command: "{{hand}}"
+"""
+
+
+def test_update_list_notes_result_header_changes(project: pytest.Pytester) -> None:
+    """結果のヘッダー（exit_code）が変わったファイルは、一覧で `(exit_code 0 → 2)` と注記する。"""
+    write_casebook(project, ECHO_EXIT.format(fails=0, text="a", hand="a 0"))
+    project.runpytest("--casebook-update").assert_outcomes(passed=4)
+    # 手で書いた、# exit_code: のない期待出力（終了コードは比べていない）
+    write_golden_file(project, "hand", "a\n")
+    write_casebook(project, ECHO_EXIT.format(fails=2, text="b", hand="b 3"))
+    result = project.runpytest("--casebook-update")
+    result.assert_outcomes(passed=4)
+    result.stdout.fnmatch_lines(
+        [
+            "*書き直した期待出力: 3 件*",
+            "golden/casebook_calc/fails.txt (exit_code 0 → 2)",
+            # 出力だけが変わったものと、古いファイルが終了コードを比べていなかったものは注記しない
+            "golden/casebook_calc/hand.txt",
+            "golden/casebook_calc/text.txt",
+        ]
+    )
+    assert "# exit_code: 2\n" in golden(project, "fails")
+
+
 # =============================================================================
 # async の関数・skip / xfail
 # =============================================================================
@@ -416,6 +453,69 @@ def test_multiline_description_becomes_one_line(project: pytest.Pytester) -> Non
         "--casebook-update", "-o", "casebook_golden_description=true"
     ).assert_outcomes(passed=2)
     assert "# description: 1 と 2 を 足す\n" in golden(project, "add")
+
+
+# =============================================================================
+# --casebook-update-headers（結果が同じファイルのヘッダーを書き直す）
+# =============================================================================
+
+
+def test_update_headers_adds_description(project: pytest.Pytester) -> None:
+    write_casebook(project, DESCRIBED_CASES)
+    project.runpytest("--casebook-update").assert_outcomes(passed=3)
+    plain = golden(project, "plain")
+    result = project.runpytest(
+        "--casebook-update-headers", "-o", "casebook_golden_description=true"
+    )
+    result.assert_outcomes(passed=3)
+    result.stdout.fnmatch_lines(["*書き直した期待出力: 1 件*", "golden/casebook_calc/add.txt"])
+    assert golden(project, "add").startswith("# case: add\n# description: 1 と 2 を足す\n")
+    # description のないケースは変わらない
+    assert golden(project, "plain") == plain
+    # もう一度実行しても、書き直すものはない
+    result = project.runpytest(
+        "--casebook-update-headers", "-o", "casebook_golden_description=true"
+    )
+    result.assert_outcomes(passed=3)
+    assert "書き直した期待出力" not in result.stdout.str()
+
+
+def test_update_headers_fails_when_results_differ(project: pytest.Pytester) -> None:
+    write_casebook(project, DESCRIBED_CASES)
+    path = write_golden_file(project, "add", "4\n")
+    write_golden_file(project, "plain", "7\n")
+    result = project.runpytest(
+        "--casebook-update-headers", "-o", "casebook_golden_description=true"
+    )
+    result.assert_outcomes(passed=2, failed=1)
+    result.stdout.fnmatch_lines(["*出力が期待と異なります*"])
+    # 結果が違うファイルはそのまま。結果が同じ plain は書き直す
+    assert path.read_text(encoding="utf-8") == "4\n"
+    assert golden(project, "plain").startswith("# case: plain\n")
+    result.stdout.fnmatch_lines(["*書き直した期待出力: 1 件*", "golden/casebook_calc/plain.txt"])
+
+
+def test_update_headers_rewrites_handwritten_golden(project: pytest.Pytester) -> None:
+    write_casebook(project, CLI)
+    write_golden_file(project, "hello", "こんにちは\n")
+    write_golden_file(project, "hello_exit3", "こんにちは\n")
+    # ふつうの実行では、手で書いた形のまま
+    project.runpytest().assert_outcomes(passed=3)
+    assert golden(project, "hello") == "こんにちは\n"
+    # 結果だけを比べるので、ヘッダーを省いたファイルは --casebook-update と同じ形になる
+    project.runpytest("--casebook-update-headers").assert_outcomes(passed=3)
+    hello = golden(project, "hello")
+    assert hello.startswith("# case: hello\n# command: ")
+    assert hello.endswith("# exit_code: 0\n----- stdout -----\nこんにちは\n")
+    assert "# exit_code: 3\n" in golden(project, "hello_exit3")
+
+
+def test_update_headers_does_not_create_missing_golden(project: pytest.Pytester) -> None:
+    write_casebook(project, CLI)
+    result = project.runpytest("--casebook-update-headers")
+    result.assert_outcomes(passed=1, failed=2)
+    result.stdout.fnmatch_lines(["*期待出力 golden/casebook_calc/hello.txt がありません*"])
+    assert not (project.path / "golden").exists()
 
 
 # =============================================================================
