@@ -6,6 +6,14 @@
 # 実起動の試験。main のルールで必須にするのは「CI result」の1つだけ。macOS は weekly.yml で
 # 週に1回確かめる（GitHub の macOS の runner は数が少なく、その待ちで PR を止めないため）。
 #
+# Docs-only changes (*.md, docs/images/, .github/pages/) skip the heavy jobs (the test matrix
+# and the end-to-end test); lint and zizmor always run. The workflow itself always runs, so the
+# required "CI result" is always reported (with paths-ignore it would never arrive and the PR
+# could not be merged).
+# ドキュメントだけの変更（*.md・docs/images/・.github/pages/）では、重いジョブ（テストの
+# matrix と実起動の試験）を飛ばす。lint と zizmor は毎回動かす。ワークフローそのものは毎回
+# 動かすので、必須の「CI result」は必ず届く（paths-ignore だと届かず、PR をマージできない）。
+#
 # Security / 安全のために:
 # - every action is pinned to a commit SHA (tags can be moved) / Actions は commit の SHA で固定する
 # - the token is read-only by default; each job gets only what it needs
@@ -34,6 +42,46 @@ env:
   PYYAML_FORCE_LIBYAML: "0"
 
 jobs:
+  changes:
+    name: Detect code changes
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      # code=false only when every changed file is documentation. Anything unknown (a manual
+      # run, the first push of a branch) counts as code, so the heavy jobs run
+      # 変わったファイルがすべてドキュメントのときだけ code=false。分からないとき（手動の実行、
+      # ブランチの最初の push）はコードとみなして、重いジョブを動かす
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            range="$BASE...HEAD"
+          elif [ "$EVENT" = push ] && [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ]; then
+            range="$BEFORE..HEAD"
+          else
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          code=false
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            case "$file" in
+              *.md | docs/images/* | .github/pages/*) echo "docs: $file" ;;
+              *) echo "code: $file"; code=true ;;
+            esac
+          done < <(git diff --name-only "$range")
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
   lint:
     name: Lint (ruff, mypy)
     runs-on: ubuntu-24.04
@@ -67,6 +115,8 @@ jobs:
 
   test:
     name: Test (${{ matrix.os }}, Python ${{ matrix.python }}, pytest ${{ matrix.pytest }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -100,6 +150,8 @@ jobs:
 
   integration:
     name: End-to-end test (PostgreSQL + API with Docker)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -118,17 +170,26 @@ jobs:
   result:
     name: CI result
     if: always()
-    needs: [lint, zizmor, test, integration]
+    needs: [changes, lint, zizmor, test, integration]
     runs-on: ubuntu-24.04
     permissions: {}
     steps:
+      # "skipped" is fine (the heavy jobs skip on docs-only changes), but the change detection
+      # itself must succeed: if it failed, the heavy jobs were skipped for the wrong reason
+      # skipped はよい（ドキュメントだけの変更では重いジョブを飛ばす）が、変更の判定そのものは
+      # 成功していなければならない（失敗していれば、重いジョブは間違った理由で飛ばされている）
       - env:
+          CHANGES: ${{ needs.changes.result }}
           RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |
-          echo "results: $RESULTS"
+          echo "changes: $CHANGES / results: $RESULTS"
+          if [ "$CHANGES" != "success" ]; then
+            echo "the change detection did not succeed: $CHANGES"
+            exit 1
+          fi
           for r in $RESULTS; do
-            if [ "$r" != "success" ]; then
-              echo "a required job did not succeed: $r"
-              exit 1
-            fi
+            case "$r" in
+              success | skipped) ;;
+              *) echo "a required job did not succeed: $r"; exit 1 ;;
+            esac
           done
