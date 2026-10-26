@@ -549,8 +549,10 @@ def _make_orphan_test(doc: CasebookDoc) -> Callable[..., None]:
         orphans = _find_orphans(doc, _sibling_docs(request.config, doc))
         if orphans:
             message = MESSAGES[request.config.getini("casebook_lang")]["golden_orphans"]
+            # ほかのメッセージと同じく、YAML のディレクトリからの相対パスで示す
+            golden_dir = Path(os.path.relpath(doc.golden_dir, doc.path.parent)).as_posix()
             pytest.fail(
-                message.format(yaml=doc.path.name, golden_dir=doc.golden_dir, orphans=orphans),
+                message.format(yaml=doc.path.name, golden_dir=golden_dir, orphans=orphans),
                 pytrace=False,
             )
 
@@ -1092,7 +1094,8 @@ def _compare_golden(
         # ヘッダーだけの違いで差分が出ないようにする）
         if (expected is None or golden_differs(expected, got)) and write_golden(path, actual):
             _record_update(request, path, _result_changes(expected, got))
-            _refresh_report_golden(request, doc, case)
+        # 書かなかったときも読み直す（同じファイルを使う前のケースが書いていることがある）
+        _refresh_report_golden(request, doc, case)
         return
     if expected is None:
         pytest.fail(m["golden_missing"].format(name=case.name, label=label), pytrace=False)
@@ -1168,9 +1171,20 @@ def _result_changes(expected: GoldenContent | None, got: GoldenContent) -> str:
     0 で終わっていたコマンドが失敗するようになったのに、それが新しい期待出力として
     黙って書かれるのを、一覧で目立たせるため。古いファイルに書いていないキーは、
     比べていなかったので注記しない。新しい結果から消えたキーは `-` と書く。
+
+    新しいファイルは、失敗の結果（0 でない exit_code・400 以上の status・raises）を
+    持つときだけ ` (new, exit_code 1)` のように注記する（初回にまとめて作るときに、
+    失敗した結果が期待として残るのに気づけるように）。
     """
     if expected is None:
-        return ""
+        notable = [
+            f"{key} {value}"
+            for key, value in got.results.items()
+            if (key == "exit_code" and value != "0") or (key == "status" and value >= "400")
+        ]
+        if "raises" in got.sections:
+            notable.append("raises")
+        return f" (new, {', '.join(notable)})" if notable else ""
     changes = [
         f"{key} {old} → {got.results.get(key, '-')}"
         for key, old in expected.results.items()
@@ -1262,7 +1276,8 @@ def _match_response(
                 problems += found
                 shown.append(("json", serialize(actual)))
     if "body" in expect:
-        problems += match_text(expect["body"], normalizer(response.body), "body", lang)
+        expected_body = _normalized_expect(expect["body"], normalizer)
+        problems += match_text(expected_body, normalizer(response.body), "body", lang)
     # ヘッダー名は大文字小文字を区別しない
     headers = {name.lower(): value for name, value in response.headers.items()}
     for name, expected in (expect.get("headers") or {}).items():
@@ -1270,8 +1285,27 @@ def _match_response(
             problems.append(m["missing_header"].format(name=name))
         else:
             actual_header = normalizer(headers[name.lower()])
+            expected = _normalized_expect(expected, normalizer)
             problems += match_text(expected, actual_header, f"headers.{name}", lang)
     return problems
+
+
+def _normalized_expect(expected: Any, normalizer: Normalizer) -> Any:
+    """
+    文字列の期待値（そのままの文字列と {contains}）に、実際の出力と同じ置き換えを当てる。
+
+    実際の出力は比べる前に正規化される（日時は `<datetime>` になるなど）ので、YAML に
+    `stdout: "1970-01-01T00:00:00"` のように書いた固定の値も同じ形にしないと、
+    「期待 "1970-01-01T00:00:00" / 実際 "<datetime>"」で合わなくなる。
+    {regex} は正規表現そのものなので触らない。
+    """
+    if isinstance(expected, str):
+        return normalizer.replace(expected)
+    if isinstance(expected, dict):
+        ((matcher, pattern),) = expected.items()
+        if matcher.lstrip("$") == "contains":
+            return {matcher: normalizer.replace(pattern)}
+    return expected
 
 
 def _compare_expect(case: Case, outcome: _Outcome, normalizer: Normalizer, lang: str) -> None:
@@ -1292,7 +1326,8 @@ def _compare_expect(case: Case, outcome: _Outcome, normalizer: Normalizer, lang:
         )
     for key in ("stdout", "stderr"):
         if key in expect:
-            problems += match_text(expect[key], normalizer(getattr(outcome, key)), key, lang)
+            expected = _normalized_expect(expect[key], normalizer)
+            problems += match_text(expected, normalizer(getattr(outcome, key)), key, lang)
 
     if outcome.response is not None:
         problems += _match_response(expect, outcome.response, normalizer, value_of, shown, lang)

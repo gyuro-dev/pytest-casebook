@@ -72,14 +72,25 @@ jobs:
             echo "code=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # Read the diff into a variable first: a failing git diff inside `< <(...)` would not
+          # stop the step and would look like "no changes" (code=false)
+          # 差分は先に変数に受ける（`< <(...)` の中で git diff が失敗しても step は止まらず、
+          # 変更なし＝code=false に見えてしまう）
+          if ! files="$(git diff --name-only "$range")" || [ -z "$files" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           code=false
           while IFS= read -r file; do
             [ -z "$file" ] && continue
             case "$file" in
+              # CHANGELOG.md is checked by tests/test_release_notes.py, so it counts as code
+              # CHANGELOG.md は tests/test_release_notes.py が確かめるので、コードとして扱う
+              CHANGELOG.md) echo "code: $file"; code=true ;;
               *.md | docs/images/* | .github/pages/*) echo "docs: $file" ;;
               *) echo "code: $file"; code=true ;;
             esac
-          done < <(git diff --name-only "$range")
+          done <<< "$files"
           echo "code=$code" >> "$GITHUB_OUTPUT"
 
   lint:

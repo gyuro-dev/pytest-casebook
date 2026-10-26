@@ -341,3 +341,34 @@ def test_orphan_check_ignores_unreadable_siblings(project: pytest.Pytester) -> N
     (project.path / "casebook_binary.yaml").write_bytes(b"\xff\xfe\x00broken")
     project.runpytest("--casebook-update", "casebook_calc.yaml").assert_outcomes(passed=2)
     project.runpytest("casebook_calc.yaml").assert_outcomes(passed=2)
+
+
+def test_expect_text_gets_the_same_replacements_as_the_output(project: pytest.Pytester) -> None:
+    """
+    expect の文字列と {contains} には、実際の出力と同じ置き換えを当ててから比べる
+    （固定の日時を書いたのに、実際が <datetime> になって合わない、とならないように）。
+    """
+    write_casebook(
+        project,
+        rf"""
+        normalize:
+          - {{pattern: 'ord-\d+', replace: '<order-id>'}}
+        cases:
+          - name: exact
+            command: [{sys.executable}, -c, "print('at 1970-01-01T00:00:00 ord-12')"]
+            expect: {{stdout: "at 1970-01-01T00:00:00 ord-12"}}
+          - name: contains
+            command: [{sys.executable}, -c, "print('at 1970-01-01T00:00:00 ord-12')"]
+            expect: {{stdout: {{contains: "1970-01-01T00:00:00 ord-99"}}}}
+          - name: regex_is_left_alone
+            command: [{sys.executable}, -c, "print('at 1970-01-01T00:00:00')"]
+            expect: {{stdout: {{regex: '<datetime>$'}}}}
+        """,
+    )
+    project.runpytest().assert_outcomes(passed=4)
+
+
+def test_nan_matches_nan() -> None:
+    assert match_value(float("nan"), float("nan"), "x") == []
+    assert match_value({"v": float("nan")}, {"v": float("nan")}, "x") == []
+    assert match_value(float("nan"), 1.0, "x")

@@ -33,6 +33,7 @@ from pathlib import Path
 
 from .messages import MESSAGES
 from .model import Case, one_line
+from .normalize import show_controls
 
 # 比べない（説明のための）ヘッダー。description は ini の casebook_golden_description を
 # 有効にしたときだけ書くが、どの版で書かれたファイルでも説明として読み飛ばす
@@ -182,8 +183,8 @@ def unified_diff(expected: str, actual: str, label: str, lang: str = "en") -> st
     m = MESSAGES[lang]
     return "".join(
         difflib.unified_diff(
-            expected.splitlines(keepends=True),
-            actual.splitlines(keepends=True),
+            show_controls(expected).splitlines(keepends=True),
+            show_controls(actual).splitlines(keepends=True),
             fromfile=m["diff_expected"].format(label=label),
             tofile=m["golden_actual"],
         )
