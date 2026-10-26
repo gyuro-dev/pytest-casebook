@@ -22,7 +22,8 @@ Excel の試験項目表と自動テストを別々に管理して、内容が�
 - ケースを**大項目・中項目・小項目**（何階層でも）に分け、**試験項目表の HTML** を出す（日本語・英語。[書き方](#html-レポート)）
 
 `pytest --casebook-html=report.html` を実行すると、YAML に書いたケースが、次のような試験項目表として出力されます。\
-グループの階層の列は縦に結合され、前提条件・期待結果・結果が1行に並びます。\n期待出力ファイルの中身も、ケースの行の下に折りたたんで出ます（下の図では price_one.txt を開いています）。
+グループの階層の列は縦に結合され、前提条件・期待結果・結果が1行に並びます。\
+期待出力ファイルの中身も、ケースの行の下に折りたたんで出ます（下の図では price_one.txt を開いています）。
 
 ![試験項目表の HTML レポート](docs/images/report-top.png)
 
@@ -122,7 +123,7 @@ title: hello コマンド
 command_prefix: [hello]              # どのケースでも先頭に付ける部分（確かめたいコマンド）
 
 cases:
-  - name: greet                         # ケース名（英数字・_・-・.）
+  - name: greet                         # ケース名: 日本語を含む文字・数字・_ - .（先頭は . と - 以外）
     description: 名前を渡すとあいさつする
     command: --name 佐藤
 
@@ -157,7 +158,7 @@ uv run pytest --casebook-update
 ```
 
 比べるのは結果（`# exit_code:` と `-----` の見出しより下）だけです。\
-`# case:` や `# command:` の行は読む人のための説明なので、期待出力ファイルを手で書くときは省けます。\
+`# case:` や `# command:` の行は読む人のための説明なので、期待出力ファイルを手で書くときは省けます（`# …:` の行は、ファイルの一番上に置いたままにします）。\
 出力が1つだけなら、本文だけを書けば十分です（[期待出力ファイルの書き方](#期待出力ファイル)）。
 
 ```text
@@ -251,7 +252,7 @@ pytest-html は要りません（一緒に使うこともできます）。
 ほとんどのことは YAML だけでできます。\
 DB を使うときや、テスト用の環境を渡したいときだけ、conftest.py に hook（決まった名前の関数）を足します。
 
-表の各行には、そのまま動くサンプルを [examples](examples) に用意しています（サンプルの列が「—」の行を除く）。\
+表の各行には、そのまま動くサンプルを [examples](examples) に用意しています（サンプルの列が「—」の行には、サンプルはありません）。\
 サンプルのディレクトリをコピーして、名前を書き換えるところから始められます。
 
 | やりたいこと | 書く場所 | 書くもの | サンプル |
@@ -280,7 +281,7 @@ DB を使うときや、テスト用の環境を渡したいときだけ、conft
 | 試験の前に、これから確かめる項目の表を出したい | コマンドライン | `pytest --collect-only --casebook-html=plan.html`（結果は「未実施」。[やり方](#html-レポート)） | — |
 | HTML レポートを出しながら、カバレッジも測りたい | pyproject.toml ＋ コマンドライン | pytest-cov と、coverage.py の `patch = ["subprocess"]`（[やり方](#カバレッジを測る)） | — |
 
-全部を組み合わせた例は [examples/shop](examples/shop) にあります。
+[examples/shop](examples/shop) は、コマンド・関数・例外・ファイル・DB・状態を、1つの小さなお店のアプリで組み合わせた例です（3階層のグループ。期待出力ファイルと `expect:` を並べています）。
 
 日時（`2026-10-19T12:34:56Z` など）と UUID は、何もしなくても `<datetime>` / `<uuid>` に置き換えてから比べます。
 
@@ -408,7 +409,8 @@ def pytest_casebook_observe(target, env):
 {"item": "apple", "count": 10}
 ```
 
-[examples/shop](examples/shop) に、ここまでの書き方をすべて使ったサンプルがあります（CLI・関数・3階層・状態・ファイル・sqlite の DB）。
+[examples/shop](examples/shop) は、コマンド・関数・例外・ファイル・DB・状態を、1つの小さなお店のアプリで組み合わせた例です（3階層のグループ。期待出力ファイルと `expect:` を並べています）。\
+次のように実行します。
 
 ```bash
 uv run pytest examples/shop -o casebook_lang=ja --casebook-html=reports/shop.html
@@ -438,6 +440,12 @@ timeout: 5                     # 中のケースの既定の timeout（グルー
 cases: [...]                   # ケースまたはグループのリスト
 ```
 
+`command_prefix` とケースの `command` は、どちらも文字列（shell と同じ書き方で区切る。`store add 'apple pie'`）か、リスト（区切らずにそのまま渡す。`[store, add, apple pie]`）で書けます。\
+2つの書き方は混ぜて使えます。\
+`command_prefix: store` と `command: [add, 'apple pie']` なら、`store add "apple pie"` を実行します。\
+`command_prefix` は、いつも `command` の引数の前に付きます。\
+ファイルに `command_prefix` がなければ、ini の `casebook_command_prefix` を使います。
+
 ### グループ
 
 ```yaml
@@ -459,9 +467,9 @@ HTML レポートの階層の列は、実際に使われているグループの
 
 | キー | 内容 |
 |---|---|
-| `name` | ケース名。期待出力のファイル名になるので、英数字・`_`・`-`・`.` で書く（先頭に `.` と `-` は使えない）。大文字小文字だけが違う名前（`Add` と `add`）は、Windows で期待出力が同じファイルになるため誤り |
+| `name` | ケース名。期待出力のファイル名になるので、文字（日本語も可）・数字・`_`・`-`・`.` で書く（先頭に `.` と `-` は使えない）。大文字小文字だけが違う名前（`Add` と `add`）は、Windows で期待出力が同じファイルになるため誤り |
 | `description` | 確認する内容 |
-| `command` | CLI として実行する引数（shell と同じ書き方で区切る）。`command_prefix` の後ろに付く。`command_prefix` があれば空文字（`""`）でもよい。リスト（`[a, 'b c']`）で書くと区切らずにそのまま渡す |
+| `command` | CLI として実行する引数。`command_prefix` の後ろに付く。文字列は shell と同じ書き方で区切り、リスト（`[a, 'b c']`）は区切らずにそのまま渡す。`command_prefix` とは書き方を混ぜてよい（`command_prefix: store` と `command: [add, 'apple pie']` など）。`command_prefix` があれば空文字（`""`）でもよい |
 | `stdin` | command の標準入力 |
 | `stdin_file` | 標準入力に渡すファイル。YAML のディレクトリからの相対パス。`stdin` とは同時に書けない |
 | `timeout` | ケースを時間切れで失敗にするまでの秒数（`command`・`call`・`request`。[詳しく](#時間の上限-timeout)） |
@@ -473,7 +481,7 @@ HTML レポートの階層の列は、実際に使われているグループの
 | `result` | 手動のケースを手で確かめた結果。`passed`・`failed`・`skipped` のどれか |
 | `state` | 状態名（`states:` に書いたもの） |
 | `setup` | 前提条件。`files`（作業ディレクトリに置くファイル）と、`pytest_casebook_setup` に渡す内容 |
-| `observe` | 実行後に取り出す対象。`files`（組み込み）か、`pytest_casebook_observe` で取り出す名前 |
+| `observe` | 実行後に取り出して、期待出力ファイルに残す対象。`files`（組み込み）か、`pytest_casebook_observe` で取り出す名前（[書き方](#実行後の値-observe)） |
 | `expect` | 期待結果。書いたときは期待出力ファイルを使わない（手動のケースでは文章。文字列か文字列のリスト） |
 | `marks` | pytest のマーク名のリスト |
 | `skip` / `xfail` | 止める理由 / 失敗すると分かっている理由。ターミナル（`pytest -rsx`）と HTML の結果の列に出る |
@@ -485,41 +493,281 @@ HTML レポートの階層の列は、実際に使われているグループの
 上の表にないキーは、打ち間違いを見つけるためにエラーにします。\
 自分で使う情報は `meta:` の中に書きます。
 
-### 環境によってスキップする
+### 期待結果 (expect)
 
-`skip:` は、いつでもスキップします。\
-環境に足りないもの（ディスクイメージ・テスト用のデータ・サービス）があるときだけスキップしたいときは、YAML だけでは書けません。\
-`marks:` に書けるのはマークの名前だけなので、`skipif(条件)` は書けないためです。\
-ケースにマークを付け、スキップは conftest.py で足します。
+ケースは、期待出力ファイルか `expect:` のどちらか一方と比べます。\
+両方を組み合わせることはできません。\
+`expect:` にどれか1つでもキーを書くと、そのケースは YAML の期待結果で確かめるケースに切り替わり、期待出力ファイルは読みも書きもしません。\
+比べるのは `expect:` に書いた項目だけです。\
+そのため、「`exit_code` は YAML に書き、stdout は期待出力ファイルで比べる」ことはできません。\
+両方を確かめるときは、両方を `expect:` に書くか、`expect:` を書かずに期待出力ファイルに両方を残します。
 
 ```yaml
-- group: ディスクイメージ
-  marks: [needs_disk]
-  cases: [...]
+expect:
+  exit_code: 1                          # command
+  stdout: ""                            # 文字列は完全一致（末尾の改行は問わない）
+  stderr: {contains: エラー}             # {contains: ...} 含む / {regex: ...} 正規表現
+  return: {item: apple}                 # call。辞書は書いたキーだけを比べる
+  raises: ValueError                    # call。型名（継承した型も一致）
+  db.stock: [{item: apple, count: 7}]   # 上記以外は observe の対象
 ```
+
+| 項目 | 書けるケース | 比べ方 |
+|---|---|---|
+| `exit_code` | command | 整数の完全一致 |
+| `status` | request | 整数の完全一致 |
+| `json` | request | レスポンスの本文を JSON として読み、`return` と同じ方法で比べる |
+| `body` | request | 本文の文字列。`stdout` と同じ比べ方 |
+| `headers` | request | ヘッダー名 -> 期待値。書いたヘッダーだけを、名前の大文字小文字を区別せずに比べる。値は `stdout` と同じ比べ方 |
+| `stdout` / `stderr` | command・call | 文字列なら完全一致、`{contains: ...}` なら含む、`{regex: ...}` なら正規表現 |
+| `return` | call | 辞書は書いたキーだけ、リストは件数と各要素、それ以外は完全一致 |
+| `raises` | call | 下の表のとおり |
+| 上記以外（`db.users`・`files` など） | すべて | observe の対象として取り出し（`observe:` は要らない）、`return` と同じ方法で比べる |
+
+| `raises` の書き方 | 一致する例外 |
+|---|---|
+| `ValueError` | ValueError と、それを継承した例外 |
+| `mypkg.errors.AppError` | モジュール名まで同じ型と、それを継承した例外 |
+| `Outer.Inner` | クラスの中に定義した例外 |
+| `"ValueError: 個数は1以上にしてください"` | 型は上と同じ比べ方で、メッセージは完全一致 |
+| `{contains: ...}` / `{regex: ...}` | `実際の型名: メッセージ` の文字列に含む / 正規表現に合う |
+
+call で例外が出たのに `raises` を書いていない場合は失敗にします。
+
+`return`・`json`・observe の対象（`db.*` など）の値の中では、`$` で始まる比べ方を使えます。\
+`$` を付けるのは、`contains` などのキーを本当に持つデータと区別するためです。
+
+```yaml
+expect:
+  json:
+    message: {$contains: 在庫が足りません}     # この文字列を含む
+    code: {$regex: '^E\d{3}$'}              # 正規表現に合う
+  db.users:
+    $unordered:                              # 順序を問わない（件数は同じ）
+      - {name: 鈴木}
+      - {name: 佐藤}
+  db.history:
+    $includes:                               # この要素があればよい（ほかにあってもよい）
+      - {action: withdraw}
+```
+
+知らない比べ方（`$unorderd` などの打ち間違い）は、YAML を読む時点でエラーにします。
+
+期待出力ファイルと `expect:` の使い分けの目安です。
+
+- 長い出力（表やツリーの表示）や、実行後のテーブル全体を残したいとき → 期待出力ファイル（`--casebook-update` で作れます）
+- 決まった値だけを確かめたいとき → `expect:`（YAML を読めば仕様が分かります。`--casebook-update` では書き換えません）
+
+### 期待出力ファイル
+
+`--casebook-update` は、次の形で期待出力ファイルを作ります。
+
+```text
+# case: price_member
+# command: shop price apple 3 --member
+# state: sold_out
+# exit_code: 0
+----- stdout -----
+apple x 3 = 324 円
+----- stderr -----
+（stderr があるときだけ）
+```
+
+比べるのは、結果である `# exit_code:`（request なら `# status:`）と、`----- 見出し -----` より下の本文だけです。
+
+- `# case:`・`# description:`・`# command:`・`# call:`・`# args:`・`# kwargs:`・`# request:`・`# state:` の行は説明で、比べません。\
+  手で書くときは省けます
+- `# キー: 値` のヘッダーは、ファイルの一番上に書きます。
+  - ヘッダーは、これらのヘッダーでない行が出たところで終わります
+  - そのため、手で書いたファイルが空行や自由なコメント（`# メモ`）で始まると、そのあとの `# exit_code:` は本文として読まれます
+  - メモは、ケースの `description:` など、ほかの場所に書いてください
+- ヘッダーの値は1行です（複数行のコマンドも1行にして書きます）
+- `# exit_code:` / `# status:` を書かなければ、終了コード / ステータスは比べません
+- 見出しのない本文は、command なら stdout、call なら return、request なら json として扱います。\
+  出力が1つだけなら、本文だけを書けば十分です
+- 書いていない見出しは、空であることを期待します（stderr の見出しがなければ、stderr は空でなければなりません）
+- `--casebook-update` は、結果が変わったときだけファイルを書き直します。\
+  手で書いた期待出力ファイルは、結果が同じなら書き方を変えません
+- ケースを消したのに期待出力ファイルだけが残っていると、`golden_orphans` という確認が失敗します（サブディレクトリの中も見ます）。
+  - 調べるのは `.txt` と、`golden:` で使った拡張子（`.json` など）のファイルです。\
+    置き場所に置いたメモなど、ほかのファイルは知らせません
+  - 同じディレクトリのほかのケースファイルが使う期待出力は「使われている」と数えるので、複数の YAML で `golden_dir:` を共有しても、消し忘れと誤って報告しません
+  - この確認を止めるときは、YAML に `check_orphans: false` を書きます
+
+ini に `casebook_golden_description = true` を書くと、`--casebook-update` が書く期待出力ファイルの `# case:` の直後に、`# description: <ケースの description>` の行が入ります（description のあるケースだけ。複数行の description は1行にします）。\
+ほかの `#` の説明の行と同じく比べないので、設定を入れても、既存のファイルが失敗したり書き直されたりはしません。\
+既存のファイルには、次に書き直されたときにこの行が入ります。\
+既存のファイル全部にすぐ入れるときは、`pytest --casebook-update-headers` を実行します。\
+結果が同じ期待出力ファイルのヘッダーを書き直します（結果が違うファイルは、書き直さずに失敗します）。\
+比べるのは結果だけなので、ヘッダーを省いて手で書いた期待出力ファイルも、`--casebook-update` が書くのと同じ形に書き直されます。
+
+### 実行後の値 (observe)
+
+`observe:` には、実行後に取り出して**期待出力ファイルに残す**値（DB のテーブル、ファイルなど）を書きます。\
+期待出力ファイルと比べるケースのためのものです。\
+`expect:` のあるケースでは、`observe:` を書かずに、確かめたい対象を `expect:` に直接書きます（例: `expect: {db.users: [...]}`）。\
+それだけで自動で取り出して比べます。\
+`expect:` のあるケースで、`expect:` にない対象を `observe:` に書くと誤りにします（取り出した値を捨てることになるためです）。
+
+- 期待出力ファイルを使うケースでは、取り出した値を `----- observe: <対象> -----` として期待出力に加えます
+- リスト（DB の行など）は、1件を1行の JSON にして書きます。\
+  値が変わったときに差分がその行だけに出ます
+- `files` は、作業ディレクトリのファイルとその中身を `=== ファイル名 ===` の形で書きます。\
+  改行は LF にそろえて比べます。\
+  UTF-8 で読めないファイル（画像など）は、大きさと SHA-256 の1行にします
+
+### 前提条件 (setup)
+
+- `setup`（またはケースの状態）に `files:` を書くと、ケースごとに新しい一時的な作業ディレクトリを作ってファイルを置き、command も call もそのディレクトリで実行します。\
+  空の `files: {}` でも同じで、ケースごとにまっさらなディレクトリで動かせます（空でない出力先を受け付けない CLI など）。\
+  `files:` を書かなければ（`observe:` / `expect:` で `files` を取り出すときを除き）、YAML のディレクトリで実行します。\
+  出力に出る作業ディレクトリのパスは `<tmp>` に置き換えます
+- 作業ディレクトリは YAML のディレクトリとは別の場所です。\
+  YAML の隣のスクリプトなどは `{casebook_dir}` を付けて指します（例: `command_prefix: [python, "{casebook_dir}/tool.py"]`）。\
+  出力に出る YAML のディレクトリのパスは `{casebook_dir}` に置き換えます
+- `files` 以外の内容は `pytest_casebook_setup` に渡します。\
+  hook がコンテキストマネージャを返すと、observe のあとにそれを抜けます（後片付けに使えます）
+- 準備はケースごとにやり直すので、前のケースの影響は残りません
+
+### 状態 (states)
+
+状態は「名前を付けた setup:」です。\
+何度も使う前提条件に名前を付けておき、ケースやグループの `state:` で選びます。
+
+```yaml
+states:
+  default:
+    flags: {maintenance: false}
+  maintenance:
+    flags: {maintenance: true}
+    files: {notice.txt: メンテナンス中}
+
+cases:
+  - name: during_maintenance
+    state: maintenance
+    setup:
+      db: {users: [...]}     # 状態の内容に重ね、同じキーはケースの値で上書きする
+    call: app:handle
+```
+
+- 選んだ状態の内容にケースの `setup:` を重ね（同じキーはケースの値で上書きする）、`pytest_casebook_setup` の `data` に渡します（`files` はファイル名ごとに重ねます）
+- `state:` を書かないケースは `default` の状態になります
+- 状態の書き方は `setup:` と同じで、書き方の誤りも同じように確かめます
+
+### HTTP の API (request)
+
+`request:` のケースは、HTTP のリクエストを送ってレスポンスを確かめます。\
+pytest-casebook 自身は HTTP を送りません。\
+送るのは conftest.py の `pytest_casebook_request` で、フレームワークのテスト用クライアントを使います。
+
+```yaml
+request_defaults:                     # どのリクエストにも付けるヘッダー
+                                      # （ケースで上書きできる。ヘッダー名の大文字小文字は問わない）
+  headers: {Authorization: Bearer test-token}
+
+cases:
+  - name: list
+    request: GET /todos                # "メソッド パス" の文字列（メソッドを省くと GET）
+  - name: create
+    request:                           # マッピングでも書ける
+      method: POST
+      path: /todos
+      query: {notify: true}            # /todos?notify=true
+      headers: {X-Request-Id: abc}
+      json: {title: 牛乳を買う}         # JSON 以外を送るときは body: に文字列
+    expect:
+      status: 201
+      json: {title: 牛乳を買う}         # 書いたキーだけを比べる
+      headers: {Location: {regex: '^/todos/\d+$'}}
+      db.todos: [{title: 牛乳を買う}]   # DB の変化も確かめられる
+```
+
+conftest.py には、リクエストを送る hook を書きます。\
+よく使うクライアント向けのアダプターを `pytest_casebook.http` に用意しています（アダプターはクライアントのメソッドを呼ぶだけで、フレームワークを import しません）。
 
 ```python
-# conftest.py
-from pathlib import Path
-import pytest
+from pytest_casebook.http import send_with_httpx_client, send_with_werkzeug_client
 
 
-def pytest_collection_modifyitems(config, items):
-    if not Path("data/disk.img").exists():
-        skip = pytest.mark.skip(reason="data/disk.img がない")
-        for item in items:
-            if "needs_disk" in item.keywords:
-                item.add_marker(skip)
+# FastAPI / Starlette の TestClient（httpx の API を持つクライアント）
+def pytest_casebook_request(request, env):
+    return send_with_httpx_client(env.client, request)
+
+
+# Flask の test_client（Werkzeug のクライアント）
+def pytest_casebook_request(request, env):
+    return send_with_werkzeug_client(env.client, request)
 ```
 
-- casebook のケースはふつうの pytest のテストなので、pytest のスキップのやり方はどれも使えます（理由は HTML の結果の列に出ます）
-- スキップではなく、実行の対象から外したいときは `-m "not needs_disk"` で除きます（除いたケースはレポートに出ません）
-- 知らないマークの警告が出ないよう、ini にマークを登録しておきます
+ほかのクライアントでも、`request`（`HttpRequest`: `method`・`path`・`url`・`query`・`headers`・`json`・`body`）を読んで `HttpResponse(status, body, headers)` を返せば使えます（[14_http_hook](examples/14_http_hook) はフレームワークなしの例です）。
 
-```toml
-[tool.pytest.ini_options]
-markers = ["needs_disk: data/disk.img が必要"]
+期待出力ファイルには `# status:` と、本文が JSON なら整形した `----- json -----`、それ以外なら `----- body -----` を書きます。\
+レスポンスのヘッダーは期待出力ファイルに書きません（日時などで毎回変わるため）。\
+ヘッダーを確かめるときは `expect:` の `headers` を使います。
+
+### 例外の扱い
+
+- **call**: 例外は戻り値と同じく結果として扱います。\
+  期待出力では `----- raises -----` に `型名: メッセージ` を書きます。\
+  例外が出たあとでも observe を行うので、「例外になったとき DB が変わらないこと」も確かめられます
+- **command（別プロセス）**: CLI の中の例外は、終了コード（Python なら 1）と stderr のトレースバックとして比べます
+- **command（`run_in_process`）**: `sys.exit()` は終了コードに、それ以外の例外は終了コード 1 と stderr の `型名: メッセージ` にします。\
+  `run_in_process(main, argv, traceback=True)` ならトレースバック全体を stderr に書きます（行番号やパスが入るため、期待出力は変わりやすくなります）
+- `setup` や `observe` の hook の中で出た例外は、比べる対象ではなくテストのエラーになります
+
+### 時間の上限 (timeout)
+
+`timeout:` は、ケースの実行にかけてよい秒数です。\
+ケースごとに書くほか、ファイルの先頭やグループにも書けます（中のケースの既定になります）。\
+いちばん近い値が使われ、ケース自身の `timeout:` が最優先です。\
+手動のケース（`manual:`）は実行しないので、既定の値は当てはまりません。
+
+- **command（別プロセス）**: プロセスを止めて、ケースを失敗にします
+- **call / request**: 関数（request では `pytest_casebook_request` hook）を別のスレッドで動かし、時間内に終わらなければケースを失敗にします。\
+  Python ではスレッドを止められないため、**関数は止まりません**。\
+  終わるまで裏で動き続けます。\
+  時間切れのあとの出力は取り込まず、pytest の終了も妨げません。\
+  止まったテストを本当に打ち切りたいときは、[pytest-timeout](https://pypi.org/project/pytest-timeout/) を使ってください
+- **command（`run_in_process`）**: `pytest_casebook_run_command` hook に任せます（`case.timeout` で秒数を読めます）
+
+`timeout:` がなければ、関数と hook は今までどおりテストと同じスレッドで動きます。\
+書いたときは別のスレッドで動くので、作ったスレッドでしか使えないもの（`pytest_casebook_setup` で作った `sqlite3` の接続など）は使えません。\
+呼ぶ前に設定したコンテキスト変数（`contextvars`）は、関数からも読めます（複製を渡します）。
+
+カレントディレクトリは、プロセス全体で1つです。\
+`setup.files` のある（`files: {}` も含む）ケースは専用の作業ディレクトリで動き、ケースが終わるとそのディレクトリから戻ります。\
+そのため、時間切れのあとも動き続ける関数からは、カレントディレクトリが別の場所（元のディレクトリや、あとのケースの作業ディレクトリ）に見えます。\
+相対パスでファイルを読み書きすると、違うファイルを触ることがあります（あとのケースの `files` の比較が壊れることもあります）。\
+時間切れになりうる関数では、絶対パスを使ってください。
+
+### 手動のケース (manual)
+
+自動にできない確認（画面を目で見る、印刷した帳票を確かめるなど）も、同じ試験項目表に載せられます。\
+`command` / `call` / `request` の代わりに、`manual:` に手順を書きます。\
+手動のケースは実行しません。
+
+```yaml
+cases:
+  - group: 印刷
+    cases:
+      - name: print_layout
+        description: 印刷しても表が崩れない
+        manual: |
+          印刷プレビューを開く
+          罫線がページをまたいで途切れていないか目で確かめる
+        expect:                      # 期待結果を文章で書く（文字列かリスト）
+          - 2ページ目の先頭にも見出し行が出る
+          - 罫線が途切れない
+        result: passed               # 手で確かめた結果（確かめるまでは書かない）
 ```
+
+- HTML レポートでは、ケース名の下に手順を、期待結果の列に `expect:` を出します
+- `result:` がなければ、pytest ではスキップになり、レポートには**手動**と出ます。\
+  手で確かめる残りを見るのに使えます
+- `result: passed` / `failed` / `skipped` と書くと、pytest でもレポートでも、成功・失敗・スキップになります。\
+  結果を書き込めば、`pytest --casebook-html=…` を1回実行するだけで、自動と手動の結果がそろった試験項目表になります
+- `setup:` と `state:` は書けますが、前提条件として表に出すだけです（`pytest_casebook_setup` hook は呼びません）。\
+  `args`・`kwargs`・`stdin`・`stdin_file`・`timeout`・`env`・`observe`・`golden` は書けません
 
 ### 表の形で同じケースを並べる (params)
 
@@ -597,6 +845,42 @@ cases:
 - ファイル全体の `meta:` は `doc.meta` で読めます
 - pytest の `-m` で絞り込みたいときは、`meta:` ではなく `marks:` を使います
 
+### 環境によってスキップする
+
+`skip:` は、いつでもスキップします。\
+環境に足りないもの（ディスクイメージ・テスト用のデータ・サービス）があるときだけスキップしたいときは、YAML だけでは書けません。\
+`marks:` に書けるのはマークの名前だけなので、`skipif(条件)` は書けないためです。\
+ケースにマークを付け、スキップは conftest.py で足します。
+
+```yaml
+- group: ディスクイメージ
+  marks: [needs_disk]
+  cases: [...]
+```
+
+```python
+# conftest.py
+from pathlib import Path
+import pytest
+
+
+def pytest_collection_modifyitems(config, items):
+    if not Path("data/disk.img").exists():
+        skip = pytest.mark.skip(reason="data/disk.img がない")
+        for item in items:
+            if "needs_disk" in item.keywords:
+                item.add_marker(skip)
+```
+
+- casebook のケースはふつうの pytest のテストなので、pytest のスキップのやり方はどれも使えます（理由は HTML の結果の列に出ます）
+- スキップではなく、実行の対象から外したいときは `-m "not needs_disk"` で除きます（除いたケースはレポートに出ません）
+- 知らないマークの警告が出ないよう、ini にマークを登録しておきます
+
+```toml
+[tool.pytest.ini_options]
+markers = ["needs_disk: data/disk.img が必要"]
+```
+
 ### pytest の外から読む (load)
 
 テストと同じ YAML を、デモ用のスクリプトなど pytest の外でも使えます。
@@ -634,264 +918,10 @@ print(pytest_casebook.run_case(doc, case, hooks=conftest), end="")  # 文字列�
 `run_case()` はケースを1件実行し（setup hook → 操作 → observe → 後片付け）、`--casebook-update` が書くものと同じ文字列を返します。\
 実行ごとに変わる値は正規化済みで、比較はしません。\
 `hooks` は、`pytest_casebook_*` という名前の関数を持つオブジェクトやモジュールで、import した conftest モジュールをそのまま渡せます。\
-手動のケースは実行できず、`pytest_casebook.CasebookRunError` を出します。コマンドが見つからないなどの実行の誤りも同じです。\
+hook には pytest で動かすときと同じ引数が渡りますが、`config` だけは None です。\
+手動のケースは実行できず、`pytest_casebook.CasebookRunError` を出します。\
+コマンドが見つからないなどの実行の誤りも同じです。\
 `call:` のケースの例外や 0 以外の終了コードは誤りではなく、返す文字列の中に入ります。
-
-### 前提条件 (setup)
-
-- `setup`（またはケースの状態）に `files:` を書くと、ケースごとに新しい一時的な作業ディレクトリを作ってファイルを置き、command も call もそのディレクトリで実行します。\
-  空の `files: {}` でも同じで、ケースごとにまっさらなディレクトリで動かせます（空でない出力先を受け付けない CLI など）。\
-  `files:` を書かなければ（`observe:` / `expect:` で `files` を取り出すときを除き）、YAML のディレクトリで実行します。\
-  出力に出る作業ディレクトリのパスは `<tmp>` に置き換えます
-- 作業ディレクトリは YAML のディレクトリとは別の場所です。\
-  YAML の隣のスクリプトなどは `{casebook_dir}` を付けて指します（例: `command_prefix: [python, "{casebook_dir}/tool.py"]`）。\
-  出力に出る YAML のディレクトリのパスは `{casebook_dir}` に置き換えます
-- `files` 以外の内容は `pytest_casebook_setup` に渡します。\
-  hook がコンテキストマネージャを返すと、observe のあとにそれを抜けます（後片付けに使えます）
-- 準備はケースごとにやり直すので、前のケースの影響は残りません
-
-### 状態 (states)
-
-状態は「名前を付けた setup:」です。\
-何度も使う前提条件に名前を付けておき、ケースやグループの `state:` で選びます。
-
-```yaml
-states:
-  default:
-    flags: {maintenance: false}
-  maintenance:
-    flags: {maintenance: true}
-    files: {notice.txt: メンテナンス中}
-
-cases:
-  - name: during_maintenance
-    state: maintenance
-    setup:
-      db: {users: [...]}     # 状態の内容に重ね、同じキーはケースの値で上書きする
-    call: app:handle
-```
-
-- 選んだ状態の内容にケースの `setup:` を重ね（同じキーはケースの値で上書きする）、`pytest_casebook_setup` の `data` に渡します（`files` はファイル名ごとに重ねます）
-- `state:` を書かないケースは `default` の状態になります
-- 状態の書き方は `setup:` と同じで、書き方の誤りも同じように確かめます
-
-### 期待出力ファイル
-
-`--casebook-update` は、次の形で期待出力ファイルを作ります。
-
-```text
-# case: price_member
-# command: shop price apple 3 --member
-# state: sold_out
-# exit_code: 0
------ stdout -----
-apple x 3 = 324 円
------ stderr -----
-（stderr があるときだけ）
-```
-
-比べるのは、結果である `# exit_code:`（request なら `# status:`）と、`----- 見出し -----` より下の本文だけです。
-
-- `# case:`・`# command:`・`# call:`・`# args:`・`# kwargs:`・`# state:` の行は説明で、比べません。\
-  手で書くときは省けます
-- `# exit_code:` / `# status:` を書かなければ、終了コード / ステータスは比べません
-- 見出しのない本文は、command なら stdout、call なら return、request なら json として扱います。\
-  出力が1つだけなら、本文だけを書けば十分です
-- 書いていない見出しは、空であることを期待します（stderr の見出しがなければ、stderr は空でなければなりません）
-- `--casebook-update` は、結果が変わったときだけファイルを書き直します。\
-  手で書いた期待出力ファイルは、結果が同じなら書き方を変えません
-- ケースを消したのに期待出力ファイルだけが残っていると、`golden_orphans` という確認が失敗します（サブディレクトリの中も見ます）。\
-  調べるのは `.txt` と、`golden:` で使った拡張子（`.json` など）のファイルです。置き場所に置いたメモなど、ほかのファイルは知らせません。\
-  同じディレクトリのほかのケースファイルが使う期待出力は「使われている」と数えるので、複数の YAML で `golden_dir:` を共有しても、消し忘れと誤って報告しません。\
-  この確認を止めるときは、YAML に `check_orphans: false` を書きます
-
-ini に `casebook_golden_description = true` を書くと、`--casebook-update` が書く期待出力ファイルの `# case:` の直後に、`# description: <ケースの description>` の行が入ります（description のあるケースだけ。複数行の description は1行にします）。\
-ほかの `#` の説明の行と同じく比べないので、設定を入れても、既存のファイルが失敗したり書き直されたりはしません。\
-既存のファイルには、次に書き直されたときにこの行が入ります。\
-既存のファイル全部にすぐ入れるときは、`pytest --casebook-update-headers` を実行します。結果が同じ期待出力ファイルのヘッダーを書き直します（結果が違うファイルは、書き直さずに失敗します）。\
-比べるのは結果だけなので、ヘッダーを省いて手で書いた期待出力ファイルも、`--casebook-update` が書くのと同じ形に書き直されます。
-
-### HTTP の API (request)
-
-`request:` のケースは、HTTP のリクエストを送ってレスポンスを確かめます。\
-pytest-casebook 自身は HTTP を送りません。\
-送るのは conftest.py の `pytest_casebook_request` で、フレームワークのテスト用クライアントを使います。
-
-```yaml
-request_defaults:                     # どのリクエストにも付けるヘッダー
-                                      # （ケースで上書きできる。ヘッダー名の大文字小文字は問わない）
-  headers: {Authorization: Bearer test-token}
-
-cases:
-  - name: list
-    request: GET /todos                # "メソッド パス" の文字列（メソッドを省くと GET）
-  - name: create
-    request:                           # マッピングでも書ける
-      method: POST
-      path: /todos
-      query: {notify: true}            # /todos?notify=true
-      headers: {X-Request-Id: abc}
-      json: {title: 牛乳を買う}         # JSON 以外を送るときは body: に文字列
-    expect:
-      status: 201
-      json: {title: 牛乳を買う}         # 書いたキーだけを比べる
-      headers: {Location: {regex: '^/todos/\d+$'}}
-      db.todos: [{title: 牛乳を買う}]   # DB の変化も確かめられる
-```
-
-conftest.py には、リクエストを送る hook を書きます。\
-よく使うクライアント向けのアダプターを `pytest_casebook.http` に用意しています（アダプターはクライアントのメソッドを呼ぶだけで、フレームワークを import しません）。
-
-```python
-from pytest_casebook.http import send_with_httpx_client, send_with_werkzeug_client
-
-
-# FastAPI / Starlette の TestClient（httpx の API を持つクライアント）
-def pytest_casebook_request(request, env):
-    return send_with_httpx_client(env.client, request)
-
-
-# Flask の test_client（Werkzeug のクライアント）
-def pytest_casebook_request(request, env):
-    return send_with_werkzeug_client(env.client, request)
-```
-
-ほかのクライアントでも、`request`（`HttpRequest`: `method`・`path`・`url`・`query`・`headers`・`json`・`body`）を読んで `HttpResponse(status, body, headers)` を返せば使えます（[14_http_hook](examples/14_http_hook) はフレームワークなしの例です）。
-
-期待出力ファイルには `# status:` と、本文が JSON なら整形した `----- json -----`、それ以外なら `----- body -----` を書きます。\
-レスポンスのヘッダーは期待出力ファイルに書きません（日時などで毎回変わるため）。\
-ヘッダーを確かめるときは `expect:` の `headers` を使います。
-
-### 実行後の値 (observe)
-
-- 期待出力ファイルを使うケースでは、取り出した値を `----- observe: <対象> -----` として期待出力に加えます
-- リスト（DB の行など）は、1件を1行の JSON にして書きます。\
-  値が変わったときに差分がその行だけに出ます
-- `files` は、作業ディレクトリのファイルとその中身を `=== ファイル名 ===` の形で書きます。\
-  改行は LF にそろえて比べます。\
-  UTF-8 で読めないファイル（画像など）は、大きさと SHA-256 の1行にします
-
-### 期待結果 (expect)
-
-```yaml
-expect:
-  exit_code: 1                          # command
-  stdout: ""                            # 文字列は完全一致（末尾の改行は問わない）
-  stderr: {contains: エラー}             # {contains: ...} 含む / {regex: ...} 正規表現
-  return: {item: apple}                 # call。辞書は書いたキーだけを比べる
-  raises: ValueError                    # call。型名（継承した型も一致）
-  db.stock: [{item: apple, count: 7}]   # 上記以外は observe の対象
-```
-
-| 項目 | 書けるケース | 比べ方 |
-|---|---|---|
-| `exit_code` | command | 整数の完全一致 |
-| `status` | request | 整数の完全一致 |
-| `json` | request | レスポンスの本文を JSON として読み、`return` と同じ方法で比べる |
-| `body` | request | 本文の文字列。`stdout` と同じ比べ方 |
-| `headers` | request | ヘッダー名 -> 期待値。書いたヘッダーだけを、名前の大文字小文字を区別せずに比べる。値は `stdout` と同じ比べ方 |
-| `stdout` / `stderr` | command・call | 文字列なら完全一致、`{contains: ...}` なら含む、`{regex: ...}` なら正規表現 |
-| `return` | call | 辞書は書いたキーだけ、リストは件数と各要素、それ以外は完全一致 |
-| `raises` | call | 下の表のとおり |
-| 上記以外（`db.users`・`files` など） | すべて | observe の対象として取り出し、`return` と同じ方法で比べる |
-
-| `raises` の書き方 | 一致する例外 |
-|---|---|
-| `ValueError` | ValueError と、それを継承した例外 |
-| `mypkg.errors.AppError` | モジュール名まで同じ型と、それを継承した例外 |
-| `Outer.Inner` | クラスの中に定義した例外 |
-| `"ValueError: 個数は1以上にしてください"` | 型は上と同じ比べ方で、メッセージは完全一致 |
-| `{contains: ...}` / `{regex: ...}` | `実際の型名: メッセージ` の文字列に含む / 正規表現に合う |
-
-call で例外が出たのに `raises` を書いていない場合は失敗にします。
-
-`return`・`json`・observe の対象（`db.*` など）の値の中では、`$` で始まる比べ方を使えます。\
-`$` を付けるのは、`contains` などのキーを本当に持つデータと区別するためです。
-
-```yaml
-expect:
-  json:
-    message: {$contains: 在庫が足りません}     # この文字列を含む
-    code: {$regex: '^E\d{3}$'}              # 正規表現に合う
-  db.users:
-    $unordered:                              # 順序を問わない（件数は同じ）
-      - {name: 鈴木}
-      - {name: 佐藤}
-  db.history:
-    $includes:                               # この要素があればよい（ほかにあってもよい）
-      - {action: withdraw}
-```
-
-知らない比べ方（`$unorderd` などの打ち間違い）は、YAML を読む時点でエラーにします。
-
-期待出力ファイルと `expect:` の使い分けの目安です。
-
-- 長い出力（表やツリーの表示）や、実行後のテーブル全体を残したいとき → 期待出力ファイル（`--casebook-update` で作れます）
-- 決まった値だけを確かめたいとき → `expect:`（YAML を読めば仕様が分かります。`--casebook-update` では書き換えません）
-
-### 例外の扱い
-
-- **call**: 例外は戻り値と同じく結果として扱います。\
-  期待出力では `----- raises -----` に `型名: メッセージ` を書きます。\
-  例外が出たあとでも observe を行うので、「例外になったとき DB が変わらないこと」も確かめられます
-- **command（別プロセス）**: CLI の中の例外は、終了コード（Python なら 1）と stderr のトレースバックとして比べます
-- **command（`run_in_process`）**: `sys.exit()` は終了コードに、それ以外の例外は終了コード 1 と stderr の `型名: メッセージ` にします。\
-  `run_in_process(main, argv, traceback=True)` ならトレースバック全体を stderr に書きます（行番号やパスが入るため、期待出力は変わりやすくなります）
-- `setup` や `observe` の hook の中で出た例外は、比べる対象ではなくテストのエラーになります
-
-### 時間の上限 (timeout)
-
-`timeout:` は、ケースの実行にかけてよい秒数です。\
-ケースごとに書くほか、ファイルの先頭やグループにも書けます（中のケースの既定になります）。\
-いちばん近い値が使われ、ケース自身の `timeout:` が最優先です。\
-手動のケース（`manual:`）は実行しないので、既定の値は当てはまりません。
-
-- **command（別プロセス）**: プロセスを止めて、ケースを失敗にします
-- **call / request**: 関数（request では `pytest_casebook_request` hook）を別のスレッドで動かし、時間内に終わらなければケースを失敗にします。\
-  Python ではスレッドを止められないため、**関数は止まりません**。\
-  終わるまで裏で動き続けます。\
-  時間切れのあとの出力は取り込まず、pytest の終了も妨げません。\
-  止まったテストを本当に打ち切りたいときは、[pytest-timeout](https://pypi.org/project/pytest-timeout/) を使ってください
-- **command（`run_in_process`）**: `pytest_casebook_run_command` hook に任せます（`case.timeout` で秒数を読めます）
-
-`timeout:` がなければ、関数と hook は今までどおりテストと同じスレッドで動きます。\
-書いたときは別のスレッドで動くので、作ったスレッドでしか使えないもの（`pytest_casebook_setup` で作った `sqlite3` の接続など）は使えません。\
-呼ぶ前に設定したコンテキスト変数（`contextvars`）は、関数からも読めます（複製を渡します）。
-
-カレントディレクトリは、プロセス全体で1つです。\
-`setup.files` のある（`files: {}` も含む）ケースは専用の作業ディレクトリで動き、ケースが終わるとそのディレクトリから戻ります。\
-そのため、時間切れのあとも動き続ける関数からは、カレントディレクトリが別の場所（元のディレクトリや、あとのケースの作業ディレクトリ）に見えます。\
-相対パスでファイルを読み書きすると、違うファイルを触ることがあります（あとのケースの `files` の比較が壊れることもあります）。\
-時間切れになりうる関数では、絶対パスを使ってください。
-
-### 手動のケース (manual)
-
-自動にできない確認（画面を目で見る、印刷した帳票を確かめるなど）も、同じ試験項目表に載せられます。\
-`command` / `call` / `request` の代わりに、`manual:` に手順を書きます。\
-手動のケースは実行しません。
-
-```yaml
-cases:
-  - group: 印刷
-    cases:
-      - name: print_layout
-        description: 印刷しても表が崩れない
-        manual: |
-          印刷プレビューを開く
-          罫線がページをまたいで途切れていないか目で確かめる
-        expect:                      # 期待結果を文章で書く（文字列かリスト）
-          - 2ページ目の先頭にも見出し行が出る
-          - 罫線が途切れない
-        result: passed               # 手で確かめた結果（確かめるまでは書かない）
-```
-
-- HTML レポートでは、ケース名の下に手順を、期待結果の列に `expect:` を出します
-- `result:` がなければ、pytest ではスキップになり、レポートには**手動**と出ます。\
-  手で確かめる残りを見るのに使えます
-- `result: passed` / `failed` / `skipped` と書くと、pytest でもレポートでも、成功・失敗・スキップになります。\
-  結果を書き込めば、`pytest --casebook-html=…` を1回実行するだけで、自動と手動の結果がそろった試験項目表になります
-- `setup:` と `state:` は書けますが、前提条件として表に出すだけです（`pytest_casebook_setup` hook は呼びません）。\
-  `args`・`kwargs`・`stdin`・`stdin_file`・`timeout`・`env`・`observe`・`golden` は書けません
 
 ### hook と fixture
 
@@ -911,6 +941,7 @@ hook は、その conftest.py があるディレクトリより下の YAML の�
 | `pytest_casebook_patterns(env)` | 比べる前 | `(正規表現, 置き換え後)` のリスト |
 
 どの hook にも、`config`（pytest の Config）が渡ります。\
+pytest の外で `run_case()` から実行したときは `config` が None なので、`run_case()` と共用する hook では、None でも動くように書きます。\
 ケースの状態の名前と内容は、`case.state` と `case.state_data` で読めます。\
 ケースの `env:` の環境変数は、`case.env` で読めます。\
 別プロセスで実行するときは、子プロセスが Python なら出力の文字コードを `casebook_encoding` にそろえます（`PYTHONIOENCODING` を設定します）。
@@ -1034,7 +1065,9 @@ VS Code の YAML 拡張（Red Hat）など yaml-language-server を使うエデ�
 ```
 
 `main` は開発中の最新の版を指します。\
-入れた版に合わせるときは、`main` の代わりにその版のタグを使います（例: `https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/v0.2.0/src/pytest_casebook/casebook.schema.json`）。
+入れた版に合わせるときは、`main` の代わりにその版のタグ `v<版>` を使います（例: 0.7.1 なら `https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/v0.7.1/src/pytest_casebook/casebook.schema.json`）。\
+古いタグのスキーマは新しいキーを知らないので、そのキーを誤りとして示します。\
+いつも最新のスキーマを使うときは、`main` の URL を使います。
 
 コメントを書かずにすべてのケースファイルに当てるときは、VS Code の設定（settings.json）に書きます。
 
