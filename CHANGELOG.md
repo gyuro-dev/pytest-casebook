@@ -53,6 +53,18 @@ incompatible change raises the minor version).
   a text `expect:` on a `command:` / `call:` / `request:` case and a mapping `expect:` on a
   `manual:` case are schema errors too. The remaining intended differences are listed in
   `tests/test_schema_matrix.py`.
+- A string or `{contains}` in `expect:` (`stdout`, `stderr`, `body`, `headers`) gets the same
+  replacements as the actual output (`normalize:`, the built-in datetime and UUID) before
+  comparing, so `stdout: 1970-01-01T00:00:00` matches instead of failing against
+  `<datetime>`. `{regex}` is left alone.
+- The `--casebook-update` list annotates a new golden file whose result is a failure
+  (`(new, exit_code 3)`, `(new, status 404)`, `(new, raises)`), so a run that created the
+  golden files does not hide a failing case among the successes.
+- Failure diffs show control characters such as ANSI colors as `\x1b[32m` instead of
+  writing them raw to the terminal, where a one-code difference was invisible.
+- The `golden_orphans` message shows the golden directory relative to the case file, like
+  the other messages.
+- `expect:` matches `.nan` against a NaN result.
 
 ### Fixed
 
@@ -89,6 +101,13 @@ incompatible change raises the minor version).
 - Under pytest-xdist, `--casebook-update --casebook-html` left the golden contents out of the
   report (the row kept the information from the setup phase). The report now takes the
   information from the latest phase.
+- With `--casebook-update --casebook-html`, a case sharing its golden file with an earlier
+  case showed no golden contents in the report (the earlier case had already written the
+  file, so this one did not re-read it).
+- The JSON Schema requires a non-empty `pattern` in `normalize:`, as loading does.
+- The CI job that skips the heavy jobs for docs-only changes treated a failing `git diff`
+  as "no changes"; it now runs everything in that case, and `CHANGELOG.md` counts as code
+  because `tests/test_release_notes.py` checks it.
 
 ## [0.7.1] - 2026-10-26
 

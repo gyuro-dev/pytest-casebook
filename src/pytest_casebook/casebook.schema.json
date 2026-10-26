@@ -66,6 +66,7 @@
         "properties": {
           "pattern": {
             "type": "string",
+            "minLength": 1,
             "description": "Regular expression / 正規表現"
           },
           "replace": {

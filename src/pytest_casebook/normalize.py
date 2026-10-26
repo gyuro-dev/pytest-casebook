@@ -16,6 +16,18 @@ BUILTIN_PATTERNS: list[tuple[re.Pattern[str], str]] = [
 ]
 
 
+_CONTROL_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+
+
+def show_controls(text: str) -> str:
+    """
+    制御文字（ANSI の色の ESC など）を `\\x1b` の形にして見えるようにする（改行とタブは残す）。
+
+    失敗の差分に生のまま出すと、端末が色として解釈して、どこが違うのか見えないため。
+    """
+    return _CONTROL_RE.sub(lambda m: f"\\x{ord(m.group()):02x}", text)
+
+
 def compile_patterns(
     patterns: Iterable[tuple[str | re.Pattern[str], str]],
 ) -> list[tuple[re.Pattern[str], str]]:

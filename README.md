@@ -455,7 +455,7 @@ expect:
 | `json` | request | the response body read as JSON, compared like `return` |
 | `body` | request | the body text, compared like `stdout` |
 | `headers` | request | header name -> expected value. Only the headers you write, names case-insensitive. Values compared like `stdout` |
-| `stdout` / `stderr` | command, call | a string is an exact match, `{contains: ...}` contains, `{regex: ...}` regex |
+| `stdout` / `stderr` | command, call | a string is an exact match, `{contains: ...}` contains, `{regex: ...}` regex. A string and `{contains}` get the same replacements as the actual output (`normalize:`, the built-in datetime and UUID) before comparing (`stdout: 1970-01-01T00:00:00` is compared as `<datetime>`) |
 | `return` | call | dicts: only the keys you write; lists: count and each item; others: exact match |
 | `raises` | call | see the table below |
 | anything else (`db.users`, `files`, …) | all | read as an observe target (no `observe:` needed) and compared like `return` |

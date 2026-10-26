@@ -489,9 +489,9 @@ def load(
         (defaults to `casebook_lang` with `ini=True`, else `en`)
     :param ini: read the `casebook_*` options from the pytest configuration file
     :return: the validated contents of the case file
-    :raises CasebookError: when the file cannot be read as YAML or is written incorrectly
+    :raises CasebookError: when the file is not UTF-8, cannot be read as YAML, or is written
+        incorrectly
     :raises OSError: when the file cannot be read
-    :raises UnicodeDecodeError: when the file is not UTF-8
     :raises ValueError: when `lang` is not supported, or an ini value is invalid
 
     ケースファイルを読み込む。pytest の外（デモ用のスクリプトなど）から、
@@ -530,9 +530,8 @@ def load(
         （省略時は、`ini=True` なら `casebook_lang`、それ以外は `en`）
     :param ini: pytest の設定ファイルから `casebook_*` の設定を読む
     :return: 検証済みのケースファイルの内容
-    :raises CasebookError: YAML として読めない、または書き方に誤りがあるとき
+    :raises CasebookError: UTF-8 でない、YAML として読めない、または書き方に誤りがあるとき
     :raises OSError: ファイルを読めないとき
-    :raises UnicodeDecodeError: UTF-8 でないとき
     :raises ValueError: `lang` が対応していない言語のとき、または ini の値が正しくないとき
     """
     # 絶対パスにしておく。"casebook_x.yaml" のような相対パスのままだと、YAML のディレクトリが

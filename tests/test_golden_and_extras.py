@@ -643,3 +643,60 @@ def test_html_shows_the_golden_written_by_update(project: pytest.Pytester) -> No
     path.write_text("4\n", encoding="utf-8")
     project.runpytest("--casebook-update", f"--casebook-html={report}")
     assert shown() == ["----- return -----\n3"]
+
+
+def test_update_list_notes_failing_results_of_new_golden(project: pytest.Pytester) -> None:
+    """新しく作る期待出力でも、失敗の結果（0 でない exit_code・raises）は一覧で注記する。"""
+    write_casebook(
+        project,
+        f"""
+        cases:
+          - name: ok
+            command: [{PY}, -c, "print('a')"]
+          - name: fails
+            command: [{PY}, -c, "import sys; sys.exit(3)"]
+          - name: raises
+            call: calc:divide
+            args: [1, 0]
+        """,
+    )
+    result = project.runpytest("--casebook-update")
+    result.assert_outcomes(passed=4)
+    result.stdout.fnmatch_lines(
+        [
+            "*書き直した期待出力: 3 件*",
+            "golden/casebook_calc/fails.txt (new, exit_code 3)",
+            "golden/casebook_calc/ok.txt",
+            "golden/casebook_calc/raises.txt (new, raises)",
+        ]
+    )
+
+
+def test_html_shows_a_shared_golden_for_every_case(project: pytest.Pytester) -> None:
+    """同じ期待出力ファイルを使うケースは、先のケースが書いたあとのケースでも内容が出る。"""
+    write_casebook(
+        project,
+        """
+        cases:
+          - {name: three, call: calc:add, args: [1, 2], golden: sum.txt}
+          - {name: also_three, call: calc:add, args: [2, 1], golden: sum.txt}
+        """,
+    )
+    report = project.path / "report.html"
+    project.runpytest("--casebook-update", f"--casebook-html={report}").assert_outcomes(passed=3)
+    page = report.read_text(encoding="utf-8")
+    shown = re.findall(r"<details class='golden'.*?<pre>(.*?)</pre>", page, re.S)
+    assert shown == ["----- return -----\n3", "----- return -----\n3"]
+
+
+def test_diff_shows_control_characters(project: pytest.Pytester) -> None:
+    """ANSI の色などの制御文字は、差分では \x1b の形で見せる（端末が色として食べないように）。"""
+    write_casebook(
+        project,
+        f"cases:\n  - name: color\n    command: [{PY}, -c, \"print('\\x1b[32mok\\x1b[0m')\"]\n",
+    )
+    write_golden_file(project, "color", "\x1b[31mok\x1b[0m\n")
+    result = project.runpytest()
+    result.assert_outcomes(passed=1, failed=1)
+    result.stdout.fnmatch_lines([r"-\x1b[[]31mok\x1b[[]0m", r"+\x1b[[]32mok\x1b[[]0m"])
+    assert "\x1b[" not in result.stdout.str()

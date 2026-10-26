@@ -80,6 +80,10 @@ def _expect(base: dict[str, Any], key: str) -> Builder:
     return lambda v: {"cases": [{**base, "expect": {key: v}}]}
 
 
+def _param(key: str) -> Builder:
+    return lambda v: {"cases": [{**CALL, "params": [{"name": "p", key: v}]}]}
+
+
 # (場所, キー) -> その値を入れた YAML 全体を作る関数
 TARGETS: dict[tuple[str, str], Builder] = {
     **{("file", k): _top(k) for k in pytest_casebook.model._TOP_KEYS - {"cases"}},
@@ -123,6 +127,20 @@ TARGETS: dict[tuple[str, str], Builder] = {
     ("expect", "observe target"): lambda v: {
         "cases": [{**CALL, "observe": ["db.users"], "expect": {"db.users": v}}]
     },
+    # 一段深いところ
+    ("normalize", "pattern"): lambda v: {"normalize": [{"pattern": v}], "cases": [CALL]},
+    ("normalize", "replace"): lambda v: {
+        "normalize": [{"pattern": "x", "replace": v}],
+        "cases": [CALL],
+    },
+    ("normalize", "item"): lambda v: {"normalize": [v], "cases": [CALL]},
+    ("request_defaults", "headers"): lambda v: {
+        "request_defaults": {"headers": v},
+        "cases": [REQUEST],
+    },
+    ("param", "name"): lambda v: {"cases": [{**CALL, "params": [{"name": v}]}]},
+    **{("param", k): _param(k) for k in ("description", "args", "expect", "timeout", "skip")},
+    ("param", "item"): lambda v: {"cases": [{**CALL, "params": [v]}]},
 }
 
 
@@ -177,6 +195,13 @@ KNOWN_DIFFERENCES: dict[tuple[str, str], tuple[Callable[[Any], bool], str]] = {
     ("expect", "observe target"): (
         lambda v: isinstance(v, dict) and bool(v),
         "observe の対象の期待値は、読み込みでは比べ方（$contains など）の書き方も確かめる",
+    ),
+    ("param", "expect"): (
+        lambda v: isinstance(v, str | list),
+        (
+            "params の要素の expect: が文章でよいかは、テンプレートの操作（manual かどうか）で"
+            "決まる。Schema は要素だけを見るので分からない"
+        ),
     ),
 }
 

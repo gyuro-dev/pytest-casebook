@@ -15,11 +15,13 @@ YAML の `expect:` に書いた期待値と、実際の結果を比べる。
 from __future__ import annotations
 
 import difflib
+import math
 import re
 from collections.abc import Callable
 from typing import Any
 
 from .messages import MESSAGES, error
+from .normalize import show_controls
 from .serialize import compact
 
 # 値の中に書ける比べ方
@@ -56,8 +58,8 @@ def match_text(expected: Any, actual: str, label: str, lang: str = "en") -> list
             # （keepends で比べると、最後の行どうしが1行につながってしまう）
             diff = "\n".join(
                 difflib.unified_diff(
-                    expected.splitlines(),
-                    actual.splitlines(),
+                    show_controls(expected).splitlines(),
+                    show_controls(actual).splitlines(),
                     fromfile=m["diff_expected"].format(label=label),
                     tofile=m["diff_actual"].format(label=label),
                     lineterm="",
@@ -122,6 +124,14 @@ def match_value(expected: Any, actual: Any, label: str, lang: str = "en") -> lis
         # ファイルの内容などは末尾の改行の有無を問わない（YAML の書き方で変わりやすいため）
         if expected.rstrip("\n") != actual.rstrip("\n"):
             return [_mismatch(m, label, expected, actual)]
+        return []
+    # NaN は NaN と一致させる（YAML の .nan と、Decimal("NaN") などから来た float）
+    if (
+        isinstance(expected, float)
+        and isinstance(actual, float)
+        and math.isnan(expected)
+        and math.isnan(actual)
+    ):
         return []
     # True == 1 にならないよう、真偽値は型も比べる
     if isinstance(expected, bool) != isinstance(actual, bool) or expected != actual:
