@@ -103,7 +103,7 @@ title: hello command
 command_prefix: [hello]              # prepended to every case (the command under test)
 
 cases:
-  - name: greet                         # case name (letters, digits, _ - .)
+  - name: greet                         # case name: letters (Japanese too), digits, _ - . (not starting with . or -)
     description: greets the given name
     command: --name Alice
 
@@ -135,7 +135,7 @@ For cases without `expect:` (here `greet`), `tests/golden/casebook_hello/<case n
 Hello, Alice
 ```
 
-Only the results are compared (`# exit_code:` and everything below the `-----` headings). Lines like `# case:` and `# command:` are explanations for readers, so you can omit them when writing a golden file by hand. If there is only one output, the body alone is enough (see [Golden files](#golden-files)).
+Only the results are compared (`# exit_code:` and everything below the `-----` headings). Lines like `# case:` and `# command:` are explanations for readers, so you can omit them when writing a golden file by hand (the `# …:` lines must stay at the very top of the file). If there is only one output, the body alone is enough (see [Golden files](#golden-files)).
 
 ```text
 Hello, Alice
@@ -207,7 +207,7 @@ Results are one of: passed, updated (rewritten by `--casebook-update`), manual (
 
 Most things can be done in YAML alone. Add pytest hooks to conftest.py only when you use a DB or want to pass a test environment.
 
-Every row has a ready-to-run sample in [examples-en](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en). You can start by copying a sample directory and renaming things.
+Each row has a ready-to-run sample in [examples-en](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en) (except the rows whose sample column is "—"). You can start by copying a sample directory and renaming things.
 
 | What you want to do | Where | What to write | Sample |
 |---|---|---|---|
@@ -235,7 +235,7 @@ Every row has a ready-to-run sample in [examples-en](https://github.com/gyuro-de
 | Write the sheet of what will be checked, before testing | command line | `pytest --collect-only --casebook-html=plan.html` (results are "Not run"; [how](#html-report)) | — |
 | Measure coverage while writing the HTML report | pyproject.toml + command line | pytest-cov and coverage.py's `patch = ["subprocess"]` ([how](#measuring-coverage)) | — |
 
-A sample combining everything is in [examples-en/shop](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/shop).
+[examples-en/shop](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/shop) has commands, functions, exceptions, files, a DB and states combined in one small shop app (three levels of groups; golden files and `expect:` side by side).
 
 Timestamps (e.g. `2026-10-19T12:34:56Z`) and UUIDs are replaced with `<datetime>` / `<uuid>` before comparison, without any setup.
 
@@ -358,7 +358,7 @@ Differs from the expected result:
 {"item": "apple", "count": 10}
 ```
 
-[examples-en/shop](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/shop) uses everything described so far (CLI, functions, three levels, states, files, a sqlite DB).
+[examples-en/shop](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/shop) has commands, functions, exceptions, files, a DB and states combined in one small shop app (three levels of groups; golden files and `expect:` side by side). To run it:
 
 ```bash
 uv run pytest examples-en/shop --casebook-html=reports/shop.html
@@ -388,6 +388,8 @@ timeout: 5                     # default seconds for the cases (a group's or cas
 cases: [...]                   # list of cases or groups
 ```
 
+`command_prefix` and a case's `command` each take either a string, split like a shell command (`store add 'apple pie'`), or a list, passed as is without splitting (`[store, add, apple pie]`). The two forms can be mixed: `command_prefix: store` with `command: [add, 'apple pie']` runs `store add "apple pie"`. The prefix is always placed before the command's arguments. Without `command_prefix` in the file, the ini option `casebook_command_prefix` is used.
+
 ### Groups
 
 ```yaml
@@ -408,9 +410,9 @@ You can select by group name, e.g. `-k Pricing`. The HTML report only shows as m
 
 | Key | Meaning |
 |---|---|
-| `name` | Case name. It becomes the golden file name, so use letters, digits, `_`, `-`, `.` (the first character must not be `.` or `-`). Names that differ only in letter case (such as `Add` and `add`) are errors, because their golden files collide on Windows |
+| `name` | Case name. It becomes the golden file name, so use letters (Japanese too), digits, `_`, `-`, `.`; it must not start with `.` or `-`. Names that differ only in letter case (such as `Add` and `add`) are errors, because their golden files collide on Windows |
 | `description` | What is checked |
-| `command` | Arguments to run as a CLI (split like a shell command), appended to `command_prefix`. May be empty (`""`) if `command_prefix` is set. A list (`[a, 'b c']`) is passed as is without splitting |
+| `command` | Arguments to run as a CLI, placed after `command_prefix`. A string is split like a shell command; a list (`[a, 'b c']`) is passed as is without splitting. Either form can be combined with either form of `command_prefix` (e.g. `command_prefix: store` with `command: [add, 'apple pie']`). May be empty (`""`) if `command_prefix` is set |
 | `stdin` | Standard input for the command |
 | `stdin_file` | File passed to standard input, relative to the YAML's directory (not together with `stdin`) |
 | `timeout` | Seconds before the case fails as too slow (`command`, `call` and `request`; [details](#timeouts-timeout)) |
@@ -422,7 +424,7 @@ You can select by group name, e.g. `-k Pricing`. The HTML report only shows as m
 | `result` | Result of a manual case checked by hand: `passed`, `failed` or `skipped` |
 | `state` | State name (from `states:`) |
 | `setup` | Preconditions. `files` (files placed in the working directory) and content passed to `pytest_casebook_setup` |
-| `observe` | What to read after the action. `files` (built in) or a name read by `pytest_casebook_observe` |
+| `observe` | What to read after the action and record in the golden file. `files` (built in) or a name read by `pytest_casebook_observe` ([how](#values-after-the-action-observe)) |
 | `expect` | Expected result. When present, no golden file is used (for a manual case, text: a string or a list of strings) |
 | `marks` | List of pytest mark names |
 | `skip` / `xfail` | Reason to skip / reason it is known to fail. Shown in the terminal (`pytest -rsx`) and in the HTML result column |
@@ -432,38 +434,220 @@ You can select by group name, e.g. `-k Pricing`. The HTML report only shows as m
 
 Write exactly one of `command`, `call`, `request` and `manual`. Keys not in this table are errors, to catch typos. Put your own information under `meta:`.
 
-### Skipping by environment
+### Expected results (expect)
 
-`skip:` always skips. To skip only when the environment lacks something (a disk image, test data, a service), YAML alone is not enough: `marks:` takes mark names only, so it cannot express `skipif(condition)`. Put a mark on the cases instead, and add the skip in conftest.py:
+A case is checked either against its golden file or against `expect:`, never both. Writing `expect:` with any key switches the whole case to the expectations in the YAML: no golden file is read or written for it, and only the items written in `expect:` are compared. So "`exit_code` in the YAML and stdout from the golden file" is not possible; to check both, write both in `expect:`, or leave `expect:` out and let the golden file hold both.
 
 ```yaml
-- group: Disk images
-  marks: [needs_disk]
-  cases: [...]
+expect:
+  exit_code: 1                          # command
+  stdout: ""                            # strings: exact match (trailing newline ignored)
+  stderr: {contains: error}             # {contains: ...} contains / {regex: ...} regex
+  return: {item: apple}                 # call. dicts: only the keys you write
+  raises: ValueError                    # call. type name (subclasses match too)
+  db.stock: [{item: apple, count: 7}]   # anything else is an observe target
 ```
+
+| Item | Cases | How it is compared |
+|---|---|---|
+| `exit_code` | command | exact integer match |
+| `status` | request | exact integer match |
+| `json` | request | the response body read as JSON, compared like `return` |
+| `body` | request | the body text, compared like `stdout` |
+| `headers` | request | header name -> expected value. Only the headers you write, names case-insensitive. Values compared like `stdout` |
+| `stdout` / `stderr` | command, call | a string is an exact match, `{contains: ...}` contains, `{regex: ...}` regex |
+| `return` | call | dicts: only the keys you write; lists: count and each item; others: exact match |
+| `raises` | call | see the table below |
+| anything else (`db.users`, `files`, …) | all | read as an observe target (no `observe:` needed) and compared like `return` |
+
+| `raises` written as | Matching exceptions |
+|---|---|
+| `ValueError` | ValueError and its subclasses |
+| `mypkg.errors.AppError` | the type with the same module name, and its subclasses |
+| `Outer.Inner` | an exception class defined inside a class |
+| `"ValueError: quantity must be at least 1"` | the type as above, and an exact message |
+| `{contains: ...}` / `{regex: ...}` | contains / matches the `actual type name: message` string |
+
+If a call raises but `raises` is not written, the case fails.
+
+Inside `return`, `json` and observe targets (`db.*` etc.) you can use matchers starting with `$`. The `$` distinguishes them from data that really has keys like `contains`.
+
+```yaml
+expect:
+  json:
+    message: {$contains: out of stock}       # contains this substring
+    code: {$regex: '^E\d{3}$'}               # matches the regex
+  db.users:
+    $unordered:                              # any order (same count)
+      - {name: Bob}
+      - {name: Alice}
+  db.history:
+    $includes:                               # these items exist (others may too)
+      - {action: withdraw}
+```
+
+Unknown matchers (typos such as `$unorderd`) are errors when the YAML is read.
+
+When to use which:
+
+- Long output (tables, trees) or a whole table after the action → golden file (generated with `--casebook-update`)
+- Only specific values → `expect:` (the YAML reads like a specification; `--casebook-update` never rewrites it)
+
+### Golden files
+
+`--casebook-update` writes golden files like this:
+
+```text
+# case: price_member
+# command: shop price apple 3 --member
+# state: sold_out
+# exit_code: 0
+----- stdout -----
+apple x 3 = 324 yen
+----- stderr -----
+(only when there is stderr)
+```
+
+Only the results are compared: `# exit_code:` (`# status:` for requests) and the body below the `----- heading -----` lines.
+
+- The `# case:`, `# description:`, `# command:`, `# call:`, `# args:`, `# kwargs:`, `# request:` and `# state:` lines are explanations and are not compared. You can omit them when writing by hand
+- The `# key: value` headers must be at the very top of the file. The header block ends at the first line that is not one of these headers, so in a hand-written file that starts with a blank line or a free comment (`# memo`), a later `# exit_code:` is read as part of the body. Keep notes somewhere else (e.g. in the case's `description:`)
+- Each header value is one line (a multi-line command, for example, is written on one line)
+- Without `# exit_code:` / `# status:`, the exit code / status is not compared
+- A body without a heading is treated as stdout for commands, return for calls and json for requests. If there is only one output, the body alone is enough
+- A heading you did not write is expected to be empty (without a stderr heading, stderr must be empty)
+- `--casebook-update` only rewrites a file when the results changed. Hand-written golden files keep their form as long as the results are the same
+- If a golden file is left over after its case was removed, the `golden_orphans` check fails (subdirectories are checked too). It looks at `.txt` files and at files with any extension used in `golden:` (e.g. `.json`), so other files you keep there, such as notes, are not reported. Golden files used by other case files in the same directory count as used, so sharing `golden_dir:` between several YAML files does not cause false alarms. To turn the check off, write `check_orphans: false` in the YAML
+
+With `casebook_golden_description = true` in the ini, golden files written by `--casebook-update` also get a `# description: <the case's description>` line right after `# case:` (only for cases that have a description; a multi-line description becomes one line). Like the other `#` explanation lines it is never compared, so turning the option on does not fail or rewrite existing files: each file picks the line up the next time it is rewritten. To add it to every existing file at once, run `pytest --casebook-update-headers`: it rewrites the headers of the golden files whose results still match (a file whose results differ still fails and is left as is). Since only the results are compared, hand-written golden files that omit the headers are rewritten into the full form too.
+
+### Values after the action (observe)
+
+`observe:` lists values to read after the action (DB tables, files, …) and **record in the golden file**. It is for cases compared with a golden file. In a case with `expect:`, write the target directly in `expect:` instead (e.g. `expect: {db.users: [...]}`): it is read automatically, with no `observe:` needed. In a case with `expect:`, an `observe:` target that is not also in `expect:` is an error, because its value would be thrown away.
+
+- For cases using a golden file, the observed values are added as `----- observe: <target> -----`
+- Lists (DB rows etc.) are written one item per line as JSON, so when a value changes, the diff shows only that line
+- `files` writes the files in the working directory and their contents as `=== file name ===`. Newlines are compared as LF, and a file that is not UTF-8 (an image etc.) becomes one line with its size and SHA-256
+
+### Preconditions (setup)
+
+- Writing `files:` in `setup` (or in the case's state) makes the case run in a fresh temporary working directory: the files are placed there, and both commands and calls run in that directory. This holds even for an empty `files: {}`, which gives each case a clean directory (e.g. for a CLI that refuses a non-empty output directory). Without `files:` (and without fetching `files` in `observe:` / `expect:`), the case runs in the YAML's directory. The working directory's path in the output is replaced with `<tmp>`
+- The working directory is not the YAML's directory. Refer to scripts next to the YAML with `{casebook_dir}` (e.g. `command_prefix: [python, "{casebook_dir}/tool.py"]`). The YAML directory's path in the output is replaced with `{casebook_dir}`
+- Everything except `files` is passed to `pytest_casebook_setup`. If the hook returns a context manager, it is exited after observe (use it for cleanup)
+- Preparation is applied for every case. Nothing carries over from the previous case
+
+### States (states)
+
+A state is a "named setup:". Give frequently used preconditions a name and select them with `state:` on a case or group.
+
+```yaml
+states:
+  default:
+    flags: {maintenance: false}
+  maintenance:
+    flags: {maintenance: true}
+    files: {notice.txt: under maintenance}
+
+cases:
+  - name: during_maintenance
+    state: maintenance
+    setup:
+      db: {users: [...]}     # the case's setup: is merged over the state's content
+    call: app:handle
+```
+
+- The selected state's content, with the case's `setup:` merged over it, is passed to `pytest_casebook_setup` as `data` (`files` are merged per file name)
+- Cases without `state:` use the `default` state
+- States are written like `setup:` and validated the same way
+
+### HTTP APIs (request)
+
+A `request:` case sends an HTTP request and checks the response. pytest-casebook itself does not send HTTP; the `pytest_casebook_request` hook in conftest.py does, using your framework's test client.
+
+```yaml
+request_defaults:                     # headers added to every request (cases can override,
+                                      # whatever the case of the header name)
+  headers: {Authorization: Bearer test-token}
+
+cases:
+  - name: list
+    request: GET /todos                # "METHOD PATH" string (GET if the method is omitted)
+  - name: create
+    request:                           # or a mapping
+      method: POST
+      path: /todos
+      query: {notify: true}            # /todos?notify=true
+      headers: {X-Request-Id: abc}
+      json: {title: buy milk}          # for non-JSON bodies use body: with a string
+    expect:
+      status: 201
+      json: {title: buy milk}          # only the keys you write are compared
+      headers: {Location: {regex: '^/todos/\d+$'}}
+      db.todos: [{title: buy milk}]    # the DB changes can be checked too
+```
+
+In conftest.py, write the hook that sends the request. `pytest_casebook.http` has adapters for common clients (they only call the client's methods and do not import any framework).
 
 ```python
-# conftest.py
-from pathlib import Path
-import pytest
+from pytest_casebook.http import send_with_httpx_client, send_with_werkzeug_client
 
 
-def pytest_collection_modifyitems(config, items):
-    if not Path("data/disk.img").exists():
-        skip = pytest.mark.skip(reason="data/disk.img is missing")
-        for item in items:
-            if "needs_disk" in item.keywords:
-                item.add_marker(skip)
+# FastAPI / Starlette TestClient (a client with the httpx API)
+def pytest_casebook_request(request, env):
+    return send_with_httpx_client(env.client, request)
+
+
+# Flask test_client (a Werkzeug client)
+def pytest_casebook_request(request, env):
+    return send_with_werkzeug_client(env.client, request)
 ```
 
-- casebook cases are ordinary pytest items, so any pytest technique for skipping works on them (the reason is shown in the HTML result column)
-- To leave the cases out instead of skipping them, deselect them with `-m "not needs_disk"` (deselected cases do not appear in the report)
-- Register the mark in the ini to avoid pytest's unknown-mark warning:
+Any other client works too: read `request` (`HttpRequest`: `method`, `path`, `url`, `query`, `headers`, `json`, `body`) and return `HttpResponse(status, body, headers)` ([14_http_hook](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/14_http_hook) is an example without a framework).
 
-```toml
-[tool.pytest.ini_options]
-markers = ["needs_disk: needs data/disk.img"]
+The golden file contains `# status:` and, if the body is JSON, a formatted `----- json -----`, otherwise `----- body -----`. Response headers are not written to the golden file (they change on every run, e.g. dates). To check headers, use `headers` in `expect:`.
+
+### Exceptions
+
+- **call**: an exception is a result, like a return value. In the golden file it is written under `----- raises -----` as `TypeName: message`. observe still runs after an exception, so you can check that the DB did not change
+- **command (subprocess)**: an exception inside the CLI is compared as the exit code (1 for Python) and the traceback on stderr
+- **command (`run_in_process`)**: `sys.exit()` becomes the exit code, other exceptions become exit code 1 and `TypeName: message` on stderr. With `run_in_process(main, argv, traceback=True)` the full traceback goes to stderr (it contains line numbers and paths, so golden files change more easily)
+- Exceptions in the `setup` or `observe` hooks are not compared; they are test errors
+
+### Timeouts (timeout)
+
+`timeout:` is the number of seconds a case may take to run. It can also be written at the top of the file or on a group as the default for the cases inside; the nearest value wins, and a case's own `timeout:` overrides it. A manual case (`manual:`) is never run, so the default does not apply to it.
+
+- **command (subprocess)**: the process is stopped and the case fails
+- **call / request**: the function (for request, the `pytest_casebook_request` hook) runs in a separate thread, and the case fails if it has not finished in time. Python cannot stop a thread, so **the function is not stopped**: it keeps running in the background until it returns. Its output after the timeout is not captured, and it does not keep pytest from exiting. To stop a hanging test for real, use [pytest-timeout](https://pypi.org/project/pytest-timeout/)
+- **command (`run_in_process`)**: up to the `pytest_casebook_run_command` hook (it can read `case.timeout`)
+
+Without `timeout:`, the function and the hook run in the test's own thread, as before. With it, they run in another thread, so objects that can only be used from the thread that created them (e.g. an `sqlite3` connection made in `pytest_casebook_setup`) cannot be used. Context variables (`contextvars`) set before the call are visible to the function (it receives a copy).
+
+The current directory is shared by the whole process. A case with `setup.files` (even `files: {}`) runs in its own working directory, and that directory is left when the case ends. A function that keeps running after a timeout therefore sees another current directory: the original one, or the working directory of a later case. If it reads or writes files with relative paths, it can touch the wrong files (and break the `files` comparison of a later case). In a function that may time out, use absolute paths.
+
+### Manual cases (manual)
+
+Checks that cannot be automated (looking at a screen, checking a printed form, …) can go in the same test specification sheet. Write the steps in `manual:` instead of `command` / `call` / `request`. A manual case is never run.
+
+```yaml
+cases:
+  - group: Printing
+    cases:
+      - name: print_layout
+        description: The table is not broken when printed
+        manual: |
+          Open the print preview
+          Check that the ruled lines do not break across pages
+        expect:                      # expected results in words (a string or a list)
+          - The header row is repeated at the top of page 2
+          - No ruled line is broken
+        result: passed               # the result checked by hand (omit until checked)
 ```
+
+- In the HTML report, the steps are shown under the case name and `expect:` in the expected-result column
+- Without `result:`, the case is skipped by pytest and the report shows **Manual**. Use it to see what is left to check by hand
+- `result: passed` / `failed` / `skipped` make the case pass / fail / be skipped, in pytest and in the report. With the results written in, one `pytest --casebook-html=…` run gives a complete sheet of the automated and the manual results
+- `setup:` and `state:` can be written; they are only shown as preconditions (the `pytest_casebook_setup` hook is not called). `args`, `kwargs`, `stdin`, `stdin_file`, `timeout`, `env`, `observe` and `golden` cannot be written
 
 ### Rows of similar cases (params)
 
@@ -525,6 +709,39 @@ pytest-casebook does not look inside `meta:`. It is a place for your project's o
 - The file-level `meta:` is `doc.meta`
 - To select with pytest's `-m`, use `marks:` instead of `meta:`
 
+### Skipping by environment
+
+`skip:` always skips. To skip only when the environment lacks something (a disk image, test data, a service), YAML alone is not enough: `marks:` takes mark names only, so it cannot express `skipif(condition)`. Put a mark on the cases instead, and add the skip in conftest.py:
+
+```yaml
+- group: Disk images
+  marks: [needs_disk]
+  cases: [...]
+```
+
+```python
+# conftest.py
+from pathlib import Path
+import pytest
+
+
+def pytest_collection_modifyitems(config, items):
+    if not Path("data/disk.img").exists():
+        skip = pytest.mark.skip(reason="data/disk.img is missing")
+        for item in items:
+            if "needs_disk" in item.keywords:
+                item.add_marker(skip)
+```
+
+- casebook cases are ordinary pytest items, so any pytest technique for skipping works on them (the reason is shown in the HTML result column)
+- To leave the cases out instead of skipping them, deselect them with `-m "not needs_disk"` (deselected cases do not appear in the report)
+- Register the mark in the ini to avoid pytest's unknown-mark warning:
+
+```toml
+[tool.pytest.ini_options]
+markers = ["needs_disk: needs data/disk.img"]
+```
+
 ### Reading outside pytest (load)
 
 You can use the same YAML outside pytest, e.g. in a demo script.
@@ -553,216 +770,7 @@ case = next(c for c in doc.cases if c.name == "add_cli")
 print(pytest_casebook.run_case(doc, case, hooks=conftest), end="")  # the text ends with a newline
 ```
 
-`run_case()` runs one case (setup hook → action → observe → cleanup) and returns exactly the text that `--casebook-update` writes, with changing values already normalized — no comparison is made. `hooks` is any object or module whose functions are named `pytest_casebook_*`, such as an imported conftest module. Manual cases cannot be run and raise `pytest_casebook.CasebookRunError`, as do failures such as a command that is not found; an exception from a `call:` case or a non-zero exit code is not a failure and comes back inside the returned text.
-
-### Preconditions (setup)
-
-- Writing `files:` in `setup` (or in the case's state) makes the case run in a fresh temporary working directory: the files are placed there, and both commands and calls run in that directory. This holds even for an empty `files: {}`, which gives each case a clean directory (e.g. for a CLI that refuses a non-empty output directory). Without `files:` (and without fetching `files` in `observe:` / `expect:`), the case runs in the YAML's directory. The working directory's path in the output is replaced with `<tmp>`
-- The working directory is not the YAML's directory. Refer to scripts next to the YAML with `{casebook_dir}` (e.g. `command_prefix: [python, "{casebook_dir}/tool.py"]`). The YAML directory's path in the output is replaced with `{casebook_dir}`
-- Everything except `files` is passed to `pytest_casebook_setup`. If the hook returns a context manager, it is exited after observe (use it for cleanup)
-- Preparation is applied for every case. Nothing carries over from the previous case
-
-### States (states)
-
-A state is a "named setup:". Give frequently used preconditions a name and select them with `state:` on a case or group.
-
-```yaml
-states:
-  default:
-    flags: {maintenance: false}
-  maintenance:
-    flags: {maintenance: true}
-    files: {notice.txt: under maintenance}
-
-cases:
-  - name: during_maintenance
-    state: maintenance
-    setup:
-      db: {users: [...]}     # the case's setup: is merged over the state's content
-    call: app:handle
-```
-
-- The selected state's content, with the case's `setup:` merged over it, is passed to `pytest_casebook_setup` as `data` (`files` are merged per file name)
-- Cases without `state:` use the `default` state
-- States are written like `setup:` and validated the same way
-
-### Golden files
-
-`--casebook-update` writes golden files like this:
-
-```text
-# case: price_member
-# command: shop price apple 3 --member
-# state: sold_out
-# exit_code: 0
------ stdout -----
-apple x 3 = 324 yen
------ stderr -----
-(only when there is stderr)
-```
-
-Only the results are compared: `# exit_code:` (`# status:` for requests) and the body below the `----- heading -----` lines.
-
-- The `# case:`, `# command:`, `# call:`, `# args:`, `# kwargs:` and `# state:` lines are explanations and are not compared. You can omit them when writing by hand
-- Without `# exit_code:` / `# status:`, the exit code / status is not compared
-- A body without a heading is treated as stdout for commands, return for calls and json for requests. If there is only one output, the body alone is enough
-- A heading you did not write is expected to be empty (without a stderr heading, stderr must be empty)
-- `--casebook-update` only rewrites a file when the results changed. Hand-written golden files keep their form as long as the results are the same
-- If a golden file is left over after its case was removed, the `golden_orphans` check fails (subdirectories are checked too). It looks at `.txt` files and at files with any extension used in `golden:` (e.g. `.json`), so other files you keep there, such as notes, are not reported. Golden files used by other case files in the same directory count as used, so sharing `golden_dir:` between several YAML files does not cause false alarms. To turn the check off, write `check_orphans: false` in the YAML
-
-With `casebook_golden_description = true` in the ini, golden files written by `--casebook-update` also get a `# description: <the case's description>` line right after `# case:` (only for cases that have a description; a multi-line description becomes one line). Like the other `#` explanation lines it is never compared, so turning the option on does not fail or rewrite existing files: each file picks the line up the next time it is rewritten. To add it to every existing file at once, run `pytest --casebook-update-headers`: it rewrites the headers of the golden files whose results still match (a file whose results differ still fails and is left as is). Since only the results are compared, hand-written golden files that omit the headers are rewritten into the full form too.
-
-### HTTP APIs (request)
-
-A `request:` case sends an HTTP request and checks the response. pytest-casebook itself does not send HTTP; the `pytest_casebook_request` hook in conftest.py does, using your framework's test client.
-
-```yaml
-request_defaults:                     # headers added to every request (cases can override,
-                                      # whatever the case of the header name)
-  headers: {Authorization: Bearer test-token}
-
-cases:
-  - name: list
-    request: GET /todos                # "METHOD PATH" string (GET if the method is omitted)
-  - name: create
-    request:                           # or a mapping
-      method: POST
-      path: /todos
-      query: {notify: true}            # /todos?notify=true
-      headers: {X-Request-Id: abc}
-      json: {title: buy milk}          # for non-JSON bodies use body: with a string
-    expect:
-      status: 201
-      json: {title: buy milk}          # only the keys you write are compared
-      headers: {Location: {regex: '^/todos/\d+$'}}
-      db.todos: [{title: buy milk}]    # the DB changes can be checked too
-```
-
-In conftest.py, write the hook that sends the request. `pytest_casebook.http` has adapters for common clients (they only call the client's methods and do not import any framework).
-
-```python
-from pytest_casebook.http import send_with_httpx_client, send_with_werkzeug_client
-
-
-# FastAPI / Starlette TestClient (a client with the httpx API)
-def pytest_casebook_request(request, env):
-    return send_with_httpx_client(env.client, request)
-
-
-# Flask test_client (a Werkzeug client)
-def pytest_casebook_request(request, env):
-    return send_with_werkzeug_client(env.client, request)
-```
-
-Any other client works too: read `request` (`HttpRequest`: `method`, `path`, `url`, `query`, `headers`, `json`, `body`) and return `HttpResponse(status, body, headers)` ([14_http_hook](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/14_http_hook) is an example without a framework).
-
-The golden file contains `# status:` and, if the body is JSON, a formatted `----- json -----`, otherwise `----- body -----`. Response headers are not written to the golden file (they change on every run, e.g. dates). To check headers, use `headers` in `expect:`.
-
-### Values after the action (observe)
-
-- For cases using a golden file, the observed values are added as `----- observe: <target> -----`
-- Lists (DB rows etc.) are written one item per line as JSON, so when a value changes, the diff shows only that line
-- `files` writes the files in the working directory and their contents as `=== file name ===`. Newlines are compared as LF, and a file that is not UTF-8 (an image etc.) becomes one line with its size and SHA-256
-
-### Expected results (expect)
-
-```yaml
-expect:
-  exit_code: 1                          # command
-  stdout: ""                            # strings: exact match (trailing newline ignored)
-  stderr: {contains: error}             # {contains: ...} contains / {regex: ...} regex
-  return: {item: apple}                 # call. dicts: only the keys you write
-  raises: ValueError                    # call. type name (subclasses match too)
-  db.stock: [{item: apple, count: 7}]   # anything else is an observe target
-```
-
-| Item | Cases | How it is compared |
-|---|---|---|
-| `exit_code` | command | exact integer match |
-| `status` | request | exact integer match |
-| `json` | request | the response body read as JSON, compared like `return` |
-| `body` | request | the body text, compared like `stdout` |
-| `headers` | request | header name -> expected value. Only the headers you write, names case-insensitive. Values compared like `stdout` |
-| `stdout` / `stderr` | command, call | a string is an exact match, `{contains: ...}` contains, `{regex: ...}` regex |
-| `return` | call | dicts: only the keys you write; lists: count and each item; others: exact match |
-| `raises` | call | see the table below |
-| anything else (`db.users`, `files`, …) | all | read as an observe target and compared like `return` |
-
-| `raises` written as | Matching exceptions |
-|---|---|
-| `ValueError` | ValueError and its subclasses |
-| `mypkg.errors.AppError` | the type with the same module name, and its subclasses |
-| `Outer.Inner` | an exception class defined inside a class |
-| `"ValueError: quantity must be at least 1"` | the type as above, and an exact message |
-| `{contains: ...}` / `{regex: ...}` | contains / matches the `actual type name: message` string |
-
-If a call raises but `raises` is not written, the case fails.
-
-Inside `return`, `json` and observe targets (`db.*` etc.) you can use matchers starting with `$`. The `$` distinguishes them from data that really has keys like `contains`.
-
-```yaml
-expect:
-  json:
-    message: {$contains: out of stock}       # contains this substring
-    code: {$regex: '^E\d{3}$'}               # matches the regex
-  db.users:
-    $unordered:                              # any order (same count)
-      - {name: Bob}
-      - {name: Alice}
-  db.history:
-    $includes:                               # these items exist (others may too)
-      - {action: withdraw}
-```
-
-Unknown matchers (typos such as `$unorderd`) are errors when the YAML is read.
-
-When to use which:
-
-- Long output (tables, trees) or a whole table after the action → golden file (generated with `--casebook-update`)
-- Only specific values → `expect:` (the YAML reads like a specification; `--casebook-update` never rewrites it)
-
-### Exceptions
-
-- **call**: an exception is a result, like a return value. In the golden file it is written under `----- raises -----` as `TypeName: message`. observe still runs after an exception, so you can check that the DB did not change
-- **command (subprocess)**: an exception inside the CLI is compared as the exit code (1 for Python) and the traceback on stderr
-- **command (`run_in_process`)**: `sys.exit()` becomes the exit code, other exceptions become exit code 1 and `TypeName: message` on stderr. With `run_in_process(main, argv, traceback=True)` the full traceback goes to stderr (it contains line numbers and paths, so golden files change more easily)
-- Exceptions in the `setup` or `observe` hooks are not compared; they are test errors
-
-### Timeouts (timeout)
-
-`timeout:` is the number of seconds a case may take to run. It can also be written at the top of the file or on a group as the default for the cases inside; the nearest value wins, and a case's own `timeout:` overrides it. A manual case (`manual:`) is never run, so the default does not apply to it.
-
-- **command (subprocess)**: the process is stopped and the case fails
-- **call / request**: the function (for request, the `pytest_casebook_request` hook) runs in a separate thread, and the case fails if it has not finished in time. Python cannot stop a thread, so **the function is not stopped**: it keeps running in the background until it returns. Its output after the timeout is not captured, and it does not keep pytest from exiting. To stop a hanging test for real, use [pytest-timeout](https://pypi.org/project/pytest-timeout/)
-- **command (`run_in_process`)**: up to the `pytest_casebook_run_command` hook (it can read `case.timeout`)
-
-Without `timeout:`, the function and the hook run in the test's own thread, as before. With it, they run in another thread, so objects that can only be used from the thread that created them (e.g. an `sqlite3` connection made in `pytest_casebook_setup`) cannot be used. Context variables (`contextvars`) set before the call are visible to the function (it receives a copy).
-
-The current directory is shared by the whole process. A case with `setup.files` (even `files: {}`) runs in its own working directory, and that directory is left when the case ends. A function that keeps running after a timeout therefore sees another current directory: the original one, or the working directory of a later case. If it reads or writes files with relative paths, it can touch the wrong files (and break the `files` comparison of a later case). In a function that may time out, use absolute paths.
-
-### Manual cases (manual)
-
-Checks that cannot be automated (looking at a screen, checking a printed form, …) can go in the same test specification sheet. Write the steps in `manual:` instead of `command` / `call` / `request`. A manual case is never run.
-
-```yaml
-cases:
-  - group: Printing
-    cases:
-      - name: print_layout
-        description: The table is not broken when printed
-        manual: |
-          Open the print preview
-          Check that the ruled lines do not break across pages
-        expect:                      # expected results in words (a string or a list)
-          - The header row is repeated at the top of page 2
-          - No ruled line is broken
-        result: passed               # the result checked by hand (omit until checked)
-```
-
-- In the HTML report, the steps are shown under the case name and `expect:` in the expected-result column
-- Without `result:`, the case is skipped by pytest and the report shows **Manual**. Use it to see what is left to check by hand
-- `result: passed` / `failed` / `skipped` make the case pass / fail / be skipped, in pytest and in the report. With the results written in, one `pytest --casebook-html=…` run gives a complete sheet of the automated and the manual results
-- `setup:` and `state:` can be written; they are only shown as preconditions (the `pytest_casebook_setup` hook is not called). `args`, `kwargs`, `stdin`, `stdin_file`, `timeout`, `env`, `observe` and `golden` cannot be written
+`run_case()` runs one case (setup hook → action → observe → cleanup) and returns exactly the text that `--casebook-update` writes, with changing values already normalized — no comparison is made. `hooks` is any object or module whose functions are named `pytest_casebook_*`, such as an imported conftest module; the hooks get the same arguments as under pytest, except that `config` is None. Manual cases cannot be run and raise `pytest_casebook.CasebookRunError`, as do failures such as a command that is not found; an exception from a `call:` case or a non-zero exit code is not a failure and comes back inside the returned text.
 
 ### Hooks and fixtures
 
@@ -779,7 +787,7 @@ Write them in conftest.py. Each hook only needs the arguments it uses (e.g. `def
 | `pytest_casebook_placeholders(env)` | before comparing | list of `(actual value, replacement)` |
 | `pytest_casebook_patterns(env)` | before comparing | list of `(regex, replacement)` |
 
-Every hook also receives `config` (pytest's Config). A case's state name and content are `case.state` and `case.state_data`, and its environment variables from `env:` are `case.env`. When running in a subprocess and the child is Python, its output encoding is set to `casebook_encoding` (via `PYTHONIOENCODING`).
+Every hook also receives `config` (pytest's Config). When the case is run outside pytest with `run_case()`, `config` is None, so a hook shared with `run_case()` must not assume it is set. A case's state name and content are `case.state` and `case.state_data`, and its environment variables from `env:` are `case.env`. When running in a subprocess and the child is Python, its output encoding is set to `casebook_encoding` (via `PYTHONIOENCODING`).
 
 ### Running against multiple environments
 
@@ -870,7 +878,7 @@ The easiest way is to put this comment on the first line of a case file (the sam
 # yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 ```
 
-`main` follows the latest development version. To match the version you installed, use its tag instead (e.g. `https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/v0.2.0/src/pytest_casebook/casebook.schema.json`).
+`main` follows the latest development version. To match the version you installed, pin the URL to that version's tag, `v<version>`, instead of `main` (e.g. `https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/v0.7.1/src/pytest_casebook/casebook.schema.json` for 0.7.1); an older tag's schema does not know newer keys and flags them as errors. Use the `main` URL to always get the latest.
 
 To apply the schema to every case file without the comment, map it in your VS Code settings (settings.json):
 
