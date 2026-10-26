@@ -46,6 +46,13 @@ incompatible change raises the minor version).
   `ValueError("cannot read <path>: …")`.
 - Hooks receive `config=None` when called through `run_case()` (typed
   `pytest.Config | None`).
+- A string `command:` is split into arguments when the file is loaded, so `Case.command_argv`
+  is set for every `command:` case (it used to be set only for a list `command:`). The run
+  no longer splits the string again.
+- The JSON Schema matches loading more closely: an empty `cases:` list, an empty `states:`,
+  a text `expect:` on a `command:` / `call:` / `request:` case and a mapping `expect:` on a
+  `manual:` case are schema errors too. The remaining intended differences are listed in
+  `tests/test_schema_matrix.py`.
 
 ### Fixed
 
@@ -58,6 +65,30 @@ incompatible change raises the minor version).
   titles (`stdout`, `stderr`, `return`, `raises`, `json`, `body`, `observe: …`) are sections.
 - The HTML report colored any line starting with `+` or `-` in the failure details (e.g. a
   Markdown `- item` in the actual output); only real diff lines are colored now.
+- With `--casebook-update --casebook-html`, the golden contents in the report were the ones
+  read at collection time: missing for a newly created golden file and stale for a rewritten
+  one. The report now shows the golden file as written.
+- A `command:` of only spaces, or a `command:` / `command_prefix:` with an unclosed quote,
+  crashed at run time with `IndexError` / `ValueError`. Both are now errors when loading.
+- `call:` accepted an empty module or function name (`:f`, `m:`), a relative import (`.m:f`)
+  and spaces, and `:f` / `.m:f` crashed with `ValueError` / `TypeError`. They are now loading
+  errors, and the JSON Schema rejects a leading `.` too.
+- A false-looking value of the wrong type was taken as "not written": `setup: {files: []}`,
+  `request: {query: ""}`, `state: ""`, `state: null`, `golden: ""` and the like are now errors.
+  `files:` left empty (null) is still allowed, and the JSON Schema now allows it too.
+- Errors in a `params:` element (missing `name`, nested `params`) pointed at the template's
+  line instead of the element's.
+- A program that is found but cannot be started (no execute permission, a directory) raised
+  `PermissionError` instead of a casebook run error.
+- `Decimal("NaN")` and `Decimal("Infinity")` in a result crashed the serialization.
+- A case file that is not UTF-8 (e.g. saved as Shift_JIS) showed a `UnicodeDecodeError`
+  traceback instead of a collection error.
+- `load(path, golden_dir=...)` with a relative `golden_dir` mixed it with the absolute `path`,
+  which broke the golden paths shown in the report.
+- The JSON Schema rejects `stdin` together with `stdin_file`, as loading does.
+- Under pytest-xdist, `--casebook-update --casebook-html` left the golden contents out of the
+  report (the row kept the information from the setup phase). The report now takes the
+  information from the latest phase.
 
 ## [0.7.1] - 2026-10-26
 

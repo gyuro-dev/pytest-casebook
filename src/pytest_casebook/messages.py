@@ -255,6 +255,8 @@ ERRORS: dict[str, dict[str, str]] = {
         "result_only_manual": "{where}: result は manual のケースにだけ書けます",
         "result_value": "{where}: result は {values} のどれかで書いてください",
         "empty_command": "{where}: command が空です（command_prefix もありません）",
+        "bad_shell": "{where}: {key} を引数に区切れません（{error}）",
+        "not_utf8": "{where}: UTF-8 で読めません（{error}）",
         "bad_call": "{where}: call は 'モジュール:関数' の形で書いてください: {call}",
         "args_only_call": "{where}: args / kwargs は call のケースにだけ書けます",
         "stdin_only_command": "{where}: stdin は command のケースにだけ書けます",
@@ -312,6 +314,7 @@ ERRORS: dict[str, dict[str, str]] = {
         "matcher_string": "{where}: {name} には文字列を書いてください",
         "matcher_list": "{where}: {name} にはリストを書いてください",
         "command_not_found": "コマンドが見つかりません: {program}",
+        "command_start_failed": "コマンドを起動できません: {program}（{error}）",
         "stdin_file_missing": "stdin_file が見つかりません: {name}",
         "command_timeout": "{timeout} 秒以内に終わりませんでした: {argv}",
         "call_timeout": (
@@ -385,6 +388,8 @@ ERRORS: dict[str, dict[str, str]] = {
         "result_only_manual": "{where}: result can only be used in manual cases",
         "result_value": "{where}: result must be one of {values}",
         "empty_command": "{where}: command is empty (and there is no command_prefix)",
+        "bad_shell": "{where}: cannot split {key} into arguments ({error})",
+        "not_utf8": "{where}: cannot read as UTF-8 ({error})",
         "bad_call": "{where}: call must be 'module:function': {call}",
         "args_only_call": "{where}: args / kwargs can only be used in call cases",
         "stdin_only_command": "{where}: stdin can only be used in command cases",
@@ -438,6 +443,7 @@ ERRORS: dict[str, dict[str, str]] = {
         "matcher_string": "{where}: {name} needs a string",
         "matcher_list": "{where}: {name} needs a list",
         "command_not_found": "command not found: {program}",
+        "command_start_failed": "cannot start the command: {program} ({error})",
         "stdin_file_missing": "stdin_file not found: {name}",
         "command_timeout": "did not finish within {timeout} seconds: {argv}",
         "call_timeout": (

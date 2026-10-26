@@ -26,6 +26,9 @@ def to_jsonable(value: Any) -> Any:
     if value is None or isinstance(value, bool | int | float | str):
         return value
     if isinstance(value, decimal.Decimal):
+        if not value.is_finite():
+            # NaN・Infinity は整数にできない（sNaN は float にもできないので repr にする）
+            return repr(value) if value.is_snan() else float(value)
         # YAML に書いた 300 や 1.5 と比べられるようにする（float は近い値への丸めを含む）
         return int(value) if value == value.to_integral_value() else float(value)
     if isinstance(value, enum.Enum):

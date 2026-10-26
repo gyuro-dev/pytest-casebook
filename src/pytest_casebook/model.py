@@ -195,7 +195,8 @@ class Case:
     groups: tuple[Group, ...] = ()
     # command: に書いた文字列（リストで書いたときは、表示用に1行にしたもの）
     command: str | None = None
-    # command: をリストで書いたときの引数（shell の書き方として区切らずに、そのまま使う）
+    # command: の引数（command_prefix は含まない）。リストで書いたときはそのまま、文字列で
+    # 書いたときは shell の書き方として区切ったもの。command のケース以外では None
     command_argv: tuple[str, ...] | None = None
     call: str | None = None
     # HTTP のリクエスト（request_defaults の headers を重ねたもの）
@@ -411,8 +412,16 @@ def _str_list(value: Any, where: str, key: str) -> tuple[str, ...]:
 def _command_prefix(value: Any, where: str) -> tuple[str, ...]:
     """command_prefix: を引数のタプルにする（文字列なら shell の書き方として区切る）。"""
     if isinstance(value, str):
-        return tuple(shlex.split(value))
+        return tuple(_shell_split(value, where, "command_prefix"))
     return _str_list(value, where, "command_prefix")
+
+
+def _shell_split(value: str, where: str, key: str) -> list[str]:
+    """shell の書き方として区切る（クォートの閉じ忘れは、実行の前に YAML の誤りにする）。"""
+    try:
+        return shlex.split(value)
+    except ValueError as e:
+        raise CasebookError(error("bad_shell", where=where, key=key, error=e)) from None
 
 
 def _normalize_rules(value: Any, where: str) -> list[tuple[re.Pattern[str], str]]:
@@ -544,7 +553,13 @@ def load(
     if levels is None and "casebook_levels" in values:
         levels = tuple(ini_lines(values["casebook_levels"])) or None
     if command_prefix is None:
-        command_prefix = tuple(shlex.split(str(values.get("casebook_command_prefix", ""))))
+        command_prefix = tuple(
+            _shell_split(
+                str(values.get("casebook_command_prefix", "")),
+                "casebook_command_prefix",
+                "casebook_command_prefix",
+            )
+        )
     options: dict[str, Any] = {}
     if ini:
         options = {
@@ -558,7 +573,11 @@ def load(
             ),
         }
     with language(lang):
-        loader = _LineLoader(path.read_text(encoding="utf-8"))
+        try:
+            source = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError as e:
+            raise CasebookError(error("not_utf8", where=path.name, error=e)) from None
+        loader = _LineLoader(source)
         try:
             data = loader.get_single_data()
         except yaml.YAMLError as e:
@@ -573,7 +592,9 @@ def load(
             data,
             path,
             golden_dir=(
-                Path(golden_dir) if golden_dir else path.parent / DEFAULT_GOLDEN_DIR / path.stem
+                Path(os.path.abspath(golden_dir))  # noqa: PTH100 (path と同じ)
+                if golden_dir
+                else path.parent / DEFAULT_GOLDEN_DIR / path.stem
             ),
             levels=levels if levels is not None else TEXTS[lang]["levels"],
             command_prefix=command_prefix,
@@ -733,7 +754,7 @@ def _walk(
                 item.get("cases"),
                 doc,
                 (*groups, group),
-                _str(item.get("state"), loc, "state") or state,
+                _state(item, loc, state),
                 (*marks, *_str_list(item.get("marks"), loc, "marks")),
                 {**meta, **_meta(item.get("meta"), loc)},
                 _merge_env(env, _env(item.get("env"), loc)),
@@ -754,18 +775,18 @@ def _walk(
             template = {k: v for k, v in item.items() if k != "params"}
             name = _str(template.get("name"), loc, "name", required=True)
             for param in params:
-                if "params" in param:
-                    raise CasebookError(error("params_nested", where=loc))
-                if "name" not in param:
-                    raise CasebookError(error("params_name", where=loc))
-                merged = {**template, **param}
-                merged["name"] = f"{name}-{_str(param['name'], loc, 'name', required=True)}"
                 # 誤りの表示とレポートの行番号は、要素自身の行を優先する（分からなければ
                 # テンプレートの行）。_parse_case が merged の id で行を引けるように登録する
                 pline = doc._source_lines.get(id(param), line)
                 ploc = f"{where}[{i}]" + (
                     error("line", line=pline + 1) if pline is not None else ""
                 )
+                if "params" in param:
+                    raise CasebookError(error("params_nested", where=ploc))
+                if "name" not in param:
+                    raise CasebookError(error("params_name", where=ploc))
+                merged = {**template, **param}
+                merged["name"] = f"{name}-{_str(param['name'], ploc, 'name', required=True)}"
                 if pline is not None:
                     doc._source_lines[id(merged)] = pline
                 doc.cases.append(
@@ -775,6 +796,10 @@ def _walk(
             doc.cases.append(
                 _parse_case(item, doc, groups, state, marks, meta, env, flags, timeout, loc)
             )
+
+
+# call: の形（モジュール:関数）。空の名前・空白・相対 import（先頭の .）は通さない
+_CALL_RE = re.compile(r"[^:\s.][^:\s]*:[^:\s]+")
 
 
 def _parse_case(
@@ -813,12 +838,14 @@ def _parse_case(
         if not command_argv and not doc.command_prefix:
             raise CasebookError(error("empty_command", where=loc))
     elif "command" in item:
-        # 空文字も書ける（command_prefix だけで実行するとき）
+        # 空文字も書ける（command_prefix だけで実行するとき）。shell の書き方として
+        # ここで区切っておく（実行のときに区切り直さない。空白だけなら引数は1つもない）
         command = _str(item["command"], loc, "command")
-        if not command and not doc.command_prefix:
+        command_argv = tuple(_shell_split(command, loc, "command"))
+        if not command_argv and not doc.command_prefix:
             raise CasebookError(error("empty_command", where=loc))
     call = _str(item["call"], loc, "call", required=True) if "call" in item else None
-    if call is not None and ":" not in call:
+    if call is not None and not _CALL_RE.fullmatch(call):
         raise CasebookError(error("bad_call", where=loc, call=repr(call)))
     if call is None and ("args" in item or "kwargs" in item):
         raise CasebookError(error("args_only_call", where=loc))
@@ -858,7 +885,7 @@ def _parse_case(
         # （ケース自身の timeout: は _MANUAL_FORBIDDEN_KEYS で先に誤りにしている）
         timeout = None
 
-    state = _str(item.get("state"), loc, "state") or state
+    state = _state(item, loc, state)
     if doc.states is None:
         if state != DEFAULT_STATE:
             raise CasebookError(error("state_without_states", where=loc, state=state))
@@ -907,7 +934,7 @@ def _parse_case(
         state=state,
         state_data=state_data,
         marks=(*marks, *_str_list(item.get("marks"), loc, "marks")),
-        golden=_golden_name(item.get("golden"), loc),
+        golden=_golden_name(item, loc),
         setup=setup,
         setup_files=setup_files,
         has_setup_files=has_setup_files,
@@ -1011,7 +1038,10 @@ def _parse_setup(value: Any, loc: str) -> tuple[dict[str, Any] | None, dict[str,
     data = dict(value)
     if "files" not in data:
         return data, None
-    files = data.pop("files") or {}
+    # files: の下が空（null）なら、置くファイルはない。[] や "" は誤りにする
+    files = data.pop("files")
+    if files is None:
+        files = {}
     if not (
         isinstance(files, dict)
         and all(isinstance(k, str) and isinstance(v, str) for k, v in files.items())
@@ -1023,10 +1053,19 @@ def _parse_setup(value: Any, loc: str) -> tuple[dict[str, Any] | None, dict[str,
     return data, files
 
 
-def _golden_name(value: Any, loc: str) -> str | None:
+def _state(item: dict[str, Any], loc: str, inherited: str) -> str:
+    """state: を確かめる（書いたなら空にできない。書かなければ外側のグループのもの）。"""
+    if "state" not in item:
+        return inherited
+    return _str(item["state"], loc, "state", required=True)
+
+
+def _golden_name(item: dict[str, Any], loc: str) -> str | None:
     """golden:（期待出力のファイル名）を確かめる。期待出力の置き場所の外は指せない。"""
-    name = _str(value, loc, "golden") or None
-    if name is not None and not _is_inside(name):
+    if "golden" not in item:
+        return None
+    name = _str(item["golden"], loc, "golden", required=True)
+    if not _is_inside(name):
         raise CasebookError(error("golden_path", where=loc, name=repr(name)))
     return name
 
@@ -1142,7 +1181,9 @@ def _parse_request(value: Any, default_headers: dict[str, str], loc: str) -> Htt
     path = _str(value.get("path"), loc, "request.path", required=True)
     if not path.startswith("/"):
         raise CasebookError(error("request_path", where=loc, path=repr(path)))
-    query = value.get("query") or {}
+    query = value.get("query")
+    if query is None:
+        query = {}
     if not (isinstance(query, dict) and all(isinstance(k, str) for k in query)):
         raise CasebookError(error("query_mapping", where=loc))
     if "json" in value and "body" in value:
