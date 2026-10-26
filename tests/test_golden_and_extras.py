@@ -47,6 +47,66 @@ def test_parse_golden_without_markers_is_the_default_section() -> None:
     assert parse_golden("", "stdout").sections == {}
 
 
+def test_parse_golden_unknown_section_title_is_body() -> None:
+    """
+    見出しになるのは決まった見出しだけ。ほかの `----- X -----` の行は本文の一部になる。
+
+    知っている見出しとまったく同じ行は、見出しのまま（書かれた期待出力と区別できない）。
+    """
+    text = "----- stdout -----\na\n----- RESULTS -----\nb\n----- observe: db.users -----\n[]\n"
+    assert parse_golden(text, "stdout").sections == {
+        "stdout": "a\n----- RESULTS -----\nb",
+        "observe: db.users": "[]",
+    }
+    assert parse_golden("----- stdout -----\na\n----- stderr -----\nb\n", "stdout").sections == {
+        "stdout": "a",
+        "stderr": "b",
+    }
+
+
+def test_output_with_an_unknown_section_line_is_compared_whole(
+    project: pytest.Pytester,
+) -> None:
+    """
+    出力に `----- X -----` の行が2回あっても、見出しとして分けないので、1回目の下の本文も
+    比べる（見出しとして分けると、同じ見出しの後のほうだけが残り、前の本文は比べられない）。
+    """
+    project.makepyfile(
+        sections_out="def show(first):\n    print(f'----- X -----\\n{first}')\n"
+        "    print('----- X -----\\nsecond')\n"
+    )
+    case = "cases:\n  - name: show\n    call: sections_out:show\n    args: [{first}]\n"
+    write_casebook(project, case.format(first="one"))
+    project.runpytest("--casebook-update").assert_outcomes(passed=2)
+    assert "----- X -----\none\n----- X -----\nsecond\n" in golden(project, "show")
+    write_casebook(project, case.format(first="uno"))
+    result = project.runpytest()
+    result.assert_outcomes(passed=1, failed=1)
+    result.stdout.fnmatch_lines(["*-one", "*+uno"])
+
+
+def test_multiline_command_argument_keeps_exit_code_compared(project: pytest.Pytester) -> None:
+    """
+    command: の引数に改行があっても、ヘッダーは1行ずつに書く。改行のまま書くと、2行目から
+    本文になり、# exit_code: が比べられなくなる（終了コードが変わっても通ってしまう）。
+    """
+    case = (
+        "cases:\n  - name: multi\n"
+        '    command: ["{py}", "-c", "print(1)\\nraise SystemExit({code})"]\n'
+    )
+    write_casebook(project, case.format(py=PY, code=0))
+    project.runpytest("--casebook-update").assert_outcomes(passed=2)
+    text = golden(project, "multi")
+    header = text.split("----- stdout -----")[0].splitlines()
+    assert all(line.startswith("# ") for line in header), text
+    assert "# exit_code: 0" in header
+    assert "print(1) raise SystemExit(0)" in text
+    write_casebook(project, case.format(py=PY, code=1))
+    result = project.runpytest()
+    result.assert_outcomes(passed=1, failed=1)
+    result.stdout.fnmatch_lines(["*-# exit_code: 0", "*+# exit_code: 1"])
+
+
 # =============================================================================
 # 手で書いた期待出力
 # =============================================================================

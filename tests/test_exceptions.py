@@ -140,6 +140,35 @@ def test_raises_matches_type_or_its_parents(
     project.runpytest().assert_outcomes(passed=2)
 
 
+def test_nested_exception_class_is_shown_with_its_outer_class(project: pytest.Pytester) -> None:
+    """
+    クラスの中の例外は、期待出力・比べ方・失敗の説明のどれでも `Outer.Inner` と書く
+    （raises: "Outer.Inner" で一致するのと同じ名前）。
+    """
+    project.makepyfile(errors=ERRORS_MODULE)
+    write_casebook(
+        project,
+        """
+        cases:
+          - name: golden
+            call: errors:inner
+          - name: with_message
+            call: errors:inner
+            expect: {raises: "Outer.Inner: 中の例外"}
+          - name: contains
+            call: errors:inner
+            expect: {raises: {contains: "Outer.Inner: 中"}}
+          - name: other_message
+            call: errors:inner
+            expect: {raises: "Outer.Inner: 違う"}
+        """,
+    )
+    result = project.runpytest("--casebook-update")
+    result.assert_outcomes(passed=4, failed=1)
+    assert golden(project, "golden").endswith("----- raises -----\nOuter.Inner: 中の例外\n")
+    result.stdout.fnmatch_lines(['*実際 "Outer.Inner: 中の例外"*'])
+
+
 @pytest.mark.parametrize(
     "raises",
     [

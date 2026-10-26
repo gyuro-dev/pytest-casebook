@@ -67,7 +67,14 @@ from .runner import (
     run_subprocess,
     run_with_timeout,
 )
-from .serialize import compact, describe_exception, render_rows, serialize, to_jsonable
+from .serialize import (
+    compact,
+    describe_exception,
+    exception_name,
+    render_rows,
+    serialize,
+    to_jsonable,
+)
 
 CASEBOOK_DIR_TOKEN = "{casebook_dir}"
 DEFAULT_FILE_PATTERNS = ["casebook_*.yaml", "casebook_*.yml", "*.casebook.yaml", "*.casebook.yml"]
@@ -1200,7 +1207,8 @@ def _match_raises(expected: Any, error: BaseException, described: str, lang: str
     if not _is_instance_of(error, type_name):
         return mismatch
     if has_message:
-        prefix = f"{type(error).__name__}: "
+        # describe_exception() と同じ型名（Outer.Inner など）で、メッセージの部分を取り出す
+        prefix = f"{exception_name(error)}: "
         actual_message = described[len(prefix) :] if described.startswith(prefix) else ""
         if message.strip() != actual_message.strip():
             return mismatch
@@ -1339,6 +1347,10 @@ def _normalizer(
     # YAML のディレクトリのパスは、置く場所（人や CI）によって変わるため {casebook_dir} にする
     for path in {doc.path.parent, doc.path.parent.resolve()}:
         placeholders += [(str(path), CASEBOOK_DIR_TOKEN), (path.as_posix(), CASEBOOK_DIR_TOKEN)]
+    # 実際の値が "." や空のものは使わない。load() は絶対パスにするが、parse_document に
+    # 相対パスを渡されると YAML のディレクトリが "." になり、出力のすべての "." が
+    # {casebook_dir} に置き換わってしまう（空文字は、すべての文字の間に入ってしまう）
+    placeholders = [(real, token) for real, token in placeholders if real not in ("", ".")]
     patterns = compile_patterns(
         pair for pairs in hook.pytest_casebook_patterns(env=env, config=config) for pair in pairs
     )

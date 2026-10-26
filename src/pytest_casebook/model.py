@@ -53,6 +53,7 @@ cases:
 from __future__ import annotations
 
 import math
+import os
 import re
 import shlex
 from dataclasses import dataclass, field
@@ -285,10 +286,13 @@ class Case:
         """
         Whether a per-case working directory is created: when `files:` is written in the
         state or the case's setup (even `files: {}`), or when the case fetches `files`.
+        Always False for a manual case (it is never run).
 
         ケースごとの作業ディレクトリを作るか。状態かケースの setup に `files:` を書いたとき
-        （`files: {}` でも）と、files を取り出すとき。
+        （`files: {}` でも）と、files を取り出すとき。手動のケースは実行しないので、いつも False。
         """
+        if self.manual is not None:
+            return False
         return (
             self.has_setup_files or bool(self.setup_files) or FILES_TARGET in self.observe_targets
         )
@@ -522,9 +526,15 @@ def load(
     :raises UnicodeDecodeError: UTF-8 でないとき
     :raises ValueError: `lang` が対応していない言語のとき、または ini の値が正しくないとき
     """
-    path = Path(path)
+    # 絶対パスにしておく。"casebook_x.yaml" のような相対パスのままだと、YAML のディレクトリが
+    # "." になり、正規化で "." を {casebook_dir} に置き換えてしまう。{casebook_dir} の展開や
+    # sys.path に加えるパスも、作業ディレクトリに移動したあとでは別の場所を指してしまう。
+    # resolve() ではなく pytest と同じ abspath にする（symlink やネットワークドライブを
+    # たどると、pytest の rootpath と別の表記になり、relpath が食い違う・失敗するため）。
+    # Path.absolute() は .. を残すので、上のディレクトリの設定ファイルを探すときに困る
+    path = Path(os.path.abspath(path))  # noqa: PTH100
     # ini=True なら pytest の設定ファイルの値（引数で渡したものが優先、なければ組み込みの既定）
-    values: dict[str, IniValue] = read_ini(path.resolve().parent)[1] if ini else {}
+    values: dict[str, IniValue] = read_ini(path.parent)[1] if ini else {}
     if lang is None:
         lang = str(values.get("casebook_lang", "en"))
     if lang not in TEXTS:
@@ -866,6 +876,20 @@ def _parse_case(
     has_setup_files = base_files is not None or own_files is not None
     setup_files = {**(base_files or {}), **(own_files or {})}
 
+    observe = _str_list(item.get("observe"), loc, "observe")
+    expect = (
+        _parse_expect(item["expect"], kind, loc) if "expect" in item and manual is None else None
+    )
+    if expect is not None:
+        # expect: のケースは期待出力ファイルを使わないので、expect: にない observe: の対象は
+        # 取り出しても何とも比べられず、黙って捨てられてしまう。誤りにして知らせる
+        # （組み込みの files も同じ）
+        missing = [target for target in observe if target not in expect]
+        if missing:
+            raise CasebookError(
+                error("observe_not_in_expect", where=loc, targets=", ".join(missing))
+            )
+
     return Case(
         name=name,
         description=_str(item.get("description"), loc, "description"),
@@ -888,12 +912,8 @@ def _parse_case(
         setup_files=setup_files,
         has_setup_files=has_setup_files,
         own_setup=item.get("setup"),
-        observe=_str_list(item.get("observe"), loc, "observe"),
-        expect=(
-            _parse_expect(item["expect"], kind, loc)
-            if "expect" in item and manual is None
-            else None
-        ),
+        observe=observe,
+        expect=expect,
         meta={**meta, **_meta(item.get("meta"), loc)},
         line=doc._source_lines.get(id(item)),
         manual=manual,

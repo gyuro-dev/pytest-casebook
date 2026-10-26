@@ -34,6 +34,7 @@ def read_ini(start: Path) -> tuple[Path | None, dict[str, IniValue]]:
 
     :param start: 探し始めるディレクトリ（ふつうは YAML のディレクトリ）
     :return: (見つかった設定ファイルのパス, 名前 -> 値)。見つからなければ (None, {})
+    :raises ValueError: 設定ファイルを TOML / ini として読めないとき（メッセージにパスを含む）
     """
     for base in (start, *start.parents):
         found = _read_one(base)
@@ -50,7 +51,11 @@ def _read_one(base: Path) -> tuple[Path, dict[str, IniValue]] | None:
         return p, _ini_section(p, "pytest") or {}
     p = base / "pyproject.toml"
     if p.is_file():
-        data = tomllib.loads(p.read_text(encoding="utf-8"))
+        try:
+            data = tomllib.loads(p.read_text(encoding="utf-8"))
+        except tomllib.TOMLDecodeError as e:
+            # TOMLDecodeError も ValueError だが、どのファイルかが分かるようにパスを添える
+            raise ValueError(f"cannot read {p}: {e}") from None
         options = data.get("tool", {}).get("pytest", {}).get("ini_options")
         if isinstance(options, dict):
             # pytest と同じく、リスト以外の値（true や数値）は文字列にする
@@ -68,10 +73,18 @@ def _read_one(base: Path) -> tuple[Path, dict[str, IniValue]] | None:
 
 
 def _ini_section(path: Path, section: str) -> dict[str, IniValue] | None:
-    """ini 形式のファイルの節を読む（節がなければ None）。"""
+    """
+    ini 形式のファイルの節を読む（節がなければ None）。
+
+    :raises ValueError: ini として読めないとき（load(ini=True) の説明どおり ValueError にする。
+        configparser.Error は ValueError ではないため）
+    """
     # % を値に書けるよう、補間はしない
     parser = configparser.ConfigParser(interpolation=None)
-    parser.read_string(path.read_text(encoding="utf-8"), source=str(path))
+    try:
+        parser.read_string(path.read_text(encoding="utf-8"), source=str(path))
+    except configparser.Error as e:
+        raise ValueError(f"cannot read {path}: {e}") from None
     if not parser.has_section(section):
         return None
     values: dict[str, IniValue] = dict(parser.items(section))

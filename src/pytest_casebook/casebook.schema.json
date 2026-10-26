@@ -173,35 +173,73 @@
       "required": [
         "name"
       ],
-      "additionalProperties": false,
-      "oneOf": [
-        {
-          "required": [
-            "command"
-          ]
-        },
-        {
-          "required": [
-            "call"
-          ]
-        },
-        {
-          "required": [
-            "request"
-          ]
-        },
-        {
-          "required": [
-            "manual"
-          ]
-        }
-      ],
+      "$ref": "#/$defs/caseProperties",
       "properties": {
         "name": {
           "type": "string",
           "pattern": "^\\w[\\w.\\-]*$",
           "description": "Case name (becomes the golden file name) / ケース名（期待出力のファイル名になる）"
         },
+        "params": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/param"
+          },
+          "description": "Rows laid over this case, one case per element (named <case name>-<element name>) / このケースに重ねる行。要素ごとに1件のケースになる（名前は <ケース名>-<要素名>）"
+        }
+      },
+      "unevaluatedProperties": false,
+      "if": {
+        "required": [
+          "params"
+        ]
+      },
+      "then": {},
+      "else": {
+        "oneOf": [
+          {
+            "required": [
+              "command"
+            ]
+          },
+          {
+            "required": [
+              "call"
+            ]
+          },
+          {
+            "required": [
+              "request"
+            ]
+          },
+          {
+            "required": [
+              "manual"
+            ]
+          }
+        ]
+      }
+    },
+    "param": {
+      "type": "object",
+      "description": "One element of params: the keys laid over the template. name is appended to the template's name (params cannot be nested) / params の要素1つ。テンプレートに重ねるキー。name はテンプレートの名前に足す（params は入れ子にできない）",
+      "required": [
+        "name"
+      ],
+      "$ref": "#/$defs/caseProperties",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[\\w.\\-]+$",
+          "description": "Appended to the template's name as <case name>-<element name> / <ケース名>-<要素名> としてテンプレートの名前に足す名前"
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "caseProperties": {
+      "description": "The keys of a case other than name and params, shared by a case and a params element / ケースのキーのうち name と params 以外（ケースと params の要素で共通）",
+      "properties": {
         "description": {
           "type": "string",
           "description": "What is checked / 確認する内容"
@@ -311,17 +349,6 @@
         "golden": {
           "type": "string",
           "description": "Golden file name (defaults to <name>.txt) / 期待出力のファイル名（省略時は <name>.txt）"
-        },
-        "params": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "object",
-            "required": [
-              "name"
-            ]
-          },
-          "description": "Rows laid over this case, one case per element (named <case name>-<element name>) / このケースに重ねる行。要素ごとに1件のケースになる（名前は <ケース名>-<要素名>）"
         }
       }
     },

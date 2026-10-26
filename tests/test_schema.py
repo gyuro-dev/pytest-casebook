@@ -97,6 +97,53 @@ def test_schema_accepts_env() -> None:
     assert errors(doc) == []
 
 
+def test_schema_accepts_params_with_the_action_in_each_element(tmp_path: Path) -> None:
+    """
+    params: を持つテンプレートは、操作（command など）を要素ごとに書いてもよい
+    （model.py でも読める書き方であることも確かめる）。
+    """
+    doc = {
+        "cases": [
+            {
+                "name": "t",
+                "description": "要素ごとに呼ぶ関数を変える",
+                "params": [
+                    {"name": "a", "call": "m:f", "args": [1]},
+                    {"name": "b", "call": "m:g", "expect": {"return": 2}},
+                ],
+            },
+            # テンプレートに操作を書く、これまでの書き方
+            {"name": "u", "call": "m:f", "params": [{"name": "0", "args": [0]}]},
+        ]
+    }
+    assert errors(doc) == []
+    path = tmp_path / "casebook_x.yaml"
+    path.write_text(yaml.safe_dump(doc, allow_unicode=True), encoding="utf-8")
+    names = [c.name for c in pytest_casebook.load(path).cases]
+    assert names == ["t-a", "t-b", "u-0"]
+
+
+@pytest.mark.parametrize(
+    "param",
+    [
+        {"name": "a", "arg": [1]},  # 要素の中の打ち間違い
+        {"name": "a", "params": [{"name": "b"}]},  # params の入れ子
+        {"name": "a", "group": "g"},  # ケースのキーではない
+        {"args": [1]},  # name がない
+        {"name": "a b"},  # 名前に空白
+    ],
+)
+def test_schema_rejects_mistakes_in_params(param: dict[str, Any]) -> None:
+    doc = {"cases": [{"name": "t", "call": "m:f", "params": [param]}]}
+    assert errors(doc)
+
+
+def test_schema_still_rejects_a_case_without_params_and_action() -> None:
+    """操作を省けるのは params: を持つテンプレートだけ。"""
+    assert errors({"cases": [{"name": "a", "description": "x"}]})
+    assert errors({"cases": [{"name": "a", "description": "x", "params": []}]})
+
+
 def test_schema_path_is_packaged() -> None:
     assert pytest_casebook.SCHEMA_PATH.is_file()
 
