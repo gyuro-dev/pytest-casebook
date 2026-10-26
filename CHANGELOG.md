@@ -31,6 +31,33 @@ incompatible change raises the minor version).
 - In the HTML report, when the golden contents are shown, the expected-result column links to
   the fold below ("See the golden file below (…)") instead of repeating the file name;
   clicking it opens the fold.
+- In a case with `expect:`, an `observe:` target (including `files`) that is not also a key of
+  `expect:` is a YAML error. Its value used to be fetched and silently thrown away; with
+  `expect:`, write the target in `expect:` directly (it is fetched automatically).
+- Exceptions defined inside a class are named with their qualified name (`Outer.Inner: …`)
+  in golden files and failure messages, matching `raises: "Outer.Inner"`. Golden files of
+  such exceptions change.
+- `load()` makes the path absolute (like pytest, without resolving symlinks), so
+  `CasebookDoc.path` is always absolute.
+- `params:` elements are validated strictly by the JSON Schema (only case keys, `name`
+  required, no nested `params`), and a `params` template may give the action
+  (`command:` / `call:` / `request:` / `manual:`) in each element instead.
+- With `load(ini=True)`, an unreadable configuration file raises
+  `ValueError("cannot read <path>: …")`.
+- Hooks receive `config=None` when called through `run_case()` (typed
+  `pytest.Config | None`).
+
+### Fixed
+
+- `load()` with a bare relative path (e.g. `load("casebook_x.yaml")`) followed by `run_case()`
+  replaced every `.` in the output with `{casebook_dir}`, and broke `{casebook_dir}` and module
+  imports after the case moved into a working directory.
+- A `command:` argument containing a newline broke the golden file's header block, so
+  `# exit_code:` was silently never compared. Header values are now written on one line.
+- A program line such as `----- RESULTS -----` was read as a golden section. Only the known
+  titles (`stdout`, `stderr`, `return`, `raises`, `json`, `body`, `observe: …`) are sections.
+- The HTML report colored any line starting with `+` or `-` in the failure details (e.g. a
+  Markdown `- item` in the actual output); only real diff lines are colored now.
 
 ## [0.7.1] - 2026-10-26
 
