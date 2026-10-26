@@ -7,9 +7,12 @@ from __future__ import annotations
 import hashlib
 import shutil
 import textwrap
+from pathlib import Path
 
 import pytest
 from helpers import PY, golden, write_casebook
+
+import pytest_casebook
 
 # DB の代わりに sqlite のインメモリ DB を使う conftest
 DB_CONFTEST = """
@@ -390,6 +393,15 @@ def test_expect_multiline_stdout_shows_diff(project: pytest.Pytester) -> None:
         ("command: x\n    expect: {}", "expect は 項目 -> 期待値 のマッピング"),
         # キーが文字列でなくても、書き方の誤りとして知らせる（AttributeError で落ちない）
         ("command: x\n    expect: {stdout: {1: a}}", "expect.stdout は文字列か"),
+        # expect: のケースでは、expect: にない observe: の対象は比べられずに捨てられるため誤り
+        (
+            "command: x\n    observe: [db.users]\n    expect: {exit_code: 0}",
+            "observe: の db.users が expect: にありません",
+        ),
+        (
+            "command: x\n    observe: [files, db.a]\n    expect: {db.a: []}",
+            "observe: の files が expect: にありません",
+        ),
     ],
 )
 def test_invalid_expect(project: pytest.Pytester, case: str, message: str) -> None:
@@ -397,6 +409,29 @@ def test_invalid_expect(project: pytest.Pytester, case: str, message: str) -> No
     result = project.runpytest()
     result.assert_outcomes(errors=1)
     result.stdout.fnmatch_lines([f"*{message}*"])
+
+
+def test_observe_not_in_expect_message_in_english(tmp_path: Path) -> None:
+    """observe: と expect: の両方に書いた対象は使えて、expect: にないものだけを英語でも知らせる。"""
+    path = tmp_path / "casebook_x.yaml"
+    path.write_text(
+        "cases:\n  - name: a\n    command: x\n    observe: [db.a, db.b, files]\n"
+        "    expect: {exit_code: 0, db.a: []}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(pytest_casebook.CasebookError) as e:
+        pytest_casebook.load(path)
+    assert str(e.value) == (
+        "casebook_x.yaml: cases[0] (line 2) (case a): db.b, files in observe: are not in "
+        "expect:. In a case with expect:, write the values to check in expect: "
+        "(then observe: is not needed)"
+    )
+    # expect: にあれば observe: に重ねて書いてもよい（取り出すのは1回）
+    path.write_text(
+        "cases:\n  - name: a\n    command: x\n    observe: [db.a]\n    expect: {db.a: []}\n",
+        encoding="utf-8",
+    )
+    assert pytest_casebook.load(path).cases[0].observe_targets == ("db.a",)
 
 
 def test_html_shows_precondition_and_expected(db_project: pytest.Pytester) -> None:

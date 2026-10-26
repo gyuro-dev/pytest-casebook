@@ -19,6 +19,9 @@
 - 見出しのない本文は、command なら stdout、call なら return、request なら json として扱う
   （出力が1つだけなら、期待出力ファイルに本文だけを書けばよい）
 - 書いていない見出しは、空であることを期待する（stderr を書かなければ stderr は空）
+- 見出しは stdout・stderr・return・raises・json・body・`observe: <対象>` だけ。
+  ほかの `----- X -----` の行は本文の一部になる
+- ヘッダーは先頭から続く `# キー: 値` の行だけ（コメントや空行があると、そこから本文になる）
 """
 
 from __future__ import annotations
@@ -29,7 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .messages import MESSAGES
-from .model import Case
+from .model import Case, one_line
 
 # 比べない（説明のための）ヘッダー。description は ini の casebook_golden_description を
 # 有効にしたときだけ書くが、どの版で書かれたファイルでも説明として読み飛ばす
@@ -40,7 +43,11 @@ INFO_KEYS = frozenset(
 RESULT_KEYS = frozenset({"exit_code", "status"})
 
 _HEADER_RE = re.compile(r"^# ([a-z_]+): ?(.*)$")
-_SECTION_RE = re.compile(r"^----- (.+) -----$")
+# 見出しの行。見出しにするのは、期待出力に書く見出し（stdout・stderr・return・raises・json・
+# body・observe: <対象>）だけで、それ以外の `----- X -----` の行（プログラムが出した区切りの
+# 行など）はふつうの本文として扱う。知っている見出しとまったく同じ行（出力の途中の
+# `----- stdout -----` など）は、書かれた期待出力と区別できないので、見出しのまま扱う
+_SECTION_RE = re.compile(r"^----- (stdout|stderr|return|raises|json|body|observe: .+) -----$")
 
 
 @dataclass
@@ -63,10 +70,20 @@ def render(case: Case, header: list[tuple[str, str]], sections: list[tuple[str, 
     :return: 期待出力の形式の文字列（末尾は改行1つ）
     """
     lines = [f"# case: {case.name}"]
-    lines += [f"# {key}: {value}" for key, value in header]
+    lines += [f"# {key}: {_one_line_header(value)}" for key, value in header]
     for title, body in sections:
         lines += [f"----- {title} -----", body]
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _one_line_header(value: str) -> str:
+    """
+    ヘッダーの値を1行にする。
+
+    ヘッダーは1行ずつでないと、次の行からが本文になり、# exit_code: が比べられなくなる
+    （command: の引数に改行があるときなど）。改行を含まない値は、空白も含めてそのまま書く。
+    """
+    return value if value.splitlines() == [value] else one_line(value)
 
 
 def parse_golden(text: str, default_section: str) -> GoldenContent:

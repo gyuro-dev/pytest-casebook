@@ -216,6 +216,72 @@ def test_html_colors_multiline_expect_diff(project: pytest.Pytester) -> None:
     assert "<span class='diff-del'>  - stdout" not in page
 
 
+def test_html_does_not_color_actual_values_outside_the_diff(project: pytest.Pytester) -> None:
+    """
+    差分の外（「----- 実際の return -----」の下の実際の値）の `- item` や `+10` の行には
+    色を付けない。差分の行には、これまでどおり付ける。
+    """
+    project.makepyfile(
+        lines="def get():\n    print('a')\n    print('b')\n    return '- item\\n+10'\n"
+    )
+    write_casebook(
+        project,
+        """
+        cases:
+          - name: lines
+            call: lines:get
+            expect:
+              stdout: |
+                a
+                X
+              return: other
+        """,
+    )
+    report = project.path / "report.html"
+    project.runpytest(f"--casebook-html={report}")
+    page = report.read_text(encoding="utf-8")
+    assert "<span class='diff-del'>    -X</span>" in page
+    assert "<span class='diff-add'>    +b</span>" in page
+    assert "----- 実際の return -----\n- item\n+10" in page
+    assert "<span class='diff-del'>- item" not in page
+    assert "<span class='diff-add'>+10" not in page
+    assert "<span class='diff-del'>-----" not in page
+
+
+def test_colorize_only_inside_unified_diff_blocks() -> None:
+    from pytest_casebook.report import _colorize
+
+    # 期待出力ファイルとの差分（字下げなし）。差分の前の行には色を付けない
+    golden_diff = ["- before", "--- expected (a.txt)", "+++ actual output", "@@ -1 +1 @@"]
+    golden_diff += [" same", "-old", "+new"]
+    assert _colorize("\n".join(golden_diff)).split("\n") == [
+        "- before",
+        "<span class='diff-file'>--- expected (a.txt)</span>",
+        "<span class='diff-file'>+++ actual output</span>",
+        "<span class='diff-hunk'>@@ -1 +1 @@</span>",
+        " same",
+        "<span class='diff-del'>-old</span>",
+        "<span class='diff-add'>+new</span>",
+    ]
+    # expect: の失敗（差分は4つの空白で字下げ）。字下げの違う行で差分が終わる
+    expect_failure = ["  - stdout: differs", "    --- expected stdout", "    +++ actual stdout"]
+    expect_failure += ["    @@ -1 +1 @@", "    -X", "    +b", "", "  - return: differs"]
+    expect_failure += ["----- actual return -----", "- item", "+10"]
+    assert _colorize("\n".join(expect_failure)).split("\n") == [
+        "  - stdout: differs",
+        "<span class='diff-file'>    --- expected stdout</span>",
+        "<span class='diff-file'>    +++ actual stdout</span>",
+        "<span class='diff-hunk'>    @@ -1 +1 @@</span>",
+        "<span class='diff-del'>    -X</span>",
+        "<span class='diff-add'>    +b</span>",
+        "",
+        "  - return: differs",
+        "----- actual return -----",
+        "- item",
+        "+10",
+    ]
+
+
 def test_orphan_check_looks_into_subdirectories(project: pytest.Pytester) -> None:
     write_casebook(
         project,

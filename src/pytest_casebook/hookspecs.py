@@ -8,7 +8,11 @@ Every hook receives its arguments by name, so declare only the ones you use
 - `case`: the case being run (`pytest_casebook.Case`)
 - `env`: the value of the `casebook_env` fixture (override it in conftest.py)
 - `workdir`: the per-case working directory, or None when the case has none
-- `config`: the pytest config
+- `config`: the pytest config, or None when the case is run outside pytest by
+  `pytest_casebook.run_case()`
+
+The same hooks are called by `run_case()` when they are attributes of its `hooks` argument
+(e.g. an imported conftest module), so a hook that reads `config` should allow None.
 
 pytest-casebook が呼ぶ hook。利用する側は conftest.py に同じ名前の関数を書いて実装する。
 
@@ -18,7 +22,10 @@ pytest-casebook が呼ぶ hook。利用する側は conftest.py に同じ名前�
 - `case`: 実行中のケース（`pytest_casebook.Case`）
 - `env`: `casebook_env` fixture の値（conftest.py で上書きして用意する）
 - `workdir`: ケースごとの作業ディレクトリ（なければ None）
-- `config`: pytest の config
+- `config`: pytest の config。pytest の外で `pytest_casebook.run_case()` が実行するときは None
+
+`run_case()` も、`hooks` 引数（import した conftest モジュールなど）の属性にある同じ hook を
+呼ぶ。そのため `config` を使う hook は、None でも動くように書く。
 """
 
 from __future__ import annotations
@@ -42,7 +49,7 @@ hookspec = pluggy.HookspecMarker("pytest")
 
 @hookspec(firstresult=True)
 def pytest_casebook_run_command(
-    case: Case, argv: list[str], env: Any, cwd: Path, config: pytest.Config
+    case: Case, argv: list[str], env: Any, cwd: Path, config: pytest.Config | None
 ) -> CommandResult | tuple[int, str, str] | None:
     """
     Run a command case.
@@ -85,7 +92,7 @@ def pytest_casebook_run_command(
 
 @hookspec(firstresult=True)
 def pytest_casebook_request(
-    case: Case, request: HttpRequest, env: Any, workdir: Path | None, config: pytest.Config
+    case: Case, request: HttpRequest, env: Any, workdir: Path | None, config: pytest.Config | None
 ) -> HttpResponse | None:
     """
     Send the HTTP request of a request: case and return the response.
@@ -134,7 +141,7 @@ def pytest_casebook_prepare_call(
     args: list[Any],
     kwargs: dict[str, Any],
     workdir: Path | None,
-    config: pytest.Config,
+    config: pytest.Config | None,
 ) -> None:
     """
     Modify `args` and `kwargs` in place before the function of a call case is called.
@@ -151,7 +158,7 @@ def pytest_casebook_prepare_call(
 
 @hookspec
 def pytest_casebook_setup(
-    case: Case, data: dict[str, Any], env: Any, workdir: Path | None, config: pytest.Config
+    case: Case, data: dict[str, Any], env: Any, workdir: Path | None, config: pytest.Config | None
 ) -> AbstractContextManager[Any] | None:
     """
     Prepare a case's preconditions (insert rows into a DB, change the state of a mock, etc.).
@@ -188,7 +195,7 @@ def pytest_casebook_setup(
 
 @hookspec(firstresult=True)
 def pytest_casebook_observe(
-    target: str, case: Case, env: Any, workdir: Path | None, config: pytest.Config
+    target: str, case: Case, env: Any, workdir: Path | None, config: pytest.Config | None
 ) -> Any:
     """
     After the run, fetch and return the value of `target`.
@@ -214,7 +221,7 @@ def pytest_casebook_observe(
 
 
 @hookspec
-def pytest_casebook_placeholders(env: Any, config: pytest.Config) -> list[tuple[str, str]]:
+def pytest_casebook_placeholders(env: Any, config: pytest.Config | None) -> list[tuple[str, str]]:
     """
     Return values to replace in the output, such as IDs that change on every run. The results
     of every implementation are combined.
@@ -230,7 +237,7 @@ def pytest_casebook_placeholders(env: Any, config: pytest.Config) -> list[tuple[
 
 @hookspec
 def pytest_casebook_patterns(
-    env: Any, config: pytest.Config
+    env: Any, config: pytest.Config | None
 ) -> list[tuple[str | re.Pattern[str], str]]:
     """
     Return regex replacements to apply to the output. The results of every implementation are

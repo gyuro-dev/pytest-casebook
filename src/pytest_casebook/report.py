@@ -353,14 +353,40 @@ def _filter_bar(texts: dict[str, Any], rows: list[CaseRow]) -> str:
 
 
 def _colorize(text: str) -> str:
-    """失敗の詳細の差分の行に色を付ける（+ は実際の出力、- は期待、@@ は場所）。"""
+    """
+    失敗の詳細の差分の行に色を付ける（+ は実際の出力、- は期待、@@ は場所）。
+
+    色を付けるのは unified diff の中だけ。差分は `--- ` / `+++ ` のファイルの見出しか
+    `@@` の行で始まり、` `・`+`・`-`・`@@`・`\\` で始まる行が続くあいだを差分とみなす。
+    それ以外の行で差分は終わる。差分の外（「----- actual stdout -----」の下の実際の出力など）の
+    `- 項目` や `+10` の行には色を付けない。
+
+    expect: の失敗では、差分の行が4つの空白で字下げされている（「  - 項目: …」の箇条書きは
+    2つの空白なので、差分の行とは区別できる）。差分の始まりの字下げを覚えておき、
+    続く行も同じ字下げのときだけ差分とみなす。
+    """
     out: list[str] = []
+    # 今の差分の字下げ（差分の外なら None）
+    indent: str | None = None
     for line in text.split("\n"):
         escaped = _e(line)
-        # expect: の失敗では、差分の行が4つの空白で字下げされている
-        # （「  - 項目: …」の箇条書きは2つの空白なので、差分の行とは区別できる）
-        body = line.removeprefix("    ")
-        if body.startswith(("+++", "---")):
+        if indent is not None:
+            body = line[len(indent) :] if line.startswith(indent) else None
+            # 空の行は、行末の空白が消えた差分の空の行として、差分の続きとみなす
+            if line and (body is None or not body.startswith((" ", "+", "-", "@@", "\\"))):
+                indent = None
+        if indent is None:
+            for candidate in ("    ", ""):
+                if line.startswith(candidate) and line[len(candidate) :].startswith(
+                    ("--- ", "+++ ", "@@")
+                ):
+                    indent = candidate
+                    break
+        if indent is None:
+            out.append(escaped)
+            continue
+        body = line[len(indent) :]
+        if body.startswith(("+++ ", "--- ")):
             out.append(f"<span class='diff-file'>{escaped}</span>")
         elif body.startswith("+"):
             out.append(f"<span class='diff-add'>{escaped}</span>")

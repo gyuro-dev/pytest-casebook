@@ -243,7 +243,10 @@ ERRORS: dict[str, dict[str, str]] = {
         ),
         "params_name": "{where}: params の各要素には name（ケース名に足す名前）を書いてください",
         "params_nested": "{where}: params の中に params は書けません",
-        "bad_name": ("{where}: name に使えるのは英数字・_・-・. で、先頭は英数字か _ です: {name}"),
+        "bad_name": (
+            "{where}: name に使えるのは文字（日本語も可）・数字・_・-・. で、"
+            "先頭に . と - は使えません: {name}"
+        ),
         "one_action": "{where}: command・call・request・manual のどれか1つだけを書いてください",
         "manual_keys": "{where}: manual のケースには {keys} を書けません",
         "manual_expect": (
@@ -287,6 +290,10 @@ ERRORS: dict[str, dict[str, str]] = {
         "expect_kind": "{where}: expect.{key} は {kinds} のケースにだけ書けます",
         "return_and_raises": (
             "{where}: expect には return と raises のどちらか一方だけを書いてください"
+        ),
+        "observe_not_in_expect": (
+            "{where}: observe: の {targets} が expect: にありません。expect: のケースでは、"
+            "確かめる値を expect: に書いてください（expect: に書けば observe: は要りません）"
         ),
         "exit_code_int": "{where}: expect.exit_code は整数で書いてください",
         "status_int": "{where}: expect.status は整数で書いてください",
@@ -369,8 +376,8 @@ ERRORS: dict[str, dict[str, str]] = {
         "params_name": "{where}: every params element needs a name (appended to the case name)",
         "params_nested": "{where}: params cannot be nested inside params",
         "bad_name": (
-            "{where}: name can only contain letters, digits, _, - and ., and must not"
-            " start with . or -: {name}"
+            "{where}: name can only contain letters (any language), digits, _, - and ., "
+            "and must not start with . or -: {name}"
         ),
         "one_action": "{where}: write exactly one of command, call, request and manual",
         "manual_keys": "{where}: manual cases cannot have {keys}",
@@ -412,6 +419,10 @@ ERRORS: dict[str, dict[str, str]] = {
         ),
         "expect_kind": "{where}: expect.{key} can only be used in {kinds} cases",
         "return_and_raises": "{where}: write either return or raises in expect, not both",
+        "observe_not_in_expect": (
+            "{where}: {targets} in observe: are not in expect:. In a case with expect:, "
+            "write the values to check in expect: (then observe: is not needed)"
+        ),
         "exit_code_int": "{where}: expect.exit_code must be an integer",
         "status_int": "{where}: expect.status must be an integer",
         "headers_mapping": "{where}: expect.headers must be a mapping of header name -> value",

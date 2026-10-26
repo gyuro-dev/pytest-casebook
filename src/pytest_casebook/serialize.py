@@ -93,7 +93,18 @@ def render_rows(value: Any) -> str:
     return compact(value)
 
 
+def exception_name(error: BaseException) -> str:
+    """
+    例外の型名。クラスの中で定義した例外は `Outer.Inner` にする（__qualname__）。
+
+    expect の raises: は `Outer.Inner` で一致するので、期待出力や失敗の説明でも同じ名前を出す
+    （`Inner` だけだと、どのクラスの例外か分からない）。組み込みの例外は __name__ と同じ。
+    """
+    return type(error).__qualname__
+
+
 def describe_exception(error: BaseException) -> str:
-    """例外を `型名: メッセージ` の1行にする。"""
+    """例外を `型名: メッセージ` の1行にする（型名は exception_name()）。"""
     message = str(error)
-    return f"{type(error).__name__}: {message}" if message else type(error).__name__
+    name = exception_name(error)
+    return f"{name}: {message}" if message else name

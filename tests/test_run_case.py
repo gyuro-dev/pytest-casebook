@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import sys
 import textwrap
 import types
 from collections.abc import Iterator
@@ -13,6 +14,7 @@ from helpers import PY, golden, write_casebook
 
 import pytest_casebook
 from pytest_casebook import Case, CasebookRunError, run_case
+from pytest_casebook.model import parse_document
 
 
 def test_command_case_equals_the_updated_golden(project: pytest.Pytester) -> None:
@@ -177,6 +179,29 @@ def test_empty_setup_files_gives_a_fresh_workdir(tmp_path: Path) -> None:
     assert not (tmp_path / "out").exists()
 
 
+def test_manual_case_needs_no_workdir(tmp_path: Path) -> None:
+    """
+    手動のケースは実行しないので、状態や setup: に files があっても作業ディレクトリを作らない。
+    """
+    path = _write(
+        tmp_path / "casebook_manual.yaml",
+        """
+        states:
+          default: {}
+          prepared: {files: {a.txt: x}}
+        cases:
+          - name: by_state
+            state: prepared
+            manual: 画面で確かめる
+          - name: by_setup
+            setup: {files: {}}
+            manual: 画面で確かめる
+        """,
+    )
+    doc = pytest_casebook.load(path)
+    assert [c.needs_workdir for c in doc.cases] == [False, False]
+
+
 # =============================================================================
 # load(ini=True)（pytest の設定ファイルの casebook_* を読む）
 # =============================================================================
@@ -337,3 +362,64 @@ def test_invalid_ini_bool_is_an_error(tmp_path: Path) -> None:
     path = _write(tmp_path / "casebook_x.yaml", INI_CASEBOOK)
     with pytest.raises(ValueError, match="casebook_golden_description must be true or false"):
         pytest_casebook.load(path, ini=True)
+
+
+@pytest.mark.parametrize(
+    ("name", "text"),
+    [
+        ("tox.ini", "[pytest]\ncasebook_lang = ja\ncasebook_lang = en\n"),  # 同じキーが2つ
+        ("pytest.ini", "casebook_lang = ja\n"),  # 節の見出しがない
+        ("pyproject.toml", "[tool.pytest.ini_options\n"),  # TOML として読めない
+    ],
+)
+def test_unreadable_config_is_a_value_error(tmp_path: Path, name: str, text: str) -> None:
+    """読めない設定ファイルは、docstring のとおり ValueError（どのファイルかを添える）。"""
+    config = _write(tmp_path / name, text)
+    path = _write(tmp_path / "casebook_x.yaml", INI_CASEBOOK)
+    with pytest.raises(ValueError, match="cannot read") as e:
+        pytest_casebook.load(path, ini=True)
+    assert str(config) in str(e.value)
+
+
+# =============================================================================
+# 相対パスで load() したケースファイル
+# =============================================================================
+
+
+def test_relative_path_load_runs_like_an_absolute_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    YAML のディレクトリで load("casebook_t.yaml") としても、出力の "." が {casebook_dir} に
+    ならず、作業ディレクトリに移動したあとも YAML の隣のモジュール・スクリプトを使える。
+    """
+    # ほかのテストの import と混ざらないよう、このテストだけのモジュール名にする
+    _write(tmp_path / "relpath_ver.py", 'def version():\n    return "v1.2.3. done."\n')
+    _write(tmp_path / "show.py", "print('show.py です')\n")
+    _write(
+        tmp_path / "casebook_t.yaml",
+        f"""
+        cases:
+          - name: version
+            setup: {{files: {{}}}}
+            call: relpath_ver:version
+          - name: script
+            setup: {{files: {{}}}}
+            command: ["{PY}", "{{casebook_dir}}/show.py"]
+        """,
+    )
+    monkeypatch.chdir(tmp_path)
+    # run_case() が sys.path に加える YAML のディレクトリを、テストのあとに戻す
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    doc = pytest_casebook.load("casebook_t.yaml")
+    assert doc.path.is_absolute()
+    assert doc.path == tmp_path / "casebook_t.yaml"
+    assert '----- return -----\n"v1.2.3. done."\n' in run_case(doc, doc.cases[0])
+    text = run_case(doc, doc.cases[1])
+    assert "# exit_code: 0\n" in text
+    assert "----- stdout -----\nshow.py です\n" in text
+
+    # parse_document に相対パスを直接渡しても、"." は {casebook_dir} の置き換えに使わない
+    data = {"cases": [{"name": "version", "call": "relpath_ver:version"}]}
+    relative = parse_document(data, Path("casebook_t.yaml"), golden_dir=Path("g"), levels=())
+    assert '----- return -----\n"v1.2.3. done."\n' in run_case(relative, relative.cases[0])
