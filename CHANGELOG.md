@@ -46,6 +46,13 @@ incompatible change raises the minor version).
   `ValueError("cannot read <path>: …")`.
 - Hooks receive `config=None` when called through `run_case()` (typed
   `pytest.Config | None`).
+- A string `command:` is split into arguments when the file is loaded, so `Case.command_argv`
+  is set for every `command:` case (it used to be set only for a list `command:`). The run
+  no longer splits the string again.
+- The JSON Schema matches loading more closely: an empty `cases:` list, an empty `states:`,
+  a text `expect:` on a `command:` / `call:` / `request:` case and a mapping `expect:` on a
+  `manual:` case are schema errors too. The remaining intended differences are listed in
+  `tests/test_schema_matrix.py`.
 
 ### Fixed
 
@@ -79,6 +86,9 @@ incompatible change raises the minor version).
 - `load(path, golden_dir=...)` with a relative `golden_dir` mixed it with the absolute `path`,
   which broke the golden paths shown in the report.
 - The JSON Schema rejects `stdin` together with `stdin_file`, as loading does.
+- Under pytest-xdist, `--casebook-update --casebook-html` left the golden contents out of the
+  report (the row kept the information from the setup phase). The report now takes the
+  information from the latest phase.
 
 ## [0.7.1] - 2026-10-26
 

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import re
 import textwrap
+from pathlib import Path
 
 import pytest
 from helpers import PY, golden, write_casebook
@@ -1188,3 +1189,82 @@ def test_command_env_replaces_casebook_dir(project: pytest.Pytester) -> None:
         """,
     )
     project.runpytest().assert_outcomes(passed=2)
+
+
+# =============================================================================
+# オプションの掛け合わせ（単体では動いても、同時に付けたときに受け渡しがずれないこと）
+# =============================================================================
+
+TWO_CASES = """
+cases:
+  - name: add
+    call: calc:add
+    args: [1, 2]
+  - name: add2
+    call: calc:add
+    args: [2, 2]
+"""
+
+
+def _golden_details(report: Path) -> list[str]:
+    page = report.read_text(encoding="utf-8")
+    return re.findall(r"<details class='golden'.*?<pre>(.*?)</pre>", page, re.S)
+
+
+def test_update_headers_with_html_shows_the_rewritten_golden(project: pytest.Pytester) -> None:
+    """--casebook-update-headers と --casebook-html: 書き直したケースは「更新」で、内容も出る。"""
+    write_casebook(project, TWO_CASES)
+    (project.path / "golden" / "casebook_calc").mkdir(parents=True)
+    (project.path / "golden" / "casebook_calc" / "add.txt").write_text("3\n", encoding="utf-8")
+    (project.path / "golden" / "casebook_calc" / "add2.txt").write_text("4\n", encoding="utf-8")
+    report = project.path / "report.html"
+    project.runpytest("--casebook-update-headers", f"--casebook-html={report}").assert_outcomes(
+        passed=3
+    )
+    page = report.read_text(encoding="utf-8")
+    assert '<span class="badge updated">更新 2</span>' in page
+    assert _golden_details(report) == ["----- return -----\n3", "----- return -----\n4"]
+    assert golden(project, "add").startswith("# case: add\n")
+
+
+def test_update_with_k_rewrites_only_the_selected_cases(project: pytest.Pytester) -> None:
+    """--casebook-update と -k: 選んだケースだけ書き直し、ほかの期待出力を迷子と間違えない。"""
+    write_casebook(project, TWO_CASES)
+    project.runpytest("--casebook-update").assert_outcomes(passed=3)
+    add2 = golden(project, "add2")
+    write_casebook(
+        project,
+        TWO_CASES.replace("args: [1, 2]", "args: [1, 3]").replace("args: [2, 2]", "args: [2, 3]"),
+    )
+    result = project.runpytest("--casebook-update", "-k", "add2")
+    result.assert_outcomes(passed=1, deselected=2)
+    result.stdout.fnmatch_lines(["*書き直した期待出力: 1 件*", "golden/casebook_calc/add2.txt"])
+    assert golden(project, "add2") != add2
+    # 選ばなかった add は書き直さないので、次のふつうの実行で古いまま失敗する
+    assert golden(project, "add").endswith("----- return -----\n3\n")
+    project.runpytest().assert_outcomes(passed=2, failed=1)
+
+
+def test_update_and_update_headers_together_act_as_update(project: pytest.Pytester) -> None:
+    """両方付けたら --casebook-update（結果が違っても書き直す）として動く。"""
+    write_casebook(project, TWO_CASES)
+    (project.path / "golden" / "casebook_calc").mkdir(parents=True)
+    (project.path / "golden" / "casebook_calc" / "add.txt").write_text("9\n", encoding="utf-8")
+    result = project.runpytest("--casebook-update", "--casebook-update-headers")
+    result.assert_outcomes(passed=3)
+    result.stdout.fnmatch_lines(["*書き直した期待出力: 2 件*"])
+    assert golden(project, "add").endswith("----- return -----\n3\n")
+
+
+def test_update_with_html_under_xdist(project: pytest.Pytester) -> None:
+    """pytest-xdist で分けて実行しても、レポートの結果・更新の印・期待出力の内容がそろう。"""
+    pytest.importorskip("xdist")
+    write_casebook(project, TWO_CASES)
+    report = project.path / "report.html"
+    result = project.runpytest("-n", "2", "--casebook-update", f"--casebook-html={report}")
+    result.assert_outcomes(passed=3)
+    result.stdout.fnmatch_lines(["*書き直した期待出力: 2 件*"])
+    page = report.read_text(encoding="utf-8")
+    assert "全 2 件" in page
+    assert '<span class="badge updated">更新 2</span>' in page
+    assert _golden_details(report) == ["----- return -----\n3", "----- return -----\n4"]

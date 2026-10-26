@@ -29,7 +29,8 @@
       "description": "State name -> contents (a named setup:). Selected with state: on a case or group / 状態名 -> 内容（名前を付けた setup:）。ケースやグループの state: で選ぶ",
       "additionalProperties": {
         "$ref": "#/$defs/setup"
-      }
+      },
+      "minProperties": 1
     },
     "command_prefix": {
       "description": "Arguments put before every command. {casebook_dir} becomes the directory of the YAML / どの command にも先頭に付ける引数。{casebook_dir} は YAML のディレクトリになる",
@@ -113,7 +114,8 @@
             "$ref": "#/$defs/case"
           }
         ]
-      }
+      },
+      "minItems": 1
     },
     "reason": {
       "type": "string",
@@ -201,22 +203,52 @@
           {
             "required": [
               "command"
-            ]
+            ],
+            "properties": {
+              "expect": {
+                "$ref": "#/$defs/expect"
+              }
+            }
           },
           {
             "required": [
               "call"
-            ]
+            ],
+            "properties": {
+              "expect": {
+                "$ref": "#/$defs/expect"
+              }
+            }
           },
           {
             "required": [
               "request"
-            ]
+            ],
+            "properties": {
+              "expect": {
+                "$ref": "#/$defs/expect"
+              }
+            }
           },
           {
             "required": [
               "manual"
-            ]
+            ],
+            "properties": {
+              "expect": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              }
+            }
           }
         ]
       }

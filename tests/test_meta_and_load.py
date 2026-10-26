@@ -274,3 +274,17 @@ def test_load_makes_a_relative_golden_dir_absolute(
     monkeypatch.chdir(tmp_path)
     doc = pytest_casebook.load(path, golden_dir="g")
     assert doc.golden_dir == tmp_path / "g"
+
+
+def test_string_command_is_split_when_loading(tmp_path: Path) -> None:
+    """文字列の command: は読み込みのときに引数に区切る（実行のときに区切り直さない）。"""
+    path = tmp_path / "casebook_x.yaml"
+    path.write_text(
+        "cases:\n  - {name: a, command: \"add 'red apple' --n=2\"}\n"
+        "  - {name: b, command: [add, 'red apple']}\n",
+        encoding="utf-8",
+    )
+    doc = pytest_casebook.load(path)
+    assert doc.cases[0].command_argv == ("add", "red apple", "--n=2")
+    assert doc.cases[1].command_argv == ("add", "red apple")
+    assert doc.cases[1].command == "add 'red apple'"

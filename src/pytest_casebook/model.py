@@ -195,7 +195,8 @@ class Case:
     groups: tuple[Group, ...] = ()
     # command: に書いた文字列（リストで書いたときは、表示用に1行にしたもの）
     command: str | None = None
-    # command: をリストで書いたときの引数（shell の書き方として区切らずに、そのまま使う）
+    # command: の引数（command_prefix は含まない）。リストで書いたときはそのまま、文字列で
+    # 書いたときは shell の書き方として区切ったもの。command のケース以外では None
     command_argv: tuple[str, ...] | None = None
     call: str | None = None
     # HTTP のリクエスト（request_defaults の headers を重ねたもの）
@@ -837,10 +838,11 @@ def _parse_case(
         if not command_argv and not doc.command_prefix:
             raise CasebookError(error("empty_command", where=loc))
     elif "command" in item:
-        # 空文字も書ける（command_prefix だけで実行するとき）
+        # 空文字も書ける（command_prefix だけで実行するとき）。shell の書き方として
+        # ここで区切っておく（実行のときに区切り直さない。空白だけなら引数は1つもない）
         command = _str(item["command"], loc, "command")
-        # 空白だけも空として扱う（区切ると引数が1つもない）
-        if not _shell_split(command, loc, "command") and not doc.command_prefix:
+        command_argv = tuple(_shell_split(command, loc, "command"))
+        if not command_argv and not doc.command_prefix:
             raise CasebookError(error("empty_command", where=loc))
     call = _str(item["call"], loc, "call", required=True) if "call" in item else None
     if call is not None and not _CALL_RE.fullmatch(call):

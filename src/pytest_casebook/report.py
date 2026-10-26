@@ -105,6 +105,9 @@ class CasebookHtmlReport:
         if not isinstance(meta, dict) or outcome not in OUTCOMES:
             return
         row = self.rows.setdefault(report.nodeid, CaseRow(meta=meta))
+        # 情報は新しい報告のものにする。--casebook-update で書いた期待出力の内容は call のあとに
+        # 入るので、setup の報告のまま（pytest-xdist では段階ごとに別の複製が届く）にしない
+        row.meta = meta
         # 時間はケースの実行（call）だけを数える。setup には session の fixture（環境を作る
         # 時間など）が入り、最初のケースだけが遅く見えてしまうため
         if report.when == "call":

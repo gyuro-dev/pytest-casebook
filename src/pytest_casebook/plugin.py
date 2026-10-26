@@ -864,7 +864,7 @@ def _execute_command(
     yaml_dir = doc.path.parent.as_posix()
     argv = [
         arg.replace(CASEBOOK_DIR_TOKEN, yaml_dir)
-        for arg in [*doc.command_prefix, *(case.command_argv or shlex.split(str(case.command)))]
+        for arg in [*doc.command_prefix, *(case.command_argv or ())]
     ]
     cwd = workdir or doc.path.parent
     with _in_dir(workdir):
