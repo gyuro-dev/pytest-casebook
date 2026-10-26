@@ -7,6 +7,31 @@ incompatible change raises the minor version).
 
 ## [Unreleased]
 
+### Added
+
+- `--casebook-update-headers` rewrites golden files whose results still match into the
+  current form (for example to add `# description:` after turning on
+  `casebook_golden_description`), without regenerating everything. A golden file whose
+  results differ still fails and is left untouched. Hand-written golden files are rewritten
+  into the full form.
+- The `--casebook-update` list marks files whose compared result headers changed, e.g.
+  `golden/casebook_cli/convert.txt (exit_code 0 → 2)`, so a run that started failing does not
+  slip into the golden files looking like any other change.
+- `load(path, ini=True)` reads the `casebook_*` options from the pytest configuration file
+  (`pytest.ini`, `pyproject.toml`, `tox.ini` or `setup.cfg`, looked up from the case file's
+  directory), and `run_case()` uses them as its defaults (`casebook_lang`,
+  `casebook_encoding`, `casebook_builtin_patterns`, `casebook_golden_description`).
+  Explicit arguments win; without `ini=True`, `load()` behaves as before.
+
+### Changed
+
+- `setup: {files: {}}` (an empty mapping) also runs the case in a fresh temporary working
+  directory. Before, only a non-empty `files:` did, and an empty one silently ran the case in
+  the YAML's directory.
+- In the HTML report, when the golden contents are shown, the expected-result column links to
+  the fold below ("See the golden file below (…)") instead of repeating the file name;
+  clicking it opens the fold.
+
 ## [0.7.1] - 2026-10-26
 
 ### Added
