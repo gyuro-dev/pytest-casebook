@@ -1092,7 +1092,7 @@ pytest がテストの場所として受け取るので、JUnit XML（xunit1）�
 
 | オプション | 内容 |
 |---|---|
-| `--casebook-update` | 期待出力ファイルを、今の出力で書き直す（結果が変わったものだけ。`expect:` のケースは比べるだけ。最後に書き直したファイルの一覧を出す。結果のヘッダーが変わったファイルには `exit_code 0 → 2` のような注記が付く） |
+| `--casebook-update` | 期待出力ファイルを、今の出力で書き直す（結果が変わったものだけ。`expect:` のケースは比べるだけ。最後に書き直したファイルの一覧を出す。結果のヘッダーが変わったファイルには `exit_code 0 → 2`、失敗の結果で新しく作ったファイルには `new, exit_code 1` / `new, raises` のような注記が付く） |
 | `--casebook-update-headers` | 結果が同じ期待出力ファイルの、ヘッダー（`# case:`・`# description:` など）を書き直し、`--casebook-update` と同じく一覧を出す。結果が違うファイルは失敗する。`--casebook-update` と一緒に付けたときは効かない |
 | `--casebook-html=PATH` | 結果を HTML に出力する |
 
