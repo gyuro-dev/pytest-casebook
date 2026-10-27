@@ -53,10 +53,11 @@ incompatible change raises the minor version).
   a text `expect:` on a `command:` / `call:` / `request:` case and a mapping `expect:` on a
   `manual:` case are schema errors too. The remaining intended differences are listed in
   `tests/test_schema_matrix.py`.
-- A string or `{contains}` in `expect:` (`stdout`, `stderr`, `body`, `headers`) gets the same
-  replacements as the actual output (`normalize:`, the built-in datetime and UUID) before
-  comparing, so `stdout: 1970-01-01T00:00:00` matches instead of failing against
-  `<datetime>`. `{regex}` is left alone.
+- Expected strings in `expect:` get the same replacements as the actual output (`normalize:`,
+  the built-in datetime and UUID) before comparing, so `stdout: 1970-01-01T00:00:00` matches
+  instead of failing against `<datetime>`. This covers `stdout`, `stderr`, `body`, `headers`,
+  `raises` and the strings inside `return`, `json` and observe targets; only the inside of
+  `{regex}` / `{$regex}` is left alone.
 - The `--casebook-update` list annotates a new golden file whose result is a failure
   (`(new, exit_code 3)`, `(new, status 404)`, `(new, raises)`), so a run that created the
   golden files does not hide a failing case among the successes.

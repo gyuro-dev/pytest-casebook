@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 
 import pytest_casebook
-from pytest_casebook import hookspecs, http
+from pytest_casebook import hookspecs, http, plugin
 
 
 def _public_objects() -> Iterator[tuple[str, Any]]:
@@ -38,6 +38,8 @@ def _public_objects() -> Iterator[tuple[str, Any]]:
             yield name, obj
     yield "send_with_httpx_client", http.send_with_httpx_client
     yield "send_with_werkzeug_client", http.send_with_werkzeug_client
+    # conftest.py で上書きする公開の fixture
+    yield "casebook_env", plugin.casebook_env
 
 
 PUBLIC = dict(_public_objects())

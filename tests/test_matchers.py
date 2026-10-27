@@ -372,3 +372,44 @@ def test_nan_matches_nan() -> None:
     assert match_value(float("nan"), float("nan"), "x") == []
     assert match_value({"v": float("nan")}, {"v": float("nan")}, "x") == []
     assert match_value(float("nan"), 1.0, "x")
+
+
+def test_expect_values_get_the_same_replacements_as_the_output(project: pytest.Pytester) -> None:
+    """raises・return・observe の中の文字列にも、出力と同じ置き換えを当てる（$regex は除く）。"""
+    project.makepyfile(
+        stamp=(
+            "def created():\n"
+            "    return {'at': '1970-01-01T00:00:00', 'ids': ['ord-1', 'ord-2']}\n"
+            "def boom():\n"
+            "    raise ValueError('ord-12 not found at 1970-01-01T00:00:00')\n"
+            "def write():\n"
+            "    open('out.txt', 'w').write('seen ord-3')\n"
+        )
+    )
+    write_casebook(
+        project,
+        r"""
+        normalize:
+          - {pattern: 'ord-\d+', replace: '<order-id>'}
+        cases:
+          - name: return_values
+            call: stamp:created
+            expect:
+              return: {at: "1970-01-01T00:00:00", ids: {$includes: [ord-2]}}
+          - name: return_regex_is_left_alone
+            call: stamp:created
+            expect:
+              return: {at: {$regex: '^<datetime>$'}}
+          - name: raises_message
+            call: stamp:boom
+            expect: {raises: "ValueError: ord-12 not found at 1970-01-01T00:00:00"}
+          - name: raises_contains
+            call: stamp:boom
+            expect: {raises: {contains: "ord-12"}}
+          - name: observed_file
+            setup: {files: {}}
+            call: stamp:write
+            expect: {files: {out.txt: "seen ord-3"}}
+        """,
+    )
+    project.runpytest().assert_outcomes(passed=6)
