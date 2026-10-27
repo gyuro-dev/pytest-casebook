@@ -519,7 +519,7 @@ expect:
 | `json` | request | レスポンスの本文を JSON として読み、`return` と同じ方法で比べる |
 | `body` | request | 本文の文字列。`stdout` と同じ比べ方 |
 | `headers` | request | ヘッダー名 -> 期待値。書いたヘッダーだけを、名前の大文字小文字を区別せずに比べる。値は `stdout` と同じ比べ方 |
-| `stdout` / `stderr` | command・call | 文字列なら完全一致、`{contains: ...}` なら含む、`{regex: ...}` なら正規表現。文字列と `{contains}` には、実際の出力と同じ置き換え（`normalize:`・組み込みの日時と UUID）を当ててから比べる（`stdout: 1970-01-01T00:00:00` は `<datetime>` と比べる） |
+| `stdout` / `stderr` | command・call | 文字列なら完全一致、`{contains: ...}` なら含む、`{regex: ...}` なら正規表現。期待値の文字列には、実際の出力と同じ置き換え（`normalize:`・組み込みの日時と UUID）を当ててから比べる（`stdout: 1970-01-01T00:00:00` は `<datetime>` と比べる）。`raises`・`return`・`json`・observe の対象の中の文字列も同じ。`{regex}` / `{$regex}` の中だけは触らない |
 | `return` | call | 辞書は書いたキーだけ、リストは件数と各要素、それ以外は完全一致 |
 | `raises` | call | 下の表のとおり |
 | 上記以外（`db.users`・`files` など） | すべて | observe の対象として取り出し（`observe:` は要らない）、`return` と同じ方法で比べる |

@@ -423,3 +423,26 @@ def test_relative_path_load_runs_like_an_absolute_one(
     data = {"cases": [{"name": "version", "call": "relpath_ver:version"}]}
     relative = parse_document(data, Path("casebook_t.yaml"), golden_dir=Path("g"), levels=())
     assert '----- return -----\n"v1.2.3. done."\n' in run_case(relative, relative.cases[0])
+
+
+def test_config_that_is_not_utf8_is_a_value_error(tmp_path: Path) -> None:
+    """UTF-8 でない設定ファイルも、どのファイルかを添えた ValueError にする。"""
+    config = tmp_path / "pyproject.toml"
+    config.write_bytes("[tool.pytest.ini_options]\ncasebook_html_title = '表'\n".encode("cp932"))
+    path = _write(tmp_path / "casebook_x.yaml", INI_CASEBOOK)
+    with pytest.raises(ValueError, match="cannot read") as e:
+        pytest_casebook.load(path, ini=True)
+    assert str(config) in str(e.value)
+
+
+@pytest.mark.parametrize("text", ['tool = "x"\n', "[tool]\npytest = 1\n"])
+def test_pyproject_with_non_table_tool_is_ignored(tmp_path: Path, text: str) -> None:
+    """tool や tool.pytest がテーブルでない pyproject.toml は、設定がないものとして読む。"""
+    _write(tmp_path / "pyproject.toml", text)
+    path = _write(tmp_path / "casebook_x.yaml", INI_CASEBOOK)
+    # 設定ファイルがまったくないときと同じ（既定の値）になる
+    plain = _write(tmp_path / "plain" / "casebook_x.yaml", INI_CASEBOOK)
+    assert (
+        pytest_casebook.load(path, ini=True).options
+        == pytest_casebook.load(plain, ini=True).options
+    )

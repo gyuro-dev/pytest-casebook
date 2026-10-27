@@ -52,11 +52,14 @@ def _read_one(base: Path) -> tuple[Path, dict[str, IniValue]] | None:
     p = base / "pyproject.toml"
     if p.is_file():
         try:
-            data = tomllib.loads(p.read_text(encoding="utf-8"))
+            data = tomllib.loads(_read_text(p))
         except tomllib.TOMLDecodeError as e:
             # TOMLDecodeError も ValueError だが、どのファイルかが分かるようにパスを添える
             raise ValueError(f"cannot read {p}: {e}") from None
-        options = data.get("tool", {}).get("pytest", {}).get("ini_options")
+        # tool や tool.pytest がテーブルでなければ（tool = "x" など）、設定はないものとする
+        tool = data.get("tool")
+        pytest_table = tool.get("pytest") if isinstance(tool, dict) else None
+        options = pytest_table.get("ini_options") if isinstance(pytest_table, dict) else None
         if isinstance(options, dict):
             # pytest と同じく、リスト以外の値（true や数値）は文字列にする
             return p, {
@@ -82,13 +85,26 @@ def _ini_section(path: Path, section: str) -> dict[str, IniValue] | None:
     # % を値に書けるよう、補間はしない
     parser = configparser.ConfigParser(interpolation=None)
     try:
-        parser.read_string(path.read_text(encoding="utf-8"), source=str(path))
+        parser.read_string(_read_text(path), source=str(path))
     except configparser.Error as e:
         raise ValueError(f"cannot read {path}: {e}") from None
     if not parser.has_section(section):
         return None
     values: dict[str, IniValue] = dict(parser.items(section))
     return values
+
+
+def _read_text(path: Path) -> str:
+    """
+    設定ファイルを UTF-8 で読む。
+
+    :raises ValueError: UTF-8 でないとき（UnicodeDecodeError は ValueError だが、
+        どのファイルかが分かるようにパスを添える）
+    """
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as e:
+        raise ValueError(f"cannot read {path}: {e}") from None
 
 
 def ini_lines(value: IniValue) -> list[str]:

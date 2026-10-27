@@ -30,7 +30,7 @@ from typing import Any
 import pytest
 
 from . import hookspecs
-from .expect import map_strings, match_text, match_value
+from .expect import map_strings, match_text, match_value, value_matcher
 from .golden import (
     GoldenContent,
     comparable_text,
@@ -1271,7 +1271,8 @@ def _match_response(
             problems.append(m["not_json"].format(body=body))
         else:
             actual = value_of(value)
-            found = match_value(expect["json"], actual, "json", lang)
+            expected_json = _normalized_value(expect["json"], normalizer)
+            found = match_value(expected_json, actual, "json", lang)
             if found:
                 problems += found
                 shown.append(("json", serialize(actual)))
@@ -1308,6 +1309,29 @@ def _normalized_expect(expected: Any, normalizer: Normalizer) -> Any:
     return expected
 
 
+def _normalized_value(expected: Any, normalizer: Normalizer) -> Any:
+    """
+    値の期待値（return・json・observe の対象）の中の文字列に、実際の値と同じ置き換えを当てる。
+
+    実際の値は `map_strings(..., normalizer.replace)` で中の文字列がすべて正規化されるので、
+    期待値も同じにする。`{$regex: ...}` の中身だけは正規表現なので触らない
+    （`$contains`・`$unordered`・`$includes` の中身は、ふつうの値と同じに扱う）。
+    """
+    matcher = value_matcher(expected)
+    if matcher is not None:
+        name, body = matcher
+        if name.lstrip("$") == "regex":
+            return expected
+        return {name: _normalized_value(body, normalizer)}
+    if isinstance(expected, str):
+        return normalizer.replace(expected)
+    if isinstance(expected, list):
+        return [_normalized_value(v, normalizer) for v in expected]
+    if isinstance(expected, dict):
+        return {k: _normalized_value(v, normalizer) for k, v in expected.items()}
+    return expected
+
+
 def _compare_expect(case: Case, outcome: _Outcome, normalizer: Normalizer, lang: str) -> None:
     """YAML の expect: に書いた期待値と比べる。"""
     m = MESSAGES[lang]
@@ -1335,7 +1359,8 @@ def _compare_expect(case: Case, outcome: _Outcome, normalizer: Normalizer, lang:
         if outcome.error is not None:
             described = normalizer(describe_exception(outcome.error))
             if "raises" in expect:
-                problems += _match_raises(expect["raises"], outcome.error, described, lang)
+                expected_raises = _normalized_expect(expect["raises"], normalizer)
+                problems += _match_raises(expected_raises, outcome.error, described, lang)
             else:
                 problems.append(m["raised"].format(described=described))
         elif "raises" in expect:
@@ -1343,7 +1368,8 @@ def _compare_expect(case: Case, outcome: _Outcome, normalizer: Normalizer, lang:
             problems.append(m["not_raised"].format(returned=returned))
         elif "return" in expect:
             actual = value_of(outcome.value)
-            found = match_value(expect["return"], actual, "return", lang)
+            expected_return = _normalized_value(expect["return"], normalizer)
+            found = match_value(expected_return, actual, "return", lang)
             if found:
                 problems += found
                 shown.append(("return", render_rows(actual)))
@@ -1352,7 +1378,8 @@ def _compare_expect(case: Case, outcome: _Outcome, normalizer: Normalizer, lang:
         if target not in expect:
             continue
         actual = value_of(outcome.observed[target])
-        found = match_value(expect[target], actual, target, lang)
+        expected_target = _normalized_value(expect[target], normalizer)
+        found = match_value(expected_target, actual, target, lang)
         if found:
             problems += found
             shown.append((target, _render_observed(target, actual, m["no_files"])))
