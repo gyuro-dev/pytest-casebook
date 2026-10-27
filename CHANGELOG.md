@@ -108,6 +108,9 @@ incompatible change raises the minor version).
 - The CI job that skips the heavy jobs for docs-only changes treated a failing `git diff`
   as "no changes"; it now runs everything in that case, and `CHANGELOG.md` counts as code
   because `tests/test_release_notes.py` checks it.
+- `scripts/integration.sh` picks free host ports for PostgreSQL and the API unless
+  `CASEBOOK_DB_PORT` / `CASEBOOK_API_PORT` are set; the fixed 58000 was occasionally taken on
+  the CI runner ("address already in use").
 
 ## [0.7.1] - 2026-10-26
 
