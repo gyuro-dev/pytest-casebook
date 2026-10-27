@@ -27,7 +27,11 @@ _T = TypeVar("_T")
 
 
 class CasebookRunError(Exception):
-    """ケースを実行できなかった（コマンドが見つからない、関数を import できないなど）。"""
+    """
+    A case could not be run (the command was not found, the function could not be imported, etc.).
+
+    ケースを実行できなかった（コマンドが見つからない、関数を import できないなど）。
+    """
 
 
 @dataclass(frozen=True)

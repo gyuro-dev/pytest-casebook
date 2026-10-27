@@ -902,7 +902,7 @@ A failed case shows the line in the YAML where it is written (`[wrong] (line 8)`
 
 | Option | Meaning |
 |---|---|
-| `--casebook-update` | rewrite golden files from the current output (only those whose results changed; `expect:` cases are only compared), and list the rewritten files at the end of the run (an `exit_code 0 → 2` style note marks files whose result headers changed) |
+| `--casebook-update` | rewrite golden files from the current output (only those whose results changed; `expect:` cases are only compared), and list the rewritten files at the end of the run (a note such as `exit_code 0 → 2` marks files whose result headers changed, and `new, exit_code 1` / `new, raises` marks new files whose result is a failure) |
 | `--casebook-update-headers` | rewrite the headers (`# case:`, `# description:`, ...) of golden files whose results still match, and list them like `--casebook-update`; a file whose results differ still fails. Ignored together with `--casebook-update` |
 | `--casebook-html=PATH` | write the results as HTML |
 

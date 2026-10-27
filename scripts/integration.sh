@@ -25,7 +25,7 @@ import socket, sys
 sockets = []
 for _ in sys.argv[1:]:
     s = socket.socket()
-    s.bind(("127.0.0.1", 0))
+    s.bind(("", 0))  # compose と同じく全インターフェース（0.0.0.0）で空いているもの
     sockets.append(s)
 print(*(s.getsockname()[1] for s in sockets))
 EOF

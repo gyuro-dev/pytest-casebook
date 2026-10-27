@@ -1180,7 +1180,7 @@ def _result_changes(expected: GoldenContent | None, got: GoldenContent) -> str:
         notable = [
             f"{key} {value}"
             for key, value in got.results.items()
-            if (key == "exit_code" and value != "0") or (key == "status" and value >= "400")
+            if (key == "exit_code" and value != "0") or (key == "status" and int(value) >= 400)
         ]
         if "raises" in got.sections:
             notable.append("raises")
