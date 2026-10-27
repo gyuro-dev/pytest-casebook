@@ -1,6 +1,7 @@
 # 実起動の試験で使うサービス（PostgreSQL と API サーバー）。
 # scripts/integration.sh が起動・待機・片付けまでを行う。
-# ポートは環境変数で変えられる（ほかのサービスとぶつかるとき）。
+# ホスト側のポートは環境変数で決める（scripts/integration.sh が空いているポートを選んで渡す。
+# compose を直接使うときの既定は 55432 と 58000）。
 name: casebook-integration
 
 services:

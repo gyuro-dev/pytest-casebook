@@ -33,7 +33,7 @@ scripts/integration.sh
 | `scripts/integration.sh` | 起動して試験し、片付ける |
 | `KEEP=1 scripts/integration.sh` | 終わってもコンテナを残す（調べるとき） |
 | `UPDATE=1 scripts/integration.sh` | 期待出力ファイル（`golden/`）を作り直す |
-| `CASEBOOK_DB_PORT=… CASEBOOK_API_PORT=…` | ポートを変える（既定は 55432 と 58000） |
+| `CASEBOOK_DB_PORT=… CASEBOOK_API_PORT=…` | ホスト側のポートを決める（指定しなければ空いているポートを選ぶ） |
 
 接続先（`CASEBOOK_DB_URL` / `CASEBOOK_API_URL`）がないときは、このディレクトリのケースを集めません。ふだんの `uv run pytest` には影響しません。
 

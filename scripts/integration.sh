@@ -17,8 +17,22 @@ cd "$(dirname "$0")/.."
 OUT="reports/integration"
 SUMMARY="$OUT/summary.txt"
 COMPOSE=(docker compose -f integration/compose.yaml)
-export CASEBOOK_DB_PORT="${CASEBOOK_DB_PORT:-55432}"
-export CASEBOOK_API_PORT="${CASEBOOK_API_PORT:-58000}"
+# ホスト側のポートは、指定がなければ空いているものを選ぶ（決め打ちの 55432 / 58000 だと、
+# CI の runner でたまたま使われていて「address already in use」で起動できないことがあった）
+free_ports() {
+  python3 - "$@" <<'EOF' 2>/dev/null || echo "$@"
+import socket, sys
+sockets = []
+for _ in sys.argv[1:]:
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    sockets.append(s)
+print(*(s.getsockname()[1] for s in sockets))
+EOF
+}
+read -r free_db free_api < <(free_ports 55432 58000)
+export CASEBOOK_DB_PORT="${CASEBOOK_DB_PORT:-$free_db}"
+export CASEBOOK_API_PORT="${CASEBOOK_API_PORT:-$free_api}"
 export CASEBOOK_DB_URL="postgresql://casebook:casebook@localhost:${CASEBOOK_DB_PORT}/casebook"
 export CASEBOOK_API_URL="http://localhost:${CASEBOOK_API_PORT}"
 export PYTHONIOENCODING=utf-8
