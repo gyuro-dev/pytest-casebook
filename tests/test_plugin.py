@@ -1334,9 +1334,11 @@ def test_relative_program_in_workdir_gets_a_hint(project: pytest.Pytester) -> No
         """,
     )
     result = project.runpytest()
-    out = result.stdout.str()
-    # 作業ディレクトリのないケースにはヒントを付けない（見つからない理由が違う）
-    assert out.count("{casebook_dir}/... で書いてください") == 1
+    result.assert_outcomes(failed=2, passed=1)
+    # 作業ディレクトリのないケースにはヒントを付けない（見つからない・起動できない理由が違う）
+    plain = [line for line in result.stdout.lines if "[plain]" in line]
+    assert plain
+    assert all("{casebook_dir}" not in line for line in plain)
     result.stdout.fnmatch_lines(
         ["*[[]with_files[]] コマンド*bin/tool.py*files を使うケースは一時の作業ディレクトリ*"]
     )
