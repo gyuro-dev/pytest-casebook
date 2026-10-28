@@ -112,7 +112,7 @@ cases:
     command: --name
     expect:                             # you can also write the expected result in YAML
       exit_code: 2
-      stderr: {contains: --name}
+      stderr: {$contains: --name}
 ```
 
 Each case runs `command_prefix` followed by `command`, e.g. `hello --name Alice`. It runs in the directory of the YAML file (`tests/` here), so the command must be runnable from there (an installed command, or a script referenced by path such as `[python, "{casebook_dir}/../hello.py"]`).
@@ -466,7 +466,7 @@ A case is checked either against its golden file or against `expect:`, never bot
 expect:
   exit_code: 1                          # command
   stdout: ""                            # strings: exact match (trailing newline ignored)
-  stderr: {contains: error}             # {contains: ...} contains / {regex: ...} regex
+  stderr: {$contains: error}             # {$contains: ...} contains / {$regex: ...} regex
   return: {item: apple}                 # call. dicts: only the keys you write
   raises: ValueError                    # call. type name (subclasses match too)
   db.stock: [{item: apple, count: 7}]   # anything else is an observe target
@@ -479,7 +479,7 @@ expect:
 | `json` | request | the response body read as JSON, compared like `return` |
 | `body` | request | the body text, compared like `stdout` |
 | `headers` | request | header name -> expected value. Only the headers you write, names case-insensitive. Values compared like `stdout` |
-| `stdout` / `stderr` | command, call | a string is an exact match, `{contains: ...}` contains, `{regex: ...}` regex. Expected strings get the same replacements as the actual output (`normalize:`, the built-in datetime and UUID) before comparing (`stdout: 1970-01-01T00:00:00` is compared as `<datetime>`); so do the strings inside `raises`, `return`, `json` and observe targets. Only the inside of `{regex}` / `{$regex}` is left alone |
+| `stdout` / `stderr` | command, call | a string is an exact match, `{$contains: ...}` contains, `{$regex: ...}` regex. Expected strings get the same replacements as the actual output (`normalize:`, the built-in datetime and UUID) before comparing (`stdout: 1970-01-01T00:00:00` is compared as `<datetime>`); so do the strings inside `raises`, `return`, `json` and observe targets. Only the inside of `{regex}` / `{$regex}` is left alone |
 | `return` | call | dicts: only the keys you write; lists: count and each item; others: exact match |
 | `raises` | call | see the table below |
 | anything else (`db.users`, `files`, …) | all | read as an observe target (no `observe:` needed) and compared like `return` |
@@ -490,11 +490,11 @@ expect:
 | `mypkg.errors.AppError` | the type with the same module name, and its subclasses |
 | `Outer.Inner` | an exception class defined inside a class |
 | `"ValueError: quantity must be at least 1"` | the type as above, and an exact message |
-| `{contains: ...}` / `{regex: ...}` | contains / matches the `actual type name: message` string |
+| `{$contains: ...}` / `{$regex: ...}` | contains / matches the `actual type name: message` string |
 
 If a call raises but `raises` is not written, the case fails.
 
-Inside `return`, `json` and observe targets (`db.*` etc.) you can use matchers starting with `$`. The `$` distinguishes them from data that really has keys like `contains`.
+Matchers always start with `$` (`{$contains: ...}`, `{$regex: ...}`), so one spelling works everywhere. Inside `return`, `json` and observe targets (`db.*` etc.) the `$` is required, because it distinguishes a matcher from data that really has keys like `contains`; under `stdout`, `stderr`, `raises`, `body` and `headers` it may be omitted (`{contains: ...}`).
 
 ```yaml
 expect:
@@ -581,7 +581,7 @@ cases:
 ```
 
 - The selected state's content, with the case's `setup:` merged over it, is passed to `pytest_casebook_setup` as `data` (`files` are merged per file name)
-- Cases without `state:` use the `default` state
+- Cases without `state:` use the `default` state. If `states:` has no `default`, they simply have no state content (so adding one named state does not force you to write `default: {}`)
 - States are written like `setup:` and validated the same way
 
 ### HTTP APIs (request)
@@ -606,7 +606,7 @@ cases:
     expect:
       status: 201
       json: {title: buy milk}          # only the keys you write are compared
-      headers: {Location: {regex: '^/todos/\d+$'}}
+      headers: {Location: {$regex: '^/todos/\d+$'}}
       db.todos: [{title: buy milk}]    # the DB changes can be checked too
 ```
 
@@ -694,7 +694,7 @@ An element's keys replace the template's keys wholesale (there is no deep merge)
 
 ### Environment variables (env)
 
-`env:` sets environment variables for `command:` cases. Write it at the top of the file, on groups, or on cases.
+`env:` sets environment variables for the cases. Write it at the top of the file, on groups, or on cases.
 
 ```yaml
 env: {LANG: C, TZ: UTC}          # every command case in the file
@@ -709,11 +709,10 @@ cases:
         env: {LANG: null}        # null removes a value set further out
 ```
 
-- When the command runs in a subprocess, these values are put over the environment of the pytest process (`os.environ`). A `PATH` set here is also used to find the program
+- While the case runs, these values are put over the environment of the pytest process (`os.environ`) and restored afterwards. They apply to every kind of case: a command run in a subprocess inherits them (a `PATH` set here is also used to find the program), a CLI run in-process by `pytest_casebook_run_command` sees them, and so do the function of a `call:` case and the hook of a `request:` case
 - `{casebook_dir}` in a value becomes the YAML's directory, as in `command:` (e.g. `env: {DATA_DIR: "{casebook_dir}/data"}`)
 - Inner levels override outer ones key by key (file → group → case). Values are strings or numbers; `true` / `false` are errors (write `"true"`). `null` only removes a value from an outer `env:`; it does not unset variables inherited from your shell
-- Only command cases use it: `env:` written on a call / request case is an error, and `env:` inherited from the file or a group is ignored for them
-- Hooks read the merged result as `case.env`. When `pytest_casebook_run_command` runs the command itself, apply it there; `run_in_process` does not change `os.environ`, so wrap it, e.g. in `unittest.mock.patch.dict(os.environ, case.env)`
+- Hooks can also read the merged result as `case.env`
 - The HTML report shows the variables that differ from the file-level `env:` in the preconditions column. Golden files do not record them
 
 ### meta

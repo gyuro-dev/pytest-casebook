@@ -5,6 +5,7 @@ meta:（利用する側が自由に使う情報）・env:（環境変数）の�
 from __future__ import annotations
 
 import json
+import os
 import re
 import textwrap
 from pathlib import Path
@@ -87,8 +88,8 @@ def test_env_is_merged_from_file_groups_and_cases(tmp_path: Path) -> None:
     # 内側が外側を上書きし、null で外側の変数を消す。数値は文字列にする
     assert env["inner"] == {"A": "case", "B": "group", "N": "1", "R": "0.5"}
     assert env["top"] == {"A": "file", "B": "file", "C": "file"}
-    # 受け継いだ env は command 以外のケースでは使わない（誤りにもしない）
-    assert env["func"] == {}
+    # 受け継いだ env は、call のケースにも同じように重なる（実行の間 os.environ に当たる）
+    assert env["func"] == {"A": "file", "B": "group"}
 
 
 @pytest.mark.parametrize(
@@ -104,11 +105,34 @@ def test_invalid_env(project: pytest.Pytester, env: str) -> None:
     )
 
 
-def test_env_on_call_case_is_an_error(project: pytest.Pytester) -> None:
-    write_casebook(project, "cases:\n  - name: a\n    call: calc:add\n    env: {A: x}\n")
-    result = project.runpytest()
-    result.assert_outcomes(errors=1)
-    result.stdout.fnmatch_lines(["*env は command のケースにだけ書けます*"])
+def test_env_applies_to_call_and_request_cases(project: pytest.Pytester) -> None:
+    """env: は call / request のケースにも書け、実行の間 os.environ に重なる（あとで元に戻る）。"""
+    project.makeconftest(
+        """
+        import os
+
+        from pytest_casebook import HttpResponse
+
+        def pytest_casebook_request(request):
+            return HttpResponse(200, os.environ.get("CASEBOOK_T", "unset"), {})
+        """
+    )
+    write_casebook(
+        project,
+        """
+        env: {CASEBOOK_T: file}
+        cases:
+          - {name: func, call: "os:getenv", args: [CASEBOOK_T], expect: {return: file}}
+          - {name: own, call: "os:getenv", args: [CASEBOOK_T], env: {CASEBOOK_T: case},
+             expect: {return: case}}
+          - {name: removed, call: "os:getenv", args: [CASEBOOK_T], env: {CASEBOOK_T: null},
+             expect: {return: null}}
+          - {name: api, request: /x, env: {CASEBOOK_T: api}, expect: {status: 200, body: api}}
+        """,
+    )
+    assert "CASEBOOK_T" not in os.environ
+    project.runpytest().assert_outcomes(passed=5)  # 5 つ目は golden_orphans
+    assert "CASEBOOK_T" not in os.environ
 
 
 def test_load_reads_the_same_yaml_outside_pytest(tmp_path: Path) -> None:

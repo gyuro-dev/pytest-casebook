@@ -24,7 +24,7 @@ cases:
         request: {method: POST, path: /notes, json: {text: Milk, tag: shopping}}
         expect:
           status: 201
-          headers: {Location: {regex: '^/notes/\d+$'}}
+          headers: {Location: {$regex: '^/notes/\d+$'}}
           db.notes: [{text: Milk, tag: shopping}]
 
       - name: create_without_text

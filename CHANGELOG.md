@@ -22,6 +22,25 @@ incompatible change raises the minor version).
 
 ### Changed
 
+- `env:` applies to every kind of case and to hooks. While a case runs, its environment
+  variables are put over `os.environ` (and restored afterwards), so a CLI run in-process by
+  `pytest_casebook_run_command`, the function of a `call:` case and the hook of a `request:`
+  case see them without wrapping anything. `env:` on a call / request case used to be an
+  error; now it works like on a command case.
+- The contents of `stdin_file:` are read when the case file is loaded and put into
+  `case.stdin`, so a `pytest_casebook_run_command` hook (and `run_case()`) no longer has to
+  read the file itself. A missing file is reported when the case file is collected, like a
+  mistake in the YAML, instead of failing the case at run time.
+- `states:` no longer requires a `default` state: a case without `state:` simply has no
+  state content when `default` is not defined. Adding one named state no longer forces
+  `default: {}` on every other case.
+- `observe:`, `marks:` and `levels:` accept a single string as well as a list
+  (`observe: files`, `marks: slow`).
+- When a case with a working directory (`files:`) cannot find a program written as a path
+  relative to the YAML, the error adds a hint to write it as `{casebook_dir}/...`.
+- The README, the examples and the JSON Schema spell the matchers as `{$contains: ...}` /
+  `{$regex: ...}` everywhere (the `$` may still be omitted under `stdout`, `stderr`, `raises`,
+  `body` and `headers`), so there is one spelling to remember.
 - The headings and labels of the `--casebook-html` sheet also follow the `lang:` of the case
   files in it when they agree (files without `lang:` keep the ini language, so existing
   reports do not change).

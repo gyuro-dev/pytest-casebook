@@ -270,7 +270,6 @@ ERRORS: dict[str, dict[str, str]] = {
         "stdin_file_path": (
             "{where}: stdin_file は YAML のディレクトリの中を指す相対パスで書いてください: {name}"
         ),
-        "env_only_command": "{where}: env は command のケースにだけ書けます",
         "env_mapping": (
             "{where}: env は 変数名 -> 値（文字列か数値。null で外側の値を消す）の"
             "マッピングで書いてください"
@@ -290,7 +289,7 @@ ERRORS: dict[str, dict[str, str]] = {
         "golden_path": "{where}: golden は期待出力の置き場所からの相対パスで書いてください: {name}",
         "expect_regex": "{where}: expect.{key} の正規表現の誤りです: {error}",
         "expect_text": (
-            "{where}: expect.{key} は文字列か、{{contains: ...}} / {{regex: ...}} の"
+            "{where}: expect.{key} は文字列か、{{$contains: ...}} / {{$regex: ...}} の"
             "どれかで書いてください"
         ),
         "expect_mapping": "{where}: expect は 項目 -> 期待値 のマッピングで、1つ以上書いてください",
@@ -319,6 +318,10 @@ ERRORS: dict[str, dict[str, str]] = {
         "matcher_string": "{where}: {name} には文字列を書いてください",
         "matcher_list": "{where}: {name} にはリストを書いてください",
         "command_not_found": "コマンドが見つかりません: {program}",
+        "workdir_hint": (
+            "（files を使うケースは一時の作業ディレクトリで実行します。"
+            "YAML からの相対パスは {{casebook_dir}}/... で書いてください）"
+        ),
         "command_start_failed": "コマンドを起動できません: {program}（{error}）",
         "stdin_file_missing": "stdin_file が見つかりません: {name}",
         "command_timeout": "{timeout} 秒以内に終わりませんでした: {argv}",
@@ -404,7 +407,6 @@ ERRORS: dict[str, dict[str, str]] = {
         "stdin_file_path": (
             "{where}: stdin_file must be a relative path inside the YAML's directory: {name}"
         ),
-        "env_only_command": "{where}: env can only be used in command cases",
         "env_mapping": (
             "{where}: env must be a mapping of variable name -> value "
             "(a string or a number; null removes an outer value)"
@@ -423,7 +425,7 @@ ERRORS: dict[str, dict[str, str]] = {
         "golden_path": "{where}: golden must be relative to the golden directory: {name}",
         "expect_regex": "{where}: invalid regular expression in expect.{key}: {error}",
         "expect_text": (
-            "{where}: expect.{key} must be a string, {{contains: ...}} or {{regex: ...}}"
+            "{where}: expect.{key} must be a string, {{$contains: ...}} or {{$regex: ...}}"
         ),
         "expect_mapping": (
             "{where}: expect must be a mapping of item -> expected value with at least one item"
@@ -449,6 +451,10 @@ ERRORS: dict[str, dict[str, str]] = {
         "matcher_string": "{where}: {name} needs a string",
         "matcher_list": "{where}: {name} needs a list",
         "command_not_found": "command not found: {program}",
+        "workdir_hint": (
+            " (a case with files runs in a temporary working directory; write paths relative "
+            "to the YAML as {{casebook_dir}}/...)"
+        ),
         "command_start_failed": "cannot start the command: {program} ({error})",
         "stdin_file_missing": "stdin_file not found: {name}",
         "command_timeout": "did not finish within {timeout} seconds: {argv}",

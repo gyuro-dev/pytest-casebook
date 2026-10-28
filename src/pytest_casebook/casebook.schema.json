@@ -26,10 +26,7 @@
       "description": "Language of this file's messages and report rows (default: the casebook_lang ini option) / このファイルのメッセージとレポートの行の言語（省略時は ini の casebook_lang）"
     },
     "levels": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
+      "$ref": "#/$defs/stringOrList",
       "description": "Names of the hierarchy levels (e.g. [Category, Subcategory, Item]) / 階層の呼び名（例: [大項目, 中項目, 小項目]）"
     },
     "states": {
@@ -111,6 +108,19 @@
     }
   },
   "$defs": {
+    "stringOrList": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
     "items": {
       "type": "array",
       "description": "A list of cases or groups / ケースまたはグループのリスト",
@@ -150,10 +160,8 @@
           "description": "Default state of the cases inside / 中のケースの既定の状態"
         },
         "marks": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+          "$ref": "#/$defs/stringOrList",
+          "description": "pytest marks (e.g. slow); one mark can be written as a string / pytest のマーク（slow など）。1 つなら文字列でもよい"
         },
         "meta": {
           "type": "object"
@@ -355,11 +363,8 @@
           "$ref": "#/$defs/setup"
         },
         "observe": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Targets fetched after the run (files, etc.) / 実行後に取り出す対象（files など）"
+          "$ref": "#/$defs/stringOrList",
+          "description": "Targets fetched after the run (files, etc.); one target can be written as a string / 実行後に取り出す対象（files など）。1 つなら文字列でもよい"
         },
         "expect": {
           "anyOf": [
@@ -379,10 +384,8 @@
           "description": "Expected results. A mapping for command / call / request; text (a string or a list of strings) for a manual case / 期待結果。command・call・request はマッピング、manual のケースは文章（文字列か文字列のリスト）"
         },
         "marks": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+          "$ref": "#/$defs/stringOrList",
+          "description": "pytest marks (e.g. slow); one mark can be written as a string / pytest のマーク（slow など）。1 つなら文字列でもよい"
         },
         "meta": {
           "type": "object"
@@ -487,7 +490,7 @@
       ]
     },
     "text": {
-      "description": "A string matches exactly, {contains: ...} matches a substring, {regex: ...} matches a regular expression / 文字列なら完全一致、{contains: ...} なら含む、{regex: ...} なら正規表現",
+      "description": "A string matches exactly, {$contains: ...} matches a substring, {$regex: ...} matches a regular expression (the $ may be omitted here) / 文字列なら完全一致、{$contains: ...} なら含む、{$regex: ...} なら正規表現（ここでは $ を省いてもよい）",
       "oneOf": [
         {
           "type": "string"

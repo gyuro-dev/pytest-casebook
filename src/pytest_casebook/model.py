@@ -40,7 +40,7 @@ cases:
         observe: [db.users]       # 実行後に取り出して期待出力に加える（省略可）
         expect:                   # 期待結果を YAML に書く（省略時は期待出力ファイルと比べる）
           exit_code: 0
-          stdout: {contains: 1件}
+          stdout: {$contains: 1件}
           db.users: [{id: 1, name: 佐藤}]
       - name: shipping            # params: を書くとテンプレートになり、要素を上書きで重ねて
         call: shop:shipping       # 1件ずつのケースに展開する（名前は shipping-0 など）
@@ -211,8 +211,8 @@ class Case:
     # 標準入力に渡すファイル（YAML のディレクトリからの相対パス。stdin とは同時に書けない）
     stdin_file: str | None = None
     timeout: float | None = None
-    # command を実行するときに os.environ に重ねる環境変数。ファイル・グループ・ケースの env: を
-    # 外側から上書きで重ねたもの（null で外側の変数を消す）。command 以外のケースでは空
+    # ケースを実行する間、os.environ に重ねる環境変数（command の別プロセスにも渡る）。
+    # ファイル・グループ・ケースの env: を外側から上書きで重ねたもの（null で外側の変数を消す）
     env: dict[str, str] = field(default_factory=dict)
     state: str = DEFAULT_STATE
     # states: のうち、このケースの状態の内容（files を含む、書いたままのもの）
@@ -409,8 +409,11 @@ def _timeout(value: Any, loc: str) -> float | int | None:
 
 
 def _str_list(value: Any, where: str, key: str) -> tuple[str, ...]:
+    """文字列のリスト。1 つだけなら文字列でも書ける（`observe: files`、`marks: slow`）。"""
     if value is None:
         return ()
+    if isinstance(value, str):
+        return (value,)
     if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
         raise CasebookError(error("not_string_list", where=where, key=key))
     return tuple(value)
@@ -689,8 +692,9 @@ def _parse_mapping(
     """parse_document の本体（キーと lang: を確かめたあと）。"""
     where = path.name
     states = data.get("states")
+    # 空の states: {} は、省略と取り違えず誤りにする（偽の値を省略と取り違えない決まり）
     if states is not None and not (
-        isinstance(states, dict) and all(isinstance(k, str) for k in states)
+        isinstance(states, dict) and states and all(isinstance(k, str) for k in states)
     ):
         raise CasebookError(error("states_mapping", where=where))
     # 状態は「名前を付けた setup:」なので、setup: と同じ書き方であることを確かめる
@@ -893,16 +897,21 @@ def _parse_case(
         raise CasebookError(error("stdin_file_only_command", where=loc))
     if "stdin" in item and "stdin_file" in item:
         raise CasebookError(error("stdin_and_file", where=loc))
+    stdin = _str(item.get("stdin"), loc, "stdin") if "stdin" in item else None
     stdin_file = None
     if "stdin_file" in item:
         stdin_file = _str(item["stdin_file"], loc, "stdin_file", required=True)
         # YAML のディレクトリの外（絶対パスや ..）は指せない
         if not _is_inside(stdin_file):
             raise CasebookError(error("stdin_file_path", where=loc, name=repr(stdin_file)))
-    # ケースに env: を書けるのは command だけ（ファイルやグループから受け継いだ env は、
-    # command 以外のケースでは使わないだけで、誤りにはしない）
-    if command is None and "env" in item:
-        raise CasebookError(error("env_only_command", where=loc))
+        # 読み込みのときに中身を stdin にしておく（hook や run_case() は case.stdin を
+        # 読むだけでよく、stdin_file を自分で読まずに済む。ないファイルは書き方の誤り）
+        try:
+            stdin = (doc.path.parent / stdin_file).read_text(encoding="utf-8")
+        except UnicodeDecodeError as e:
+            raise CasebookError(error("not_utf8", where=f"{loc}: {stdin_file}", error=e)) from None
+        except OSError:
+            raise CasebookError(f"{loc}: {error('stdin_file_missing', name=stdin_file)}") from None
     own_env = _env(item.get("env"), loc)
     request = (
         _parse_request(item["request"], doc.request_headers, loc) if "request" in item else None
@@ -930,6 +939,10 @@ def _parse_case(
         state_data = None
     elif state in doc.states:
         state_data = doc.states[state]
+    elif state == DEFAULT_STATE:
+        # states: に default を書いていなければ、state: のないケースは「状態の内容なし」
+        # （1 つの状態を足しただけで、ほかのケースが default を要求して止まらないように）
+        state_data = None
     else:
         raise CasebookError(error("unknown_state", where=loc, state=state))
 
@@ -965,10 +978,10 @@ def _parse_case(
         request=request,
         args=args,
         kwargs=kwargs,
-        stdin=_str(item.get("stdin"), loc, "stdin") if "stdin" in item else None,
+        stdin=stdin,
         stdin_file=stdin_file,
         timeout=timeout,
-        env=_merge_env(env, own_env) if command is not None else {},
+        env=_merge_env(env, own_env),
         state=state,
         state_data=state_data,
         marks=(*marks, *_str_list(item.get("marks"), loc, "marks")),
@@ -1119,7 +1132,7 @@ def _is_inside(name: str) -> bool:
 
 
 def _check_text_expect(value: Any, loc: str, key: str) -> None:
-    """文字列の期待値（そのままの文字列、または {contains: ...} / {regex: ...}）を確かめる。"""
+    """文字列の期待値（そのままの文字列、または {$contains: ...} / {$regex: ...}）を確かめる。"""
     if isinstance(value, str):
         return
     if isinstance(value, dict) and len(value) == 1 and all(isinstance(k, str) for k in value):

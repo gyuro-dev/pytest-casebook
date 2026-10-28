@@ -20,13 +20,13 @@ cases:
         command: banana
         expect:
           exit_code: 3
-          stderr: {contains: 在庫切れ}
+          stderr: {$contains: 在庫切れ}
 
       - name: count_pattern
         description: 正規表現で確かめる
         command: apple
         expect:
-          stdout: {regex: '^apple: \d+ 個$'}
+          stdout: {$regex: '^apple: \d+ 個$'}
 
   - group: call
     cases:

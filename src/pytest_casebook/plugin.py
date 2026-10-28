@@ -883,6 +883,10 @@ def _execute_case(
     :raises CasebookRunError: 実行できないとき（コマンドが見つからないなど）
     """
     with contextlib.ExitStack() as stack:
+        # YAML の env: を、このケースの間だけ os.environ に重ねる。hook の中で動かす CLI
+        # （run_in_process）、call: の関数、request: の hook からも見え、別プロセスで実行する
+        # ときはその環境も受け継ぐ
+        stack.enter_context(_environ_overlay(_expanded_env(doc, case)))
         if workdir is not None:
             _write_files(workdir, case.setup_files)
         # setup: がないケースでも呼ぶ（data は空）。後片付けが毎回行われ、
@@ -912,6 +916,30 @@ def _execute_case(
         index = results[0] if results else len(keys)
         outcome.header.insert(index, ("state", case.state))
     return outcome
+
+
+def _expanded_env(doc: CasebookDoc, case: Case) -> dict[str, str]:
+    """ケースの env:（値の中の {casebook_dir} を YAML のディレクトリにしたもの）。"""
+    yaml_dir = doc.path.parent.as_posix()
+    return {k: v.replace(CASEBOOK_DIR_TOKEN, yaml_dir) for k, v in case.env.items()}
+
+
+@contextlib.contextmanager
+def _environ_overlay(env: dict[str, str]) -> Iterator[None]:
+    """この中だけ、os.environ に env を上書きで重ねる（抜けるときに元に戻す）。"""
+    if not env:
+        yield
+        return
+    saved = {name: os.environ.get(name) for name in env}
+    os.environ.update(env)
+    try:
+        yield
+    finally:
+        for name, value in saved.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
 
 
 def _write_files(workdir: Path, files: dict[str, str]) -> None:
@@ -944,26 +972,34 @@ def _execute_command(
     ]
     cwd = workdir or doc.path.parent
     with _in_dir(workdir):
-        # hook にはケースをそのまま渡す（stdin_file に対応する実装は、hook の中で自分で読む）
+        # hook にはケースをそのまま渡す（stdin_file の中身は読み込みのときに case.stdin に
+        # 入れてある。env: は _execute_case が os.environ に重ねてある）
         result = hook.pytest_casebook_run_command(
             case=case, argv=argv, env=env, cwd=cwd, config=config
         )
     if result is None:
-        stdin = case.stdin
-        if case.stdin_file is not None:
-            try:
-                stdin = (doc.path.parent / case.stdin_file).read_text(encoding="utf-8")
-            except OSError:
-                raise CasebookRunError(error("stdin_file_missing", name=case.stdin_file)) from None
-        result = run_subprocess(
-            argv,
-            cwd=cwd,
-            stdin=stdin,
-            timeout=case.timeout,
-            encoding=encoding,
-            # argv と同じく、env の値の中の {casebook_dir} も YAML のディレクトリにする
-            env={k: v.replace(CASEBOOK_DIR_TOKEN, yaml_dir) for k, v in case.env.items()},
-        )
+        try:
+            result = run_subprocess(
+                argv,
+                cwd=cwd,
+                stdin=case.stdin,
+                timeout=case.timeout,
+                encoding=encoding,
+                env=_expanded_env(doc, case),
+            )
+        except CasebookRunError as e:
+            # 作業ディレクトリで動かすケースで、YAML からの相対パスで書いたプログラムが
+            # 見つからないときは、{casebook_dir} の案内を添える（説明書を探さずに直せるように）
+            program = Path(argv[0])
+            if (
+                workdir is not None
+                and not program.is_absolute()
+                and len(program.parts) > 1
+                and not (cwd / program).exists()
+                and (doc.path.parent / program).exists()
+            ):
+                raise CasebookRunError(f"{e}{error('workdir_hint')}") from None
+            raise
     elif not isinstance(result, CommandResult):
         result = CommandResult(*result)
     return _Outcome(
@@ -1311,7 +1347,7 @@ def _match_raises(expected: Any, error: BaseException, described: str, lang: str
 
     - `"型名"`: その型か、それを継承した型の例外なら一致
     - `"型名: メッセージ"`: 型は上と同じ比べ方で、メッセージは完全一致
-    - `{contains: ...}` / `{regex: ...}`: `実際の型名: メッセージ` の文字列と比べる
+    - `{$contains: ...}` / `{$regex: ...}`: `実際の型名: メッセージ` の文字列と比べる
     """
     if not isinstance(expected, str):
         return match_text(expected, described, "raises", lang)

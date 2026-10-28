@@ -40,7 +40,7 @@ cases:
             command: price ぶどう 1
             expect:
               exit_code: 1
-              stderr: {contains: 商品がありません}
+              stderr: {$contains: 商品がありません}
           - name: quote_zero
             description: 個数0は ValueError になる
             call: store:quote
@@ -60,7 +60,7 @@ cases:
             command: stock バナナ
             expect:
               exit_code: 3
-              stdout: {contains: 在庫切れ}
+              stdout: {$contains: 在庫切れ}
       - group: 売り切れ時
         state: sold_out
         cases:
