@@ -219,10 +219,36 @@ def test_update_lists_rewritten_golden_files(project: pytest.Pytester) -> None:
 def test_update_without_changes_lists_nothing(project: pytest.Pytester) -> None:
     write_casebook(project, UPDATE_LIST_CASES)
     project.runpytest("--casebook-update").assert_outcomes(passed=3)
-    # 2回目は結果が変わらず書き直さないので、一覧も出ない
+    # 2回目は結果が変わらず書き直さないので、一覧の代わりに 0 件の 1 行を出す
+    # （ふつうの実行と見分けがつき、オプションが効いたことが分かる）
     result = project.runpytest("--casebook-update")
     result.assert_outcomes(passed=3)
-    assert "書き直した期待出力" not in result.stdout.str()
+    result.stdout.fnmatch_lines(["*書き直した期待出力: 0 件（2 件は同じ）*"])
+    assert "golden/casebook_calc/" not in result.stdout.str()
+
+
+def test_update_without_changes_in_english(project: pytest.Pytester) -> None:
+    write_casebook(project, UPDATE_LIST_CASES)
+    project.runpytest("--casebook-update").assert_outcomes(passed=3)
+    result = project.runpytest("--casebook-update", "-o", "casebook_lang=en")
+    result.assert_outcomes(passed=3)
+    result.stdout.fnmatch_lines(["*Updated golden files: 0 (2 unchanged)*"])
+
+
+def test_update_counts_a_shared_golden_file_once(project: pytest.Pytester) -> None:
+    """同じ期待出力ファイルを使う 2 つのケースは、「同じ」の件数でもファイル 1 件に数える。"""
+    write_casebook(
+        project,
+        """
+        cases:
+          - {name: add, call: "calc:add", args: [1, 2], golden: same.txt}
+          - {name: add2, call: "calc:add", args: [1, 2], golden: same.txt}
+        """,
+    )
+    project.runpytest("--casebook-update").assert_outcomes(passed=3)
+    result = project.runpytest("--casebook-update")
+    result.assert_outcomes(passed=3)
+    result.stdout.fnmatch_lines(["*書き直した期待出力: 0 件（1 件は同じ）*"])
 
 
 def test_normal_run_lists_nothing(project: pytest.Pytester) -> None:
@@ -491,7 +517,7 @@ def test_description_does_not_rewrite_unchanged_golden(project: pytest.Pytester)
     assert "# description:" not in golden(project, "add")
     result = project.runpytest("--casebook-update", "-o", "casebook_golden_description=true")
     result.assert_outcomes(passed=3)
-    assert "書き直した期待出力" not in result.stdout.str()
+    result.stdout.fnmatch_lines(["*書き直した期待出力: 0 件（2 件は同じ）*"])
     assert "# description:" not in golden(project, "add")
     # 行のないファイルのままでも、設定を入れた比較は成功する
     project.runpytest("-o", "casebook_golden_description=true").assert_outcomes(passed=3)
@@ -533,12 +559,12 @@ def test_update_headers_adds_description(project: pytest.Pytester) -> None:
     assert golden(project, "add").startswith("# case: add\n# description: 1 と 2 を足す\n")
     # description のないケースは変わらない
     assert golden(project, "plain") == plain
-    # もう一度実行しても、書き直すものはない
+    # もう一度実行しても、書き直すものはない（0 件の 1 行だけ出る）
     result = project.runpytest(
         "--casebook-update-headers", "-o", "casebook_golden_description=true"
     )
     result.assert_outcomes(passed=3)
-    assert "書き直した期待出力" not in result.stdout.str()
+    result.stdout.fnmatch_lines(["*書き直した期待出力: 0 件（2 件は同じ）*"])
 
 
 def test_update_headers_fails_when_results_differ(project: pytest.Pytester) -> None:

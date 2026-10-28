@@ -180,8 +180,8 @@
       "properties": {
         "name": {
           "type": "string",
-          "pattern": "^\\w[\\w.\\-]*$",
-          "description": "Case name (becomes the golden file name) / ケース名（期待出力のファイル名になる）"
+          "pattern": "^[^\\s.\\-/\\\\:\\[\\]][^\\s/\\\\:\\[\\]]*$",
+          "description": "Case name (becomes the golden file name): letters, digits, _ . - (not starting with . or -) / ケース名（期待出力のファイル名になる）: 文字・数字・_ . -（先頭は . と - 以外）"
         },
         "params": {
           "type": "array",
@@ -264,7 +264,7 @@
       "properties": {
         "name": {
           "type": "string",
-          "pattern": "^[\\w.\\-]+$",
+          "pattern": "^[^\\s/\\\\:\\[\\]]+$",
           "description": "Appended to the template's name as <case name>-<element name> / <ケース名>-<要素名> としてテンプレートの名前に足す名前"
         }
       },

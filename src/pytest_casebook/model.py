@@ -68,7 +68,9 @@ from .inifile import IniValue, ini_bool, ini_lines, read_ini
 from .messages import TEXTS, error, language
 
 # ケース名は期待出力のファイル名になるため、ファイル名に使える文字だけにする。
-# 先頭の . と - は認めない（.foo.txt は隠しファイルになり、消し忘れの確認からも漏れる）
+# 先頭の . と - は認めない（.foo.txt は隠しファイルになり、消し忘れの確認からも漏れる）。
+# JSON Schema の pattern はこれより緩い（空白と / \ : [ ] を弾くだけ）。エディタの JS の
+# 正規表現では \w が ASCII だけで日本語の名前に赤線が出るため、文字の種類はここでだけ確かめる
 NAME_RE = re.compile(r"^\w[\w.\-]*$")
 
 _TOP_KEYS = {

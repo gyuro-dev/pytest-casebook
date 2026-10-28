@@ -7,6 +7,17 @@ incompatible change raises the minor version).
 
 ## [Unreleased]
 
+### Changed
+
+- `--casebook-update` and `--casebook-update-headers` print `Updated golden files: 0 (N
+  unchanged)` when nothing was rewritten. Before, such a run printed nothing and could not be
+  told from an ordinary run (or from a misspelled option that was ignored).
+- The JSON Schema's patterns for case names and `params` element names no longer use `\w`.
+  In editors (the VS Code YAML extension and other JavaScript validators) `\w` matches ASCII
+  only, so a Japanese case name that loads fine was underlined as an error. The schema now
+  rejects only whitespace and `/ \ : [ ]` (and a leading `.` or `-`); the exact rule is
+  checked when the file is loaded, as before.
+
 ## [0.8.0] - 2026-10-27
 
 ### Added
