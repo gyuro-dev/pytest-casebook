@@ -193,9 +193,34 @@ def test_missing_stdin_file_fails_the_case(project: pytest.Pytester) -> None:
             stdin_file: no_such.txt
         """,
     )
+    # 中身は読み込みのときに読む（hook も run_case() も case.stdin を読むだけでよい）ので、
+    # ないファイルは書き方の誤りと同じく、集めるときに知らせる
     result = project.runpytest()
-    result.assert_outcomes(failed=1, passed=1)
-    result.stdout.fnmatch_lines(["*[[]missing[]] stdin_file が見つかりません: no_such.txt*"])
+    result.assert_outcomes(errors=1)
+    result.stdout.fnmatch_lines(
+        ["*casebook_calc.yaml*missing*stdin_file が見つかりません: no_such.txt*"]
+    )
+
+
+def test_stdin_file_is_read_into_case_stdin(project: pytest.Pytester) -> None:
+    """stdin_file: の中身は case.stdin に入るので、hook は自分でファイルを読まなくてよい。"""
+    project.makefile(".txt", stdin_data="from file")
+    project.makeconftest(
+        """
+        from pytest_casebook import CommandResult
+
+        def pytest_casebook_run_command(case):
+            return CommandResult(0, f"stdin={case.stdin!r}", "")
+        """
+    )
+    write_casebook(
+        project,
+        """
+        cases:
+          - {name: a, command: x, stdin_file: stdin_data.txt, expect: {stdout: "stdin='from file'"}}
+        """,
+    )
+    project.runpytest().assert_outcomes(passed=2)  # 2 つ目は golden_orphans
 
 
 def test_command_env(project: pytest.Pytester) -> None:
@@ -503,7 +528,6 @@ def test_groups_can_be_selected_with_k(project: pytest.Pytester) -> None:
         ("cases:\n  - name: .hidden\n    call: m:f\n", "先頭に . と - は使えません"),
         ("cases:\n  - name: '-x'\n    call: m:f\n", "先頭に . と - は使えません"),
         ("cases: []\n", "cases にケースがありません"),
-        ("cases:\n  - name: a\n    request: /x\n    env: {A: x}\n", "env は command のケース"),
         ("env: [A]\ncases:\n  - name: a\n    call: m:f\n", "env は 変数名 -> 値"),
         ("cases:\n  - name: a\n    call: f\n", "'モジュール:関数' の形"),
         ("cases:\n  - name: a\n    call: m:f\n    timeout: 0\n", "0 より大きい秒数"),
@@ -1268,3 +1292,109 @@ def test_update_with_html_under_xdist(project: pytest.Pytester) -> None:
     assert "全 2 件" in page
     assert '<span class="badge updated">更新 2</span>' in page
     assert _golden_details(report) == ["----- return -----\n3", "----- return -----\n4"]
+
+
+def test_env_is_visible_to_an_in_process_hook(project: pytest.Pytester) -> None:
+    """env: は実行の間 os.environ に重なるので、run_in_process で動かす CLI からも見える。"""
+    project.makeconftest(
+        """
+        import os
+
+        from pytest_casebook import run_in_process
+
+        def main(argv):
+            print(os.environ.get("CASEBOOK_HOOK_T", "unset"))
+            return 0
+
+        def pytest_casebook_run_command(argv):
+            return run_in_process(main, argv[1:])
+        """
+    )
+    write_casebook(
+        project,
+        """
+        cases:
+          - {name: set, command: x, env: {CASEBOOK_HOOK_T: hello}, expect: {stdout: hello}}
+          - {name: unset, command: x, expect: {stdout: unset}}
+        """,
+    )
+    project.runpytest().assert_outcomes(passed=3)  # 3 つ目は golden_orphans
+
+
+def test_relative_program_in_workdir_gets_a_hint(project: pytest.Pytester) -> None:
+    """files のケースで YAML からの相対パスのプログラムがなければ {casebook_dir} を案内する。"""
+    project.mkdir("bin")
+    (project.path / "bin" / "tool.py").write_text("print('x')\n", encoding="utf-8")
+    write_casebook(
+        project,
+        """
+        cases:
+          - {name: plain, command: [bin/tool.py]}
+          - {name: with_files, command: [bin/tool.py], setup: {files: {a.txt: x}}}
+        """,
+    )
+    result = project.runpytest()
+    result.assert_outcomes(failed=2, passed=1)
+    # 作業ディレクトリのないケースにはヒントを付けない（見つからない・起動できない理由が違う）
+    plain = [line for line in result.stdout.lines if "[plain]" in line]
+    assert plain
+    assert all("{casebook_dir}" not in line for line in plain)
+    result.stdout.fnmatch_lines(
+        ["*[[]with_files[]] コマンド*bin/tool.py*files を使うケースは一時の作業ディレクトリ*"]
+    )
+
+
+def test_marks_and_observe_accept_a_single_string(project: pytest.Pytester) -> None:
+    write_casebook(
+        project,
+        """
+        cases:
+          - group: g
+            marks: slow
+            cases:
+              - {name: a, call: "calc:add", args: [1, 2], marks: fast, observe: files,
+                 setup: {files: {in.txt: hi}}}
+        """,
+    )
+    project.runpytest("--casebook-update").assert_outcomes(passed=2)
+    assert "=== in.txt ===" in golden(project, "a")
+    result = project.runpytest("-m", "slow and fast", "--collect-only", "-q")
+    result.stdout.fnmatch_lines(["casebook_calc.yaml::a"])
+
+
+def test_states_without_default(project: pytest.Pytester) -> None:
+    """states: に default がなくても、state: のないケースは「状態なし」で動く。"""
+    project.makeconftest(
+        """
+        def pytest_casebook_setup(case, data):
+            print("setup:", case.state, data)
+        """
+    )
+    write_casebook(
+        project,
+        """
+        states:
+          outage: {db: down}
+        cases:
+          - {name: normal, call: "calc:add", args: [1, 2]}
+          - {name: broken, call: "calc:add", args: [1, 2], state: outage}
+          - {name: typo, call: "calc:add", args: [1, 2], state: outage2}
+        """,
+    )
+    result = project.runpytest("--casebook-update", "-s")
+    result.assert_outcomes(errors=1)
+    result.stdout.fnmatch_lines(["*states に outage2 がありません*"])
+    write_casebook(
+        project,
+        """
+        states:
+          outage: {db: down}
+        cases:
+          - {name: normal, call: "calc:add", args: [1, 2]}
+          - {name: broken, call: "calc:add", args: [1, 2], state: outage}
+        """,
+    )
+    result = project.runpytest("--casebook-update", "-s")
+    result.assert_outcomes(passed=3)
+    result.stdout.fnmatch_lines(["*setup: default {}*", "*setup: outage {'db': 'down'}*"])
+    assert "# state: default\n" in golden(project, "normal")

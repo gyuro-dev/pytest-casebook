@@ -90,7 +90,7 @@ cases:
             command: receipt orders.csv --out out.txt
             expect:
               exit_code: 0
-              stdout: {contains: 1 line(s)}
+              stdout: {$contains: 1 line(s)}
               files:
                 out.txt: |
                   banana x 1: 80 yen
@@ -100,7 +100,7 @@ cases:
             command: receipt nothing.csv
             expect:
               exit_code: 1
-              stderr: {regex: 'file not found: nothing\.csv$'}
+              stderr: {$regex: 'file not found: nothing\.csv$'}
 
   - group: Orders (DB)
     description: Insert rows with setup's db and check the tables after the run

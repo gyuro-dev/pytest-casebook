@@ -132,7 +132,7 @@ cases:
     command: --name
     expect:                             # 期待結果を YAML に書くこともできる
       exit_code: 2
-      stderr: {contains: --name}
+      stderr: {$contains: --name}
 ```
 
 各ケースは `hello --name 佐藤` のように、`command_prefix` と `command` をつないで実行します。\
@@ -538,7 +538,7 @@ HTML レポートの階層の列は、実際に使われているグループの
 expect:
   exit_code: 1                          # command
   stdout: ""                            # 文字列は完全一致（末尾の改行は問わない）
-  stderr: {contains: エラー}             # {contains: ...} 含む / {regex: ...} 正規表現
+  stderr: {$contains: エラー}             # {$contains: ...} 含む / {$regex: ...} 正規表現
   return: {item: apple}                 # call。辞書は書いたキーだけを比べる
   raises: ValueError                    # call。型名（継承した型も一致）
   db.stock: [{item: apple, count: 7}]   # 上記以外は observe の対象
@@ -551,7 +551,7 @@ expect:
 | `json` | request | レスポンスの本文を JSON として読み、`return` と同じ方法で比べる |
 | `body` | request | 本文の文字列。`stdout` と同じ比べ方 |
 | `headers` | request | ヘッダー名 -> 期待値。書いたヘッダーだけを、名前の大文字小文字を区別せずに比べる。値は `stdout` と同じ比べ方 |
-| `stdout` / `stderr` | command・call | 文字列なら完全一致、`{contains: ...}` なら含む、`{regex: ...}` なら正規表現。期待値の文字列には、実際の出力と同じ置き換え（`normalize:`・組み込みの日時と UUID）を当ててから比べる（`stdout: 1970-01-01T00:00:00` は `<datetime>` と比べる）。`raises`・`return`・`json`・observe の対象の中の文字列も同じ。`{regex}` / `{$regex}` の中だけは触らない |
+| `stdout` / `stderr` | command・call | 文字列なら完全一致、`{$contains: ...}` なら含む、`{$regex: ...}` なら正規表現。期待値の文字列には、実際の出力と同じ置き換え（`normalize:`・組み込みの日時と UUID）を当ててから比べる（`stdout: 1970-01-01T00:00:00` は `<datetime>` と比べる）。`raises`・`return`・`json`・observe の対象の中の文字列も同じ。`{regex}` / `{$regex}` の中だけは触らない |
 | `return` | call | 辞書は書いたキーだけ、リストは件数と各要素、それ以外は完全一致 |
 | `raises` | call | 下の表のとおり |
 | 上記以外（`db.users`・`files` など） | すべて | observe の対象として取り出し（`observe:` は要らない）、`return` と同じ方法で比べる |
@@ -562,12 +562,13 @@ expect:
 | `mypkg.errors.AppError` | モジュール名まで同じ型と、それを継承した例外 |
 | `Outer.Inner` | クラスの中に定義した例外 |
 | `"ValueError: 個数は1以上にしてください"` | 型は上と同じ比べ方で、メッセージは完全一致 |
-| `{contains: ...}` / `{regex: ...}` | `実際の型名: メッセージ` の文字列に含む / 正規表現に合う |
+| `{$contains: ...}` / `{$regex: ...}` | `実際の型名: メッセージ` の文字列に含む / 正規表現に合う |
 
 call で例外が出たのに `raises` を書いていない場合は失敗にします。
 
-`return`・`json`・observe の対象（`db.*` など）の値の中では、`$` で始まる比べ方を使えます。\
-`$` を付けるのは、`contains` などのキーを本当に持つデータと区別するためです。
+比べ方のキーワードはいつも `$` で始めます（`{$contains: ...}`・`{$regex: ...}`）。覚える書き方は1つです。\
+`return`・`json`・observe の対象（`db.*` など）の値の中では `$` が必須です（`contains` などのキーを本当に持つデータと区別するため）。\
+`stdout`・`stderr`・`raises`・`body`・`headers` の下では、`$` を省いて `{contains: ...}` と書いても動きます。
 
 ```yaml
 expect:
@@ -683,7 +684,8 @@ cases:
 ```
 
 - 選んだ状態の内容にケースの `setup:` を重ね（同じキーはケースの値で上書きする）、`pytest_casebook_setup` の `data` に渡します（`files` はファイル名ごとに重ねます）
-- `state:` を書かないケースは `default` の状態になります
+- `state:` を書かないケースは `default` の状態になります。\
+  `states:` に `default` がなければ、状態の内容がないものとして動きます（1つの状態を足しただけで `default: {}` を書かされることはありません）
 - 状態の書き方は `setup:` と同じで、書き方の誤りも同じように確かめます
 
 ### HTTP の API (request)
@@ -710,7 +712,7 @@ cases:
     expect:
       status: 201
       json: {title: 牛乳を買う}         # 書いたキーだけを比べる
-      headers: {Location: {regex: '^/todos/\d+$'}}
+      headers: {Location: {$regex: '^/todos/\d+$'}}
       db.todos: [{title: 牛乳を買う}]   # DB の変化も確かめられる
 ```
 
@@ -828,7 +830,7 @@ YAML のほかの部分を共有したいときは、アンカー（`&` / `*` / 
 
 ### 環境変数 (env)
 
-`env:` で、`command:` のケースを実行するときの環境変数を設定します。\
+`env:` で、ケースを実行するときの環境変数を設定します。\
 ファイルの先頭・グループ・ケースのどこにでも書けます。
 
 ```yaml
@@ -844,18 +846,15 @@ cases:
         env: {LANG: null}        # null で、外側に書いた値を消す
 ```
 
-- 別プロセスで実行するとき、pytest のプロセスの環境変数（`os.environ`）に上書きで重ねます。\
-  ここで `PATH` を変えると、プログラムもその `PATH` で探します
+- ケースを実行する間、pytest のプロセスの環境変数（`os.environ`）に上書きで重ね、終わったら元に戻します。\
+  どの種類のケースにも効きます。\
+  別プロセスで実行する command はその環境を受け継ぎ（ここで `PATH` を変えると、プログラムもその `PATH` で探します）、`pytest_casebook_run_command` で同じプロセスで動かす CLI からも、`call:` の関数や `request:` の hook からも見えます
 - 値の中の `{casebook_dir}` は、`command:` と同じく YAML のディレクトリになります（例: `env: {DATA_DIR: "{casebook_dir}/data"}`）
 - 内側が外側を、変数ごとに上書きします（ファイル → グループ → ケース）。\
   値は文字列か数値で書きます。\
   `true` / `false` は誤りにします（`"true"` と書きます）。\
   `null` は外側の `env:` の値を消すだけで、シェルから受け継いだ環境変数は消しません
-- command のケースだけが使います。\
-  call / request のケースに `env:` を書くと誤りにし、ファイルやグループから受け継いだ `env:` は使いません
-- hook では、重ねた結果を `case.env` で読めます。\
-  `pytest_casebook_run_command` で自分でコマンドを実行するときは、そこで当ててください。\
-  `run_in_process` は `os.environ` を変えないので、`unittest.mock.patch.dict(os.environ, case.env)` などで囲みます
+- hook では、重ねた結果を `case.env` でも読めます
 - HTML レポートの前提条件の列には、ファイル全体の `env:` と違う変数だけを出します。\
   期待出力ファイルには書きません
 

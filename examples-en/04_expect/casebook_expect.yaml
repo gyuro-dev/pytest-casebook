@@ -20,13 +20,13 @@ cases:
         command: banana
         expect:
           exit_code: 3
-          stderr: {contains: out of stock}
+          stderr: {$contains: out of stock}
 
       - name: count_pattern
         description: Check with a regular expression
         command: apple
         expect:
-          stdout: {regex: '^apple: \d+ in stock$'}
+          stdout: {$regex: '^apple: \d+ in stock$'}
 
   - group: call
     cases:

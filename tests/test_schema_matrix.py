@@ -188,6 +188,10 @@ KNOWN_DIFFERENCES: dict[tuple[str, str], tuple[Callable[[Any], bool], str]] = {
         lambda v: v == "x",
         "state: の名前が states: にあるかは読み込みで確かめる",
     ),
+    ("case", "stdin_file"): (
+        lambda v: v == "x",
+        "stdin_file: のファイルがあるかは読み込みで確かめる（読んで case.stdin にする）",
+    ),
     ("group", "state"): (
         lambda v: v == "x",
         "state: の名前が states: にあるかは読み込みで確かめる",

@@ -54,13 +54,13 @@ def pytest_casebook_run_command(
     """
     Run a command case.
 
-    Return None to use the default (run `argv` in a subprocess, applying `case.stdin`,
-    `case.timeout` and `case.env`). To run the CLI in-process, return
+    Return None to use the default (run `argv` in a subprocess, applying `case.stdin`
+    and `case.timeout`). To run the CLI in-process, return
     `pytest_casebook.run_in_process(main, argv[1:], stdin=case.stdin)`.
 
-    When this hook runs the command itself, apply `case.env` (the environment variables from
-    `env:`, to be put over `os.environ`) as well. `run_in_process` does not change
-    `os.environ`, so wrap it, e.g. in `unittest.mock.patch.dict(os.environ, case.env)`.
+    The environment variables from `env:` (`case.env`) are already put over `os.environ`
+    while the case runs, so a CLI run in-process sees them too. The contents of
+    `stdin_file:` are already in `case.stdin`.
 
     For cases with a per-case working directory, this hook is called with the current
     directory changed to it (the same as `cwd`).
@@ -73,13 +73,12 @@ def pytest_casebook_run_command(
 
     command のケースを実行する。
 
-    None を返すと、標準の方法（`argv` を別プロセスで実行し、`case.stdin`・`case.timeout`・
-    `case.env` を当てる）になる。同じプロセスで CLI を動かすときは
+    None を返すと、標準の方法（`argv` を別プロセスで実行し、`case.stdin`・`case.timeout` を
+    当てる）になる。同じプロセスで CLI を動かすときは
     `pytest_casebook.run_in_process(main, argv[1:], stdin=case.stdin)` を返す。
 
-    この hook でコマンドを実行するときは、`case.env`（env: の環境変数。os.environ に重ねるもの）
-    も当てる。`run_in_process` は os.environ を変えないので、
-    `unittest.mock.patch.dict(os.environ, case.env)` などで囲む。
+    env: の環境変数（`case.env`）は、ケースを実行する間 os.environ に重ねてあるので、
+    同じプロセスで動かす CLI からも見える。`stdin_file:` の中身は `case.stdin` に入っている。
 
     ケースごとの作業ディレクトリがあるケースでは、この hook はそのディレクトリ（`cwd` と同じ）に
     移動した状態で呼ばれる。

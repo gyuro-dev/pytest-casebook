@@ -40,7 +40,7 @@ cases:
             command: price grape 1
             expect:
               exit_code: 1
-              stderr: {contains: no such item}
+              stderr: {$contains: no such item}
           - name: quote_zero
             description: A quantity of 0 raises ValueError
             call: store_en:quote
@@ -60,7 +60,7 @@ cases:
             command: stock banana
             expect:
               exit_code: 3
-              stdout: {contains: out of stock}
+              stdout: {$contains: out of stock}
       - group: Sold out
         state: sold_out
         cases:

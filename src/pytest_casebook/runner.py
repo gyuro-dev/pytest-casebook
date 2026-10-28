@@ -204,8 +204,8 @@ def run_in_process(
     - any other exception is caught; the exit code becomes 1 and the exception is written to
       stderr
 
-    It does not change `os.environ`: to apply the case's `env:`, wrap the call, e.g. in
-    `unittest.mock.patch.dict(os.environ, case.env)`.
+    It does not change `os.environ` itself. Under pytest-casebook the case's `env:` is
+    already put over `os.environ` while the case runs, so the CLI sees it.
 
     :param main: a function callable as `main(argv)` (its return value or SystemExit is the
         exit code)
@@ -225,8 +225,8 @@ def run_in_process(
     - `sys.exit()` は、その値を終了コードにする
     - それ以外の例外は受け止めて、終了コードを 1 にし、例外を stderr に書く
 
-    `os.environ` は変えない。ケースの `env:` を当てるときは、
-    `unittest.mock.patch.dict(os.environ, case.env)` などで囲んで呼ぶ。
+    この関数自身は `os.environ` を変えない。pytest-casebook の中では、ケースの `env:` は
+    実行の間 `os.environ` に重ねてあるので、CLI からそのまま見える。
 
     :param main: `main(argv)` の形で呼べる関数（戻り値または SystemExit が終了コード）
     :param argv: main に渡す引数（プログラム名を含まない）

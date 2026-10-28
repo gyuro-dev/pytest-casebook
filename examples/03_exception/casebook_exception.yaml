@@ -38,4 +38,4 @@ cases:
         call: accounts:withdraw
         args: [1000, 5000]
         expect:
-          raises: {contains: 残高が足りません}
+          raises: {$contains: 残高が足りません}

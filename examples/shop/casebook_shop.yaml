@@ -90,7 +90,7 @@ cases:
             command: receipt orders.csv --out out.txt
             expect:
               exit_code: 0
-              stdout: {contains: 1 件の明細}
+              stdout: {$contains: 1 件の明細}
               files:
                 out.txt: |
                   banana x 1: 80 円
@@ -100,7 +100,7 @@ cases:
             command: receipt nothing.csv
             expect:
               exit_code: 1
-              stderr: {regex: 'ファイルがありません: nothing\.csv$'}
+              stderr: {$regex: 'ファイルがありません: nothing\.csv$'}
 
   - group: 注文（DB）
     description: setup の db で行を入れ、実行後のテーブルを確かめる
