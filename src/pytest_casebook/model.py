@@ -729,19 +729,15 @@ def _parse_mapping(
 
     if not data.get("cases"):
         raise CasebookError(error("no_cases", where=where))
-    _walk(
-        data["cases"],
-        doc,
-        (),
-        DEFAULT_STATE,
-        (),
-        {},
-        doc.env,
-        {},
-        _timeout(data.get("timeout"), where),
-        f"{where}: cases",
-    )
+    inherited = _Inherited(env=doc.env, timeout=_timeout(data.get("timeout"), where))
+    _walk(data["cases"], doc, inherited, f"{where}: cases")
+    _check_names(doc, where)
+    doc._source_lines = {}
+    return doc
 
+
+def _check_names(doc: CasebookDoc, where: str) -> None:
+    """ケース名が重ならないことを確かめる（期待出力のファイル名とテストの名前になるため）。"""
     seen: dict[str, int] = {}
     for case in doc.cases:
         seen[case.name] = seen.get(case.name, 0) + 1
@@ -758,22 +754,34 @@ def _parse_mapping(
     # 同じ名前のテストが2つになり、-k や結果で区別できなくなるため
     if doc.check_orphans and ORPHANS_TEST_NAME in seen:
         raise CasebookError(error("reserved_name", where=where, name=ORPHANS_TEST_NAME))
-    doc._source_lines = {}
-    return doc
 
 
-def _walk(
-    items: Any,
-    doc: CasebookDoc,
-    groups: tuple[Group, ...],
-    state: str,
-    marks: tuple[str, ...],
-    meta: dict[str, Any],
-    env: dict[str, str],
-    flags: dict[str, str],
-    timeout: float | int | None,
-    where: str,
-) -> None:
+@dataclass(frozen=True)
+class _Inherited:
+    """ファイルとグループからケースへ受け継ぐ値。グループに入るたびに、その分を上に重ねる。"""
+
+    groups: tuple[Group, ...] = ()
+    state: str = DEFAULT_STATE
+    marks: tuple[str, ...] = ()
+    meta: dict[str, Any] = field(default_factory=dict)
+    env: dict[str, str] = field(default_factory=dict)
+    flags: dict[str, str] = field(default_factory=dict)
+    timeout: float | int | None = None
+
+    def enter(self, group: Group, item: dict[str, Any], loc: str) -> _Inherited:
+        """グループ `item` に書いた値を重ねたものを返す（書いていない値はそのまま受け継ぐ）。"""
+        return _Inherited(
+            groups=(*self.groups, group),
+            state=_state(item, loc, self.state),
+            marks=(*self.marks, *_str_list(item.get("marks"), loc, "marks")),
+            meta={**self.meta, **_meta(item.get("meta"), loc)},
+            env=_merge_env(self.env, _env(item.get("env"), loc)),
+            flags={**self.flags, **_flags(item, loc)},
+            timeout=_timeout(item["timeout"], loc) if "timeout" in item else self.timeout,
+        )
+
+
+def _walk(items: Any, doc: CasebookDoc, inherited: _Inherited, where: str) -> None:
     """グループを再帰的にたどり、ケースを `doc.cases` に順に追加する。"""
     if not isinstance(items, list):
         raise CasebookError(error("items_list", where=where))
@@ -795,67 +803,63 @@ def _walk(
             _walk(
                 item.get("cases"),
                 doc,
-                (*groups, group),
-                _state(item, loc, state),
-                (*marks, *_str_list(item.get("marks"), loc, "marks")),
-                {**meta, **_meta(item.get("meta"), loc)},
-                _merge_env(env, _env(item.get("env"), loc)),
-                {**flags, **_flags(item, loc)},
-                _timeout(item["timeout"], loc) if "timeout" in item else timeout,
+                inherited.enter(group, item, loc),
                 f"{loc}{error('in_group', name=group.name)}.cases",
             )
         elif "params" in item:
-            # params: を持つケースはテンプレート。テンプレートに params の各要素を上書きで
-            # 重ねて（深い併合はしない）、1件ずつのケースにする。要素は name を持ち、
-            # ケース名は「テンプレート名-要素名」になる。重ねた結果の検証は、ふつうの
-            # ケースと同じ _parse_case に任せる
-            params = item["params"]
-            if not (
-                isinstance(params, list) and params and all(isinstance(p, dict) for p in params)
-            ):
-                raise CasebookError(error("params_list", where=loc))
-            template = {k: v for k, v in item.items() if k != "params"}
-            name = _str(template.get("name"), loc, "name", required=True)
-            for param in params:
-                # 誤りの表示とレポートの行番号は、要素自身の行を優先する（分からなければ
-                # テンプレートの行）。_parse_case が merged の id で行を引けるように登録する
-                pline = doc._source_lines.get(id(param), line)
-                ploc = f"{where}[{i}]" + (
-                    error("line", line=pline + 1) if pline is not None else ""
-                )
-                if "params" in param:
-                    raise CasebookError(error("params_nested", where=ploc))
-                if "name" not in param:
-                    raise CasebookError(error("params_name", where=ploc))
-                merged = {**template, **param}
-                merged["name"] = f"{name}-{_str(param['name'], ploc, 'name', required=True)}"
-                if pline is not None:
-                    doc._source_lines[id(merged)] = pline
-                doc.cases.append(
-                    _parse_case(merged, doc, groups, state, marks, meta, env, flags, timeout, ploc)
-                )
+            _expand_params(item, doc, inherited, where, i, line, loc)
         else:
-            doc.cases.append(
-                _parse_case(item, doc, groups, state, marks, meta, env, flags, timeout, loc)
-            )
+            doc.cases.append(_parse_case(item, doc, inherited, loc))
+
+
+def _expand_params(
+    item: dict[str, Any],
+    doc: CasebookDoc,
+    inherited: _Inherited,
+    where: str,
+    index: int,
+    line: int | None,
+    loc: str,
+) -> None:
+    """
+    params: を持つケース（テンプレート）を、1件ずつのケースにして `doc.cases` に追加する。
+
+    テンプレートに params の各要素を上書きで重ねる（深い併合はしない）。要素は name を持ち、
+    ケース名は「テンプレート名-要素名」になる。重ねた結果の検証は、ふつうのケースと同じ
+    _parse_case に任せる。
+    """
+    params = item["params"]
+    if not (isinstance(params, list) and params and all(isinstance(p, dict) for p in params)):
+        raise CasebookError(error("params_list", where=loc))
+    template = {k: v for k, v in item.items() if k != "params"}
+    name = _str(template.get("name"), loc, "name", required=True)
+    for param in params:
+        # 誤りの表示とレポートの行番号は、要素自身の行を優先する（分からなければ
+        # テンプレートの行）。_parse_case が merged の id で行を引けるように登録する
+        pline = doc._source_lines.get(id(param), line)
+        ploc = f"{where}[{index}]" + (error("line", line=pline + 1) if pline is not None else "")
+        if "params" in param:
+            raise CasebookError(error("params_nested", where=ploc))
+        if "name" not in param:
+            raise CasebookError(error("params_name", where=ploc))
+        merged = {**template, **param}
+        merged["name"] = f"{name}-{_str(param['name'], ploc, 'name', required=True)}"
+        if pline is not None:
+            doc._source_lines[id(merged)] = pline
+        doc.cases.append(_parse_case(merged, doc, inherited, ploc))
 
 
 # call: の形（モジュール:関数）。空の名前・空白・相対 import（先頭の .）は通さない
 _CALL_RE = re.compile(r"[^:\s.][^:\s]*:[^:\s]+")
 
 
-def _parse_case(
-    item: dict[str, Any],
-    doc: CasebookDoc,
-    groups: tuple[Group, ...],
-    state: str,
-    marks: tuple[str, ...],
-    meta: dict[str, Any],
-    env: dict[str, str],
-    flags: dict[str, str],
-    timeout: float | int | None,
-    loc: str,
-) -> Case:
+def _parse_case(item: dict[str, Any], doc: CasebookDoc, inherited: _Inherited, loc: str) -> Case:
+    """
+    1件のケースを検証して `Case` にする（グループから受け継いだ値に、ケースの値を重ねる）。
+
+    確かめる順（どの誤りを先に知らせるか）は、名前 → 動作（command / call / request /
+    manual）→ stdin → env → request → 引数 → timeout → 状態と setup → observe と expect。
+    """
     _check_keys(item, _CASE_KEYS, loc)
     name = _str(item.get("name"), loc, "name", required=True)
     if not NAME_RE.match(name):
@@ -864,6 +868,63 @@ def _parse_case(
 
     if sum(key in item for key in ("command", "call", "request", "manual")) != 1:
         raise CasebookError(error("one_action", where=loc))
+    manual = _parse_manual(item, loc)
+    command, command_argv = _parse_command(item, doc, loc)
+    call = _parse_call(item, loc)
+    stdin, stdin_file = _parse_stdin(item, doc, command, loc)
+    own_env = _env(item.get("env"), loc)
+    request = (
+        _parse_request(item["request"], doc.request_headers, loc) if "request" in item else None
+    )
+    kind = _kind_of(command, call)
+    args, kwargs = _parse_args(item, loc)
+    # ケースに書いた timeout が最優先。なければファイル・グループから受け継いだ既定を使う
+    timeout = _timeout(item["timeout"], loc) if "timeout" in item else inherited.timeout
+    if manual is not None:
+        # 手動のケースは実行しないため、受け継いだ既定の timeout は使わない
+        # （ケース自身の timeout: は _MANUAL_FORBIDDEN_KEYS で先に誤りにしている）
+        timeout = None
+    state, state_data = _resolve_state(item, doc, inherited.state, loc)
+    setup, setup_files, has_setup_files = _merge_setup(state_data, item.get("setup"), loc)
+    observe, expect = _parse_observe_expect(item, kind, manual, loc)
+
+    return Case(
+        name=name,
+        description=_str(item.get("description"), loc, "description"),
+        groups=inherited.groups,
+        command=command,
+        command_argv=command_argv,
+        call=call,
+        request=request,
+        args=args,
+        kwargs=kwargs,
+        stdin=stdin,
+        stdin_file=stdin_file,
+        timeout=timeout,
+        # 手動のケースは実行しないので、受け継いだ env も timeout と同じく使わない
+        # （ケース自身の env: は _MANUAL_FORBIDDEN_KEYS で先に誤りにしている）
+        env=_merge_env(inherited.env, own_env) if manual is None else {},
+        state=state,
+        state_data=state_data,
+        marks=(*inherited.marks, *_str_list(item.get("marks"), loc, "marks")),
+        golden=_golden_name(item, loc),
+        setup=setup,
+        setup_files=setup_files,
+        has_setup_files=has_setup_files,
+        own_setup=item.get("setup"),
+        observe=observe,
+        expect=expect,
+        meta={**inherited.meta, **_meta(item.get("meta"), loc)},
+        line=doc._source_lines.get(id(item)),
+        manual=manual,
+        manual_expect=_manual_expect(item.get("expect"), loc) if manual is not None else (),
+        result=_manual_result(item.get("result"), loc),
+        **{**inherited.flags, **_flags(item, loc)},
+    )
+
+
+def _parse_manual(item: dict[str, Any], loc: str) -> str | None:
+    """manual:（手で確かめる内容）。手動のケースに書けないキーと、result: の置き場所も確かめる。"""
     manual = _str(item["manual"], loc, "manual", required=True) if "manual" in item else None
     if manual is not None:
         forbidden = [key for key in _MANUAL_FORBIDDEN_KEYS if key in item]
@@ -871,89 +932,118 @@ def _parse_case(
             raise CasebookError(error("manual_keys", where=loc, keys=", ".join(forbidden)))
     elif "result" in item:
         raise CasebookError(error("result_only_manual", where=loc))
-    command = None
-    command_argv = None
+    return manual
+
+
+def _parse_command(
+    item: dict[str, Any], doc: CasebookDoc, loc: str
+) -> tuple[str | None, tuple[str, ...] | None]:
+    """command: を (表示用の文字列, 区切った引数) にする。command: がなければ (None, None)。"""
     if isinstance(item.get("command"), list):
         # リストで書くと、shell の書き方として区切らない（Windows のパスの \ が消えない）
         command_argv = _str_list(item["command"], loc, "command")
         command = shlex.join(command_argv)
-        if not command_argv and not doc.command_prefix:
-            raise CasebookError(error("empty_command", where=loc))
     elif "command" in item:
         # 空文字も書ける（command_prefix だけで実行するとき）。shell の書き方として
         # ここで区切っておく（実行のときに区切り直さない。空白だけなら引数は1つもない）
         command = _str(item["command"], loc, "command")
         command_argv = tuple(_shell_split(command, loc, "command"))
-        if not command_argv and not doc.command_prefix:
-            raise CasebookError(error("empty_command", where=loc))
+    else:
+        return None, None
+    if not command_argv and not doc.command_prefix:
+        raise CasebookError(error("empty_command", where=loc))
+    return command, command_argv
+
+
+def _parse_call(item: dict[str, Any], loc: str) -> str | None:
+    """call:（"モジュール:関数"）。args: / kwargs: は call: のケースにだけ書ける。"""
     call = _str(item["call"], loc, "call", required=True) if "call" in item else None
     if call is not None and not _CALL_RE.fullmatch(call):
         raise CasebookError(error("bad_call", where=loc, call=repr(call)))
     if call is None and ("args" in item or "kwargs" in item):
         raise CasebookError(error("args_only_call", where=loc))
+    return call
+
+
+def _parse_stdin(
+    item: dict[str, Any], doc: CasebookDoc, command: str | None, loc: str
+) -> tuple[str | None, str | None]:
+    """
+    stdin: / stdin_file: を (標準入力の中身, stdin_file の名前) にする（command のケースだけ）。
+
+    stdin_file: は読み込みのときに中身を読んでおく（hook や run_case() は case.stdin を
+    読むだけでよく、stdin_file を自分で読まずに済む。ないファイルは書き方の誤り）。
+    """
     if command is None and "stdin" in item:
         raise CasebookError(error("stdin_only_command", where=loc))
     if command is None and "stdin_file" in item:
         raise CasebookError(error("stdin_file_only_command", where=loc))
     if "stdin" in item and "stdin_file" in item:
         raise CasebookError(error("stdin_and_file", where=loc))
-    stdin = _str(item.get("stdin"), loc, "stdin") if "stdin" in item else None
-    stdin_file = None
-    if "stdin_file" in item:
-        stdin_file = _str(item["stdin_file"], loc, "stdin_file", required=True)
-        # YAML のディレクトリの外（絶対パスや ..）は指せない
-        if not _is_inside(stdin_file):
-            raise CasebookError(error("stdin_file_path", where=loc, name=repr(stdin_file)))
-        # 読み込みのときに中身を stdin にしておく（hook や run_case() は case.stdin を
-        # 読むだけでよく、stdin_file を自分で読まずに済む。ないファイルは書き方の誤り）
-        try:
-            stdin = (doc.path.parent / stdin_file).read_text(encoding="utf-8")
-        except UnicodeDecodeError as e:
-            raise CasebookError(error("not_utf8", where=f"{loc}: {stdin_file}", error=e)) from None
-        except OSError:
-            raise CasebookError(f"{loc}: {error('stdin_file_missing', name=stdin_file)}") from None
-    own_env = _env(item.get("env"), loc)
-    request = (
-        _parse_request(item["request"], doc.request_headers, loc) if "request" in item else None
-    )
-    kind = _kind_of(command, call)
+    if "stdin_file" not in item:
+        return (_str(item.get("stdin"), loc, "stdin") if "stdin" in item else None), None
+    stdin_file = _str(item["stdin_file"], loc, "stdin_file", required=True)
+    # YAML のディレクトリの外（絶対パスや ..）は指せない
+    if not _is_inside(stdin_file):
+        raise CasebookError(error("stdin_file_path", where=loc, name=repr(stdin_file)))
+    try:
+        stdin = (doc.path.parent / stdin_file).read_text(encoding="utf-8")
+    except UnicodeDecodeError as e:
+        raise CasebookError(error("not_utf8", where=f"{loc}: {stdin_file}", error=e)) from None
+    except OSError:
+        raise CasebookError(f"{loc}: {error('stdin_file_missing', name=stdin_file)}") from None
+    return stdin, stdin_file
 
+
+def _parse_args(item: dict[str, Any], loc: str) -> tuple[list[Any], dict[str, Any]]:
+    """call: に渡す args:（リスト）と kwargs:（名前 -> 値）。"""
     args = item.get("args", [])
     if not isinstance(args, list):
         raise CasebookError(error("args_list", where=loc))
     kwargs = item.get("kwargs", {})
     if not (isinstance(kwargs, dict) and all(isinstance(k, str) for k in kwargs)):
         raise CasebookError(error("kwargs_mapping", where=loc))
-    # ケースに書いた timeout が最優先。なければファイル・グループから受け継いだ既定を使う
-    if "timeout" in item:
-        timeout = _timeout(item["timeout"], loc)
-    if manual is not None:
-        # 手動のケースは実行しないため、受け継いだ既定の timeout は使わない
-        # （ケース自身の timeout: は _MANUAL_FORBIDDEN_KEYS で先に誤りにしている）
-        timeout = None
+    return args, kwargs
 
-    state = _state(item, loc, state)
+
+def _resolve_state(
+    item: dict[str, Any], doc: CasebookDoc, inherited: str, loc: str
+) -> tuple[str, Any]:
+    """ケースの状態の名前と、states: に書いたその内容（なければ None）。"""
+    state = _state(item, loc, inherited)
     if doc.states is None:
         if state != DEFAULT_STATE:
             raise CasebookError(error("state_without_states", where=loc, state=state))
-        state_data = None
-    elif state in doc.states:
-        state_data = doc.states[state]
-    elif state == DEFAULT_STATE:
+        return state, None
+    if state in doc.states:
+        return state, doc.states[state]
+    if state == DEFAULT_STATE:
         # states: に default を書いていなければ、state: のないケースは「状態の内容なし」
         # （1 つの状態を足しただけで、ほかのケースが default を要求して止まらないように）
-        state_data = None
-    else:
-        raise CasebookError(error("unknown_state", where=loc, state=state))
+        return state, None
+    raise CasebookError(error("unknown_state", where=loc, state=state))
 
-    # 状態の内容に、ケースの setup: を上書きで重ねる（files はファイル名ごとに重ねる）
+
+def _merge_setup(
+    state_data: Any, own_setup: Any, loc: str
+) -> tuple[dict[str, Any] | None, dict[str, str], bool]:
+    """
+    状態の内容に、ケースの setup: を上書きで重ねる（files はファイル名ごとに重ねる）。
+
+    :return: (hook に渡す部分, 置くファイル, files: を書いたか（空でも）)
+    """
     base, base_files = _parse_setup(state_data, loc)
-    own, own_files = _parse_setup(item.get("setup"), loc)
+    own, own_files = _parse_setup(own_setup, loc)
     setup = None if base is None and own is None else {**(base or {}), **(own or {})}
     # files: を書いたか（空でも）は、None かどうかで分かる
     has_setup_files = base_files is not None or own_files is not None
-    setup_files = {**(base_files or {}), **(own_files or {})}
+    return setup, {**(base_files or {}), **(own_files or {})}, has_setup_files
 
+
+def _parse_observe_expect(
+    item: dict[str, Any], kind: str, manual: str | None, loc: str
+) -> tuple[tuple[str, ...], dict[str, Any] | None]:
+    """observe:（実行後に取り出すもの）と expect:（YAML に書いた期待結果。手動のケースは除く）。"""
     observe = _str_list(item.get("observe"), loc, "observe")
     expect = (
         _parse_expect(item["expect"], kind, loc) if "expect" in item and manual is None else None
@@ -967,40 +1057,7 @@ def _parse_case(
             raise CasebookError(
                 error("observe_not_in_expect", where=loc, targets=", ".join(missing))
             )
-
-    return Case(
-        name=name,
-        description=_str(item.get("description"), loc, "description"),
-        groups=groups,
-        command=command,
-        command_argv=command_argv,
-        call=call,
-        request=request,
-        args=args,
-        kwargs=kwargs,
-        stdin=stdin,
-        stdin_file=stdin_file,
-        timeout=timeout,
-        # 手動のケースは実行しないので、受け継いだ env も timeout と同じく使わない
-        # （ケース自身の env: は _MANUAL_FORBIDDEN_KEYS で先に誤りにしている）
-        env=_merge_env(env, own_env) if manual is None else {},
-        state=state,
-        state_data=state_data,
-        marks=(*marks, *_str_list(item.get("marks"), loc, "marks")),
-        golden=_golden_name(item, loc),
-        setup=setup,
-        setup_files=setup_files,
-        has_setup_files=has_setup_files,
-        own_setup=item.get("setup"),
-        observe=observe,
-        expect=expect,
-        meta={**meta, **_meta(item.get("meta"), loc)},
-        line=doc._source_lines.get(id(item)),
-        manual=manual,
-        manual_expect=_manual_expect(item.get("expect"), loc) if manual is not None else (),
-        result=_manual_result(item.get("result"), loc),
-        **{**flags, **_flags(item, loc)},
-    )
+    return observe, expect
 
 
 def _manual_expect(value: Any, loc: str) -> tuple[str, ...]:

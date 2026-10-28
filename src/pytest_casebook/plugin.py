@@ -819,9 +819,9 @@ def run_case(
                 # あとから resolve() しても変わらないよう、作った直後に resolve しておく
                 # （Windows の 8.3 形式のパスや macOS の /var の symlink で変わりうる）
                 workdir = Path(tmp).resolve()
-            outcome = _execute_case(doc, case, env, hook, workdir, None, encoding)
-            normalizer = _normalizer(None, hook, doc, env, workdir, builtin_patterns)
-            return _render_golden(case, outcome, normalizer, description)
+            run = _Run(doc, case, env, hook, workdir, config=None)
+            outcome = _execute_case(run, encoding)
+            return _render_golden(case, outcome, _normalizer(run, builtin_patterns), description)
 
 
 def _run_case(
@@ -837,17 +837,21 @@ def _run_case(
     実行（_execute_case）が済んだら、expect: があればそれと、なければ期待出力ファイルと比べる。
     """
     config = request.config
-    # このケースの YAML のパスに効く conftest.py の hook だけを呼ぶ
-    # （config.hook は、ほかのディレクトリの conftest.py の hook も呼ぶ）
-    hook = request.node.ihook
-    workdir: Path | None = None
     run_error: str | None = None
     try:
-        if case.needs_workdir:
-            workdir = tmp_path_factory.mktemp(f"casebook-{case.name}")
-        outcome = _execute_case(
-            doc, case, env, hook, workdir, config, config.getini("casebook_encoding")
+        run = _Run(
+            doc,
+            case,
+            env,
+            # このケースの YAML のパスに効く conftest.py の hook だけを呼ぶ
+            # （config.hook は、ほかのディレクトリの conftest.py の hook も呼ぶ）
+            hook=request.node.ihook,
+            workdir=tmp_path_factory.mktemp(f"casebook-{case.name}")
+            if case.needs_workdir
+            else None,
+            config=config,
         )
+        outcome = _execute_case(run, config.getini("casebook_encoding"))
     except CasebookRunError as e:
         run_error = str(e)
     # 失敗にするのは except の外で（中で pytest.fail を呼ぶと、元の例外もつながって表示され、
@@ -855,24 +859,31 @@ def _run_case(
     if run_error is not None:
         pytest.fail(f"[{case.name}] {run_error}", pytrace=False)
 
-    normalizer = _normalizer(
-        config, hook, doc, env, workdir, config.getini("casebook_builtin_patterns")
-    )
+    normalizer = _normalizer(run, config.getini("casebook_builtin_patterns"))
     if case.uses_golden:
         _compare_golden(request, doc, case, outcome, normalizer, doc.lang)
     else:
         _compare_expect(case, outcome, normalizer, doc.lang)
 
 
-def _execute_case(
-    doc: CasebookDoc,
-    case: Case,
-    env: Any,
-    hook: Any,
-    workdir: Path | None,
-    config: pytest.Config | None,
-    encoding: str,
-) -> _Outcome:
+@dataclass(frozen=True)
+class _Run:
+    """
+    1件のケースを実行する間、ずっと一緒に使う値（pytest のテストと run_case() で同じ形）。
+
+    hook は、pytest ではそのケースに効く conftest.py の hook、run_case() では渡された
+    hooks。config は pytest の外では None。
+    """
+
+    doc: CasebookDoc
+    case: Case
+    env: Any
+    hook: Any
+    workdir: Path | None
+    config: pytest.Config | None
+
+
+def _execute_case(run: _Run, encoding: str) -> _Outcome:
     """
     ケースを実行して結果を返す（pytest のテストと run_case() で共通の部分）。
 
@@ -885,34 +896,35 @@ def _execute_case(
 
     :raises CasebookRunError: 実行できないとき（コマンドが見つからないなど）
     """
+    case = run.case
     with contextlib.ExitStack() as stack:
         # YAML の env: を、このケースの間だけ os.environ に重ねる。hook の中で動かす CLI
         # （run_in_process）、call: の関数、request: の hook からも見え、別プロセスで実行する
         # ときはその環境も受け継ぐ
-        stack.enter_context(_environ_overlay(_expanded_env(doc, case)))
-        if workdir is not None:
-            _write_files(workdir, case.setup_files)
+        stack.enter_context(_environ_overlay(_expanded_env(run.doc, case)))
+        if run.workdir is not None:
+            _write_files(run.workdir, case.setup_files)
         # setup: がないケースでも呼ぶ（data は空）。後片付けが毎回行われ、
         # 前のケースで増えた DB の行などが次のケースに残らないようにするため
-        for cm in hook.pytest_casebook_setup(
+        for cm in run.hook.pytest_casebook_setup(
             case=case,
             data=copy.deepcopy(case.setup or {}),
-            env=env,
-            workdir=workdir,
-            config=config,
+            env=run.env,
+            workdir=run.workdir,
+            config=run.config,
         ):
             if cm is not None:
                 stack.enter_context(cm)
         if case.command is not None:
-            outcome = _execute_command(config, hook, doc, case, env, workdir, encoding)
+            outcome = _execute_command(run, encoding)
         elif case.request is not None:
-            outcome = _execute_request(config, hook, case, env, workdir)
+            outcome = _execute_request(run)
         else:
-            outcome = _execute_call(config, hook, doc, case, env, workdir)
+            outcome = _execute_call(run)
         for target in case.observe_targets:
-            outcome.observed[target] = _observe(config, hook, case, target, env, workdir)
+            outcome.observed[target] = _observe(run, target)
 
-    if doc.states is not None:
+    if run.doc.states is not None:
         # 実行内容（command / call / request と引数）のあと、結果（exit_code / status）の前に置く
         keys = [key for key, _ in outcome.header]
         results = [i for i, key in enumerate(keys) if key in ("exit_code", "status")]
@@ -957,15 +969,8 @@ def _in_dir(workdir: Path | None) -> contextlib.AbstractContextManager[Any]:
     return contextlib.chdir(workdir) if workdir is not None else contextlib.nullcontext()
 
 
-def _execute_command(
-    config: pytest.Config | None,
-    hook: Any,
-    doc: CasebookDoc,
-    case: Case,
-    env: Any,
-    workdir: Path | None,
-    encoding: str,
-) -> _Outcome:
+def _execute_command(run: _Run, encoding: str) -> _Outcome:
+    doc, case, workdir = run.doc, run.case, run.workdir
     # {casebook_dir} は YAML のあるディレクトリ（作業ディレクトリで実行するときに、
     # YAML の隣のスクリプトなどを指すのに使う）
     yaml_dir = doc.path.parent.as_posix()
@@ -977,8 +982,8 @@ def _execute_command(
     with _in_dir(workdir):
         # hook にはケースをそのまま渡す（stdin_file の中身は読み込みのときに case.stdin に
         # 入れてある。env: は _execute_case が os.environ に重ねてある）
-        result = hook.pytest_casebook_run_command(
-            case=case, argv=argv, env=env, cwd=cwd, config=config
+        result = run.hook.pytest_casebook_run_command(
+            case=case, argv=argv, env=run.env, cwd=cwd, config=run.config
         )
     if result is None:
         try:
@@ -1031,26 +1036,20 @@ def _run_error_hint(
     return ""
 
 
-def _execute_call(
-    config: pytest.Config | None,
-    hook: Any,
-    doc: CasebookDoc,
-    case: Case,
-    env: Any,
-    workdir: Path | None,
-) -> _Outcome:
+def _execute_call(run: _Run) -> _Outcome:
+    case = run.case
     # YAML と同じディレクトリのモジュールを、conftest.py なしで import できるようにする
     # （pytest がテストのファイルのディレクトリを sys.path に加えるのと同じ）
-    yaml_dir = str(doc.path.parent)
+    yaml_dir = str(run.doc.path.parent)
     if yaml_dir not in sys.path:
         sys.path.insert(0, yaml_dir)
     func = import_callable(str(case.call))
     args = copy.deepcopy(case.args)
     kwargs = copy.deepcopy(case.kwargs)
-    hook.pytest_casebook_prepare_call(
-        case=case, env=env, args=args, kwargs=kwargs, workdir=workdir, config=config
+    run.hook.pytest_casebook_prepare_call(
+        case=case, env=run.env, args=args, kwargs=kwargs, workdir=run.workdir, config=run.config
     )
-    with _in_dir(workdir):
+    with _in_dir(run.workdir):
         try:
             result = invoke(func, args, kwargs, timeout=case.timeout)
         except WorkerTimeout:
@@ -1072,18 +1071,17 @@ def _execute_call(
     )
 
 
-def _execute_request(
-    config: pytest.Config | None, hook: Any, case: Case, env: Any, workdir: Path | None
-) -> _Outcome:
+def _execute_request(run: _Run) -> _Outcome:
+    case = run.case
     request = case.request
     assert request is not None
 
     def send() -> Any:
-        return hook.pytest_casebook_request(
-            case=case, request=request, env=env, workdir=workdir, config=config
+        return run.hook.pytest_casebook_request(
+            case=case, request=request, env=run.env, workdir=run.workdir, config=run.config
         )
 
-    with _in_dir(workdir):
+    with _in_dir(run.workdir):
         if case.timeout is None:
             response = send()
         else:
@@ -1104,10 +1102,9 @@ def _execute_request(
     )
 
 
-def _observe(
-    config: pytest.Config | None, hook: Any, case: Case, target: str, env: Any, workdir: Path | None
-) -> Any:
+def _observe(run: _Run, target: str) -> Any:
     """observe の対象を取り出す（files は作業ディレクトリを読み、ほかは hook に任せる）。"""
+    workdir = run.workdir
     if target == FILES_TARGET:
         assert workdir is not None
         return {
@@ -1115,13 +1112,13 @@ def _observe(
             for p in sorted(workdir.rglob("*"))
             if p.is_file()
         }
-    value = hook.pytest_casebook_observe(
-        target=target, case=case, env=env, workdir=workdir, config=config
+    value = run.hook.pytest_casebook_observe(
+        target=target, case=run.case, env=run.env, workdir=workdir, config=run.config
     )
     if value is None:
         message = error("observe_failed", target=target)
         # expect: の結果のキーの打ち間違い（retrun など）は、observe の対象として扱われてここに来る
-        close = difflib.get_close_matches(target, EXPECT_KEYS_BY_KIND.get(case.kind, ()), n=1)
+        close = difflib.get_close_matches(target, EXPECT_KEYS_BY_KIND.get(run.case.kind, ()), n=1)
         if close:
             message += error("did_you_mean", key=close[0])
         raise CasebookRunError(message)
@@ -1543,23 +1540,17 @@ def _title(case: Case, lang: str) -> str:
     return " ".join(p for p in parts if p)
 
 
-def _normalizer(
-    config: pytest.Config | None,
-    hook: Any,
-    doc: CasebookDoc,
-    env: Any,
-    workdir: Path | None,
-    builtin_patterns: bool,
-) -> Normalizer:
+def _normalizer(run: _Run, builtin_patterns: bool) -> Normalizer:
     """
     このケースの出力の正規化を組み立てる。
 
     置き換えは、hook の placeholders・作業ディレクトリと YAML のディレクトリのパス、
     正規表現は、hook の patterns・YAML の normalize:・組み込みの日時と UUID の順に当てる。
     """
+    doc, hook, workdir = run.doc, run.hook, run.workdir
     placeholders = [
         pair
-        for pairs in hook.pytest_casebook_placeholders(env=env, config=config)
+        for pairs in hook.pytest_casebook_placeholders(env=run.env, config=run.config)
         for pair in pairs
     ]
     if workdir is not None:
@@ -1574,7 +1565,9 @@ def _normalizer(
     # {casebook_dir} に置き換わってしまう（空文字は、すべての文字の間に入ってしまう）
     placeholders = [(real, token) for real, token in placeholders if real not in ("", ".")]
     patterns = compile_patterns(
-        pair for pairs in hook.pytest_casebook_patterns(env=env, config=config) for pair in pairs
+        pair
+        for pairs in hook.pytest_casebook_patterns(env=run.env, config=run.config)
+        for pair in pairs
     )
     patterns += doc.normalize
     if builtin_patterns:
