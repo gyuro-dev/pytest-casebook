@@ -77,7 +77,7 @@ def test_lang_in_yaml_applies_to_run_errors_and_manual_cases(project: pytest.Pyt
     result = project.runpytest("-rs")
     result.assert_outcomes(passed=1, failed=2, skipped=1)  # passed は golden_orphans
     out = result.stdout.str()
-    assert "command not found: no-such-command-xyz" in out
+    assert "command not found: no-such-command-xyz (it ran in " in out
     assert "manual case (no result: yet)" in out
     assert "[bad] the manual check result is failed" in out
 

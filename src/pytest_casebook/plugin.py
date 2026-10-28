@@ -60,6 +60,7 @@ from .normalize import BUILTIN_PATTERNS, Normalizer, compile_patterns
 from .report import CasebookHtmlReport, ReportOutput
 from .runner import (
     CasebookRunError,
+    CommandNotFoundError,
     CommandResult,
     WorkerTimeout,
     import_callable,
@@ -120,19 +121,20 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=None,
         help="write the case results as an HTML test specification sheet grouped by levels",
     )
-    parser.addini(
-        "casebook_html_reports",
-        type="linelist",
-        default=[],
-        help="additional HTML sheets, one per line: '<html file> = <case file patterns>' "
-        "(patterns separated by commas, relative to rootdir, globs allowed)",
-    )
+    # ini は --help で見出しを付けられないので、役割の順に並べる（集め方 → 実行 → 期待出力
+    # → レポート → 言語）。README の ini の表も同じ順にする
     parser.addini(
         "casebook_files",
         type="linelist",
         default=DEFAULT_FILE_PATTERNS,
         help="file name patterns collected as case files",
     )
+    parser.addini(
+        "casebook_command_prefix",
+        default="",
+        help="arguments put before every command when the YAML has no command_prefix",
+    )
+    parser.addini("casebook_encoding", default="utf-8", help="encoding of the command output")
     parser.addini(
         "casebook_golden_dir",
         default=DEFAULT_GOLDEN_DIR,
@@ -147,23 +149,17 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         "written by --casebook-update or --casebook-update-headers",
     )
     parser.addini(
+        "casebook_builtin_patterns",
+        type="bool",
+        default=True,
+        help="replace datetimes and UUIDs with <datetime> / <uuid>",
+    )
+    parser.addini(
         "casebook_levels",
         type="linelist",
         default=[],
         help="names of the group levels when the YAML has no levels "
         "(default: those of casebook_lang, e.g. Category Subcategory Item)",
-    )
-    parser.addini(
-        "casebook_command_prefix",
-        default="",
-        help="arguments put before every command when the YAML has no command_prefix",
-    )
-    parser.addini("casebook_encoding", default="utf-8", help="encoding of the command output")
-    parser.addini(
-        "casebook_builtin_patterns",
-        type="bool",
-        default=True,
-        help="replace datetimes and UUIDs with <datetime> / <uuid>",
     )
     parser.addini(
         "casebook_html_title",
@@ -181,6 +177,13 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         "casebook_html_golden_lines",
         default="40",
         help="number of lines of a golden file shown when casebook_html_golden is summary",
+    )
+    parser.addini(
+        "casebook_html_reports",
+        type="linelist",
+        default=[],
+        help="additional HTML sheets, one per line: '<html file> = <case file patterns>' "
+        "(patterns separated by commas, relative to rootdir, globs allowed)",
     )
     parser.addini(
         "casebook_lang",
@@ -987,19 +990,8 @@ def _execute_command(
                 encoding=encoding,
                 env=_expanded_env(doc, case),
             )
-        except CasebookRunError as e:
-            # 作業ディレクトリで動かすケースで、YAML からの相対パスで書いたプログラムが
-            # 見つからないときは、{casebook_dir} の案内を添える（説明書を探さずに直せるように）
-            program = Path(argv[0])
-            if (
-                workdir is not None
-                and not program.is_absolute()
-                and len(program.parts) > 1
-                and not (cwd / program).exists()
-                and (doc.path.parent / program).exists()
-            ):
-                raise CasebookRunError(f"{e}{error('workdir_hint')}") from None
-            raise
+        except CommandNotFoundError as e:
+            raise CasebookRunError(f"{e}{_not_found_hint(doc, argv[0], cwd, workdir)}") from None
     elif not isinstance(result, CommandResult):
         result = CommandResult(*result)
     return _Outcome(
@@ -1008,6 +1000,25 @@ def _execute_command(
         stdout=result.stdout,
         stderr=result.stderr,
     )
+
+
+def _not_found_hint(doc: CasebookDoc, program: str, cwd: Path, workdir: Path | None) -> str:
+    """
+    コマンドが見つからないときに添える直し方（説明書を探さずに直せるように）。
+
+    作業ディレクトリで動かすケースで、YAML からの相対パスで書いたプログラムなら
+    {casebook_dir} の書き方を、それ以外は、どこで実行したかと書き方を案内する。
+    """
+    path = Path(program)
+    if (
+        workdir is not None
+        and not path.is_absolute()
+        and len(path.parts) > 1
+        and not (cwd / path).exists()
+        and (doc.path.parent / path).exists()
+    ):
+        return error("workdir_hint")
+    return error("command_not_found_hint", cwd=cwd)
 
 
 def _execute_call(

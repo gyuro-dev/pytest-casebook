@@ -7,6 +7,20 @@ incompatible change raises the minor version).
 
 ## [Unreleased]
 
+### Changed
+
+- "command not found" now says where the command ran and how to fix it: use an installed
+  command, or a script by its path from that directory (e.g. `[python, my_cli.py]`). The
+  existing `{casebook_dir}` hint for cases run in a temporary working directory stays.
+- The ini options are listed in `pytest --help` and in the README by role: collecting,
+  running, golden files, reports, language.
+
+### Fixed
+
+- The README's "Getting started" example runs as written: it now includes the small CLI it
+  tests (`hello.py`) instead of a `hello` command that does not exist. A test copies the
+  example from both READMEs and runs it.
+
 ## [0.9.0] - 2026-10-28
 
 ### Added

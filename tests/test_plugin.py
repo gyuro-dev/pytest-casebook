@@ -263,7 +263,12 @@ def test_missing_command_fails_with_message(project: pytest.Pytester) -> None:
     write_casebook(project, "cases:\n  - name: x\n    command: no-such-command-xyz\n")
     result = project.runpytest("--casebook-update")
     result.assert_outcomes(passed=1, failed=1)
-    result.stdout.fnmatch_lines(["*コマンドが見つかりません: no-such-command-xyz*"])
+    # 理由だけで止めず、どこで実行したかと直し方も添える
+    line = (
+        f"*コマンドが見つかりません: no-such-command-xyz（{project.path} で実行しました。"
+        "*command_prefix: [[]python, my_cli.py] など*"
+    )
+    result.stdout.fnmatch_lines([line])
 
 
 def test_run_command_hook_runs_in_process(project: pytest.Pytester) -> None:
