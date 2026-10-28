@@ -990,8 +990,11 @@ def _execute_command(
                 encoding=encoding,
                 env=_expanded_env(doc, case),
             )
-        except CommandNotFoundError as e:
-            raise CasebookRunError(f"{e}{_not_found_hint(doc, argv[0], cwd, workdir)}") from None
+        except CasebookRunError as e:
+            hint = _run_error_hint(doc, argv[0], cwd, workdir, e)
+            if not hint:
+                raise
+            raise CasebookRunError(f"{e}{hint}") from None
     elif not isinstance(result, CommandResult):
         result = CommandResult(*result)
     return _Outcome(
@@ -1002,12 +1005,17 @@ def _execute_command(
     )
 
 
-def _not_found_hint(doc: CasebookDoc, program: str, cwd: Path, workdir: Path | None) -> str:
+def _run_error_hint(
+    doc: CasebookDoc, program: str, cwd: Path, workdir: Path | None, e: CasebookRunError
+) -> str:
     """
-    コマンドが見つからないときに添える直し方（説明書を探さずに直せるように）。
+    コマンドを実行できなかったときに添える直し方（説明書を探さずに直せるように）。なければ ""。
 
     作業ディレクトリで動かすケースで、YAML からの相対パスで書いたプログラムなら
-    {casebook_dir} の書き方を、それ以外は、どこで実行したかと書き方を案内する。
+    {casebook_dir} の書き方を案内する。見つからないときだけでなく、起動できないときも同じ
+    （Windows は相対パスのプログラムを親プロセスのカレントディレクトリでも探すため、YAML の
+    隣の .py を見つけて「起動できない」になることがある）。それ以外で見つからないときは、
+    どこで実行したかと書き方を案内する。
     """
     path = Path(program)
     if (
@@ -1018,7 +1026,9 @@ def _not_found_hint(doc: CasebookDoc, program: str, cwd: Path, workdir: Path | N
         and (doc.path.parent / path).exists()
     ):
         return error("workdir_hint")
-    return error("command_not_found_hint", cwd=cwd)
+    if isinstance(e, CommandNotFoundError):
+        return error("command_not_found_hint", cwd=cwd)
+    return ""
 
 
 def _execute_call(

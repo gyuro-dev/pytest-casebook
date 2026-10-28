@@ -1349,6 +1349,45 @@ def test_relative_program_in_workdir_gets_a_hint(project: pytest.Pytester) -> No
     )
 
 
+def test_workdir_hint_also_when_program_cannot_start(
+    project: pytest.Pytester, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    見つからないときだけでなく、起動できないときも {casebook_dir} を案内する。
+
+    Windows（少なくとも windows-2025 の runner）は相対パスのプログラムを親プロセスの
+    カレントディレクトリでも探し、YAML の隣の .py を見つけて WinError 193（起動できない）に
+    なる。どの OS でも確かめられるよう、起動できない誤りを出す run_subprocess に差し替える。
+    """
+    from pytest_casebook import plugin
+    from pytest_casebook.runner import CasebookRunError
+
+    def cannot_start(argv: list[str], **kwargs: object) -> None:
+        raise CasebookRunError(f"コマンドを起動できません: {argv[0]}（WinError 193）")
+
+    monkeypatch.setattr(plugin, "run_subprocess", cannot_start)
+    project.mkdir("bin")
+    (project.path / "bin" / "tool.py").write_text("print('x')\n", encoding="utf-8")
+    write_casebook(
+        project,
+        """
+        cases:
+          - {name: plain, command: [bin/tool.py]}
+          - {name: with_files, command: [bin/tool.py], setup: {files: {a.txt: x}}}
+        """,
+    )
+    result = project.runpytest()
+    result.assert_outcomes(failed=2, passed=1)
+    # 作業ディレクトリのない「起動できない」には、どちらの案内も付けない
+    result.stdout.fnmatch_lines(
+        ["*[[]plain[]] コマンドを起動できません: bin/tool.py（WinError 193）"]
+    )
+    assert "で実行しました" not in result.stdout.str()
+    result.stdout.fnmatch_lines(
+        ["*[[]with_files[]] コマンドを起動できません*files を使うケースは一時の作業ディレクトリ*"]
+    )
+
+
 def test_marks_and_observe_accept_a_single_string(project: pytest.Pytester) -> None:
     write_casebook(
         project,
