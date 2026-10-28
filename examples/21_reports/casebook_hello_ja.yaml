@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
+# 同じ CLI を日本語と英語で確かめ、1 回の実行で日本語の表と英語の表に分けて出す。
+# このファイルが日本語の表、casebook_hello_en.yaml（lang: en）が英語の表になる。
+#
+#   uv run pytest examples/21_reports --casebook-update   # 期待出力ファイルを作る（最初の1回）
+#   uv run pytest examples/21_reports \
+#     -o "casebook_html_reports=reports/hello_ja.html = examples/21_reports/*_ja.yaml"
+#
+# ふだんは pyproject.toml に書く（1 行が「出す HTML = 入れる YAML（, 区切り。グロブ可）」。
+# パスは rootdir から。`--casebook-html` の全体の表とは別に、追加で書く）:
+#
+#   [tool.pytest.ini_options]
+#   casebook_html_reports = [
+#     "reports/hello_ja.html = examples/21_reports/*_ja.yaml",
+#     "reports/hello_en.html = examples/21_reports/*_en.yaml",
+#   ]
+#
+# 表の枠（見出し・結果の文言）は、入った YAML の lang: がそろっていればその言語になる。
+lang: ja
+title: あいさつ（日本語）
+command_prefix: [python, hello.py, --lang, ja]
+
+cases:
+  - name: hello
+    description: 名前を渡すとあいさつする
+    command: 佐藤
+
+  - name: bye
+    description: --bye を付けると別れのあいさつになる
+    command: --bye 佐藤

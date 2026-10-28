@@ -1,0 +1,5 @@
+# case: hello
+# command: python hello.py --lang ja 佐藤
+# exit_code: 0
+----- stdout -----
+こんにちは、佐藤さん

@@ -57,7 +57,7 @@ from .model import (
     one_line,
 )
 from .normalize import BUILTIN_PATTERNS, Normalizer, compile_patterns
-from .report import CasebookHtmlReport
+from .report import CasebookHtmlReport, ReportOutput
 from .runner import (
     CasebookRunError,
     CommandResult,
@@ -119,6 +119,13 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         metavar="PATH",
         default=None,
         help="write the case results as an HTML test specification sheet grouped by levels",
+    )
+    parser.addini(
+        "casebook_html_reports",
+        type="linelist",
+        default=[],
+        help="additional HTML sheets, one per line: '<html file> = <case file patterns>' "
+        "(patterns separated by commas, relative to rootdir, globs allowed)",
     )
     parser.addini(
         "casebook_files",
@@ -205,16 +212,71 @@ def _html_golden_options(config: pytest.Config) -> tuple[str, int]:
     return mode, limit
 
 
+def _html_reports(config: pytest.Config) -> list[tuple[Path, list[str]]]:
+    """
+    ini の casebook_html_reports（追加で出す表）を読む。
+
+    1 行が「出す HTML = 入れるケースファイルのパターン（, 区切り）」。パスとパターンは
+    rootdir からの相対（pytest の testpaths などと同じ）。
+
+    :return: (出す HTML のパス, パターンのリスト) のリスト
+    :raises pytest.UsageError: 行の書き方が違うとき
+    """
+    reports: list[tuple[Path, list[str]]] = []
+    for line in config.getini("casebook_html_reports"):
+        target, sep, rest = line.partition("=")
+        patterns = [p.strip() for p in rest.split(",") if p.strip()]
+        if not sep or not target.strip() or not patterns:
+            raise pytest.UsageError(
+                "casebook_html_reports: each line must be "
+                f"'<html file> = <case file patterns>': {line}"
+            )
+        reports.append((config.rootpath / target.strip(), patterns))
+    return reports
+
+
+def _html_enabled(config: pytest.Config) -> bool:
+    """HTML レポートを出すか（--casebook-html か ini の casebook_html_reports がある）。"""
+    return bool(config.getoption("--casebook-html")) or bool(_html_reports(config))
+
+
+def _matching_files(config: pytest.Config, patterns: list[str]) -> frozenset[str]:
+    """
+    パターンに合うケースファイルを、rootdir からの相対パス（/ 区切り。レポートの meta の
+    `file` と同じ表記）の集まりにする。`**` も使える（recursive）。今あるファイルで
+    展開するので、ケースを集める前に決まる。
+    """
+    root = config.rootpath
+    found: set[str] = set()
+    for pattern in patterns:
+        if Path(pattern).is_absolute():
+            raise pytest.UsageError(
+                f"casebook_html_reports: patterns must be relative to rootdir: {pattern}"
+            )
+        for match in root.glob(pattern):
+            if match.is_file():
+                found.add(Path(os.path.relpath(match, root)).as_posix())
+    return frozenset(found)
+
+
 def pytest_configure(config: pytest.Config) -> None:
-    texts = _texts(config)
+    _texts(config)  # casebook_lang を確かめる
     html = config.getoption("--casebook-html")
-    if html:
+    reports = _html_reports(config)
+    if html or reports:
         _html_golden_options(config)  # 値の誤りを、ケースを集める前に知らせる
     # pytest-xdist のワーカーでは書かない（結果はまとめ役のプロセスに集まる）
-    if html and not hasattr(config, "workerinput"):
-        title = config.getini("casebook_html_title") or texts["title"]
+    if (html or reports) and not hasattr(config, "workerinput"):
         lang = config.getini("casebook_lang")
-        report = CasebookHtmlReport(Path(html).resolve(), title, lang)
+        title = config.getini("casebook_html_title") or None
+        outputs = []
+        if html:
+            outputs.append(ReportOutput(Path(html).resolve(), None, title))
+        outputs += [
+            ReportOutput(path, _matching_files(config, patterns), title)
+            for path, patterns in reports
+        ]
+        report = CasebookHtmlReport(outputs, lang)
         config.pluginmanager.register(report, "casebook-html-report")
 
 
@@ -293,13 +355,18 @@ class CasebookFile(pytest.File):
             raise self.CollectError(str(e)) from None
 
         file_label = Path(os.path.relpath(self.path, config.rootpath)).as_posix()
-        texts = _texts(config)
+        # レポートの行の文言は、このファイルの言語（YAML の lang:。なければ ini）
+        texts = TEXTS[doc.lang]
         # 期待出力の内容は HTML レポートに使うときだけ読む（レポートがなければファイルを読まない）
         html_golden = ("off", 0)
-        if config.getoption("--casebook-html"):
+        if _html_enabled(config):
             html_golden = _html_golden_options(config)
         for case in doc.cases:
-            test = _make_manual_test(case) if case.manual is not None else _make_test(doc, case)
+            test = (
+                _make_manual_test(case, doc.lang)
+                if case.manual is not None
+                else _make_test(doc, case)
+            )
             item = CasebookItem.from_parent(self, name=case.name, callobj=test)
             item.casebook_line = case.line
             for mark in case.marks:
@@ -309,7 +376,7 @@ class CasebookFile(pytest.File):
             if case.xfail is not None:
                 item.add_marker(pytest.mark.xfail(reason=case.xfail))
             if case.manual is not None:
-                _mark_manual(item, case, config)
+                _mark_manual(item, case, doc.lang)
             # -k でグループ名でも絞り込めるようにする
             item.extra_keyword_matches.update(case.path)
             meta = _report_meta(doc, case, file_label, texts, *html_golden)
@@ -423,6 +490,8 @@ def _report_meta(
     return {
         "order": next(_order),
         "file": file_label,
+        # このファイルの言語（表の枠の言語を決めるのと、追加の表に入れるファイルの絞り込みに使う）
+        "lang": doc.lang,
         "title": doc.title,
         "file_description": doc.description,
         "golden_dir": Path(os.path.relpath(doc.golden_dir, doc.path.parent)).as_posix(),
@@ -451,21 +520,21 @@ def _make_test(doc: CasebookDoc, case: Case) -> Callable[..., None]:
         tmp_path_factory: pytest.TempPathFactory,
         request: pytest.FixtureRequest,
     ) -> None:
-        # 実行の誤り（コマンドが見つからないなど）のメッセージを、ini の言語で出す
-        with language(request.config.getini("casebook_lang")):
+        # 実行の誤り（コマンドが見つからないなど）のメッセージを、ファイルの言語で出す
+        with language(doc.lang):
             _run_case(request, doc, case, casebook_env, tmp_path_factory)
 
     return casebook_test
 
 
-def _mark_manual(item: CasebookItem, case: Case, config: pytest.Config) -> None:
+def _mark_manual(item: CasebookItem, case: Case, lang: str) -> None:
     """
     手動のケースを、result: がないか skipped ならスキップにする。
 
     マーカーで止めるので、スキップの場所には YAML の行が出る。result: がなければ、
     レポートでふつうのスキップと分けて「手動」と出すための印も付ける。
     """
-    m = MESSAGES[config.getini("casebook_lang")]
+    m = MESSAGES[lang]
     if case.result is None:
         item.add_marker(pytest.mark.skip(reason=m["manual_not_run"]))
         if case.skip is None:
@@ -474,13 +543,12 @@ def _mark_manual(item: CasebookItem, case: Case, config: pytest.Config) -> None:
         item.add_marker(pytest.mark.skip(reason=m["manual_skipped"]))
 
 
-def _make_manual_test(case: Case) -> Callable[..., None]:
+def _make_manual_test(case: Case, lang: str) -> Callable[..., None]:
     """手動のケースのテスト関数を作る（実行はせず、result: に書いた結果にする）。"""
 
-    def casebook_manual(request: pytest.FixtureRequest) -> None:
+    def casebook_manual() -> None:
         if case.result == "failed":
-            m = MESSAGES[request.config.getini("casebook_lang")]
-            pytest.fail(m["manual_failed"].format(name=case.name), pytrace=False)
+            pytest.fail(MESSAGES[lang]["manual_failed"].format(name=case.name), pytrace=False)
 
     return casebook_manual
 
@@ -554,7 +622,7 @@ def _make_orphan_test(doc: CasebookDoc) -> Callable[..., None]:
             return
         orphans = _find_orphans(doc, _sibling_docs(request.config, doc))
         if orphans:
-            message = MESSAGES[request.config.getini("casebook_lang")]["golden_orphans"]
+            message = MESSAGES[doc.lang]["golden_orphans"]
             # ほかのメッセージと同じく、YAML のディレクトリからの相対パスで示す
             golden_dir = Path(os.path.relpath(doc.golden_dir, doc.path.parent)).as_posix()
             pytest.fail(
@@ -730,7 +798,8 @@ def run_case(
     if builtin_patterns is None:
         builtin_patterns = bool(options.get("builtin_patterns", True))
     if lang is None:
-        lang = str(options.get("lang", "en"))
+        # ファイルの言語（YAML の lang:。なければ load() の lang か、ini=True の casebook_lang）
+        lang = doc.lang
     if description is None:
         description = bool(options.get("description", False))
     if lang not in TEXTS:
@@ -786,11 +855,10 @@ def _run_case(
     normalizer = _normalizer(
         config, hook, doc, env, workdir, config.getini("casebook_builtin_patterns")
     )
-    lang = config.getini("casebook_lang")
     if case.uses_golden:
-        _compare_golden(request, doc, case, outcome, normalizer, lang)
+        _compare_golden(request, doc, case, outcome, normalizer, doc.lang)
     else:
-        _compare_expect(case, outcome, normalizer, lang)
+        _compare_expect(case, outcome, normalizer, doc.lang)
 
 
 def _execute_case(

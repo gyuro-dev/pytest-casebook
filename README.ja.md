@@ -235,6 +235,32 @@ uv run pytest --collect-only --casebook-html=reports/plan.html
 
 ![失敗したケースの差分](docs/images/report-failure.png)
 
+### 1回の実行で表を分ける (casebook_html_reports)
+
+試験項目表には、ふつう読む人が1人います（お客さん、開発チーム、英語で読むレビュアー、など）。\
+読む人ごとの YAML を別のファイルにしてあれば、ini の `casebook_html_reports` で、1回の実行から読む人ごとの表を出せます。\
+1行が「出す HTML = 入れるケースファイルのパターン」で、パターンは `,` で区切ります。\
+どちらも pytest の rootdir からのパスで、パターンにはグロブ（`*`・`**`）が使えるので、ディレクトリごとに1枚の表にもできます。
+
+```toml
+[tool.pytest.ini_options]
+casebook_html_reports = [
+  "reports/customer.html = tests/casebook_shop.yaml, tests/casebook_orders.yaml",
+  "reports/ja.html       = tests/*_ja.yaml",
+  "reports/en.html       = tests/*_en.yaml",
+]
+```
+
+- `--casebook-html` の全体の表は、今までどおりすべてのケースを入れて書きます。\
+  どの行にも合わないファイルも全体の表には必ず出るので、黙って消えることはありません。両方を一緒に使えます
+- 表の見出しと結果の文言は、入ったケースファイルの `lang:` がそろっていればその言語になります（[YAML の全体](#yaml-の全体)を参照）。\
+  両方の言語のファイルが混ざった表は、全体の表と同じく ini の `casebook_lang` で決まります
+- 入るケースのない表（パターンの綴りの誤り、`-k` / `-m` で全部除いたとき）は書かず、実行の最後にそう知らせます
+- `--collect-only`・`casebook_html_golden`・`-k` / `-m` は、どの表にも同じように効きます
+- 追加の表を出さずに実行するとき（実環境に流す実行で上書きしたくないときなど）は、`-o casebook_html_reports=`（空）を付けます
+
+完成例は [21_reports](examples/21_reports) にあります（同じ CLI を日本語と英語で確かめ、言語ごとに1枚の表にします）。
+
 ### レポートの期待出力の中身
 
 期待出力ファイルを使うケース（`expect:` のないケース）では、期待出力の比べる部分も、同じようにケースの行の下に折りたたんで出します。\
@@ -425,6 +451,7 @@ uv run pytest examples/shop -o casebook_lang=ja --casebook-html=reports/shop.htm
 ```yaml
 title: 見出し                  # レポートの見出し（省略時はファイル名）
 description: 説明
+lang: ja                       # このファイルのメッセージとレポートの行の言語（省略時は ini の casebook_lang）
 levels: [大項目, 中項目, 小項目] # 階層の呼び名。いくつでも（省略時は ini の casebook_levels）
 command_prefix: [python, -m, mytool]  # {casebook_dir} は YAML のあるディレクトリになる
 states:                        # 状態名 -> 内容（名前を付けた setup:。下の「状態」を参照）
@@ -445,6 +472,11 @@ cases: [...]                   # ケースまたはグループのリスト
 `command_prefix: store` と `command: [add, 'apple pie']` なら、`store add "apple pie"` を実行します。\
 `command_prefix` は、いつも `command` の引数の前に付きます。\
 ファイルに `command_prefix` がなければ、ini の `casebook_command_prefix` を使います。
+
+`lang`（`en` か `ja`）は、このファイルの言語です。\
+ケースのメッセージ（比較の失敗、実行の誤り、YAML の書き方の誤り）、レポートの行の文言（前提条件・期待結果）、`levels` の既定、`run_case()` の既定の言語がこれになります。\
+書かなければ ini の `casebook_lang` が効きます。\
+読む人ごとに言語の違うファイルを作るとき（[1回の実行で表を分ける](#1回の実行で表を分ける-casebook_html_reports)）に使います。
 
 ### グループ
 
@@ -934,7 +966,7 @@ hook は、その conftest.py があるディレクトリより下の YAML の�
 | `casebook_env` fixture | テストの開始時に1回（session） | 各 hook の `env` に渡す値（既定は None） |
 | `pytest_casebook_setup(case, data, env, workdir)` | すべてのケースの前（setup: も states: もなければ data は空） | 後片付けのコンテキストマネージャ、または None |
 | `pytest_casebook_request(case, request, env, workdir)` | request の実行 | `HttpResponse`。request: を使うときは必須 |
-| `pytest_casebook_run_command(case, argv, env, cwd)` | command の実行 | `CommandResult`（`run_in_process` の戻り値）。None なら別プロセスで実行 |
+| `pytest_casebook_run_command(case, argv, env, cwd)` | command の実行 | `CommandResult`（`run_in_process` の戻り値）。None なら別プロセスで実行。`argv` は `command_prefix` と command の引数を合わせたもの。`case.command_argv` は command の引数だけで、prefix を含まない |
 | `pytest_casebook_prepare_call(case, env, args, kwargs, workdir)` | call の前 | なし（`args` / `kwargs` をその場で書き換える） |
 | `pytest_casebook_observe(target, case, env, workdir)` | 実行のあと | 取り出した値（None なら失敗） |
 | `pytest_casebook_placeholders(env)` | 比べる前 | `(実際の値, 置き換え後)` のリスト |
@@ -1113,7 +1145,8 @@ pytest がテストの場所として受け取るので、JUnit XML（xunit1）�
 | `casebook_html_title` | `Test Specification`（`casebook_lang` が `ja` なら `試験項目表`） | HTML レポートの題名 |
 | `casebook_html_golden` | `summary` | HTML レポートに期待出力ファイルの内容をどれだけ出すか。`off`（出さない）・`summary`（行数を打ち切る）・`full`（全部） |
 | `casebook_html_golden_lines` | `40` | `casebook_html_golden` が `summary` のときに出す行数 |
-| `casebook_lang` | `en` | HTML レポートと、メッセージ（比較の失敗、YAML の書き方の誤り、ケースを実行するときの誤り）の言語。`en` か `ja` |
+| `casebook_html_reports` | （なし） | 1回の実行で追加で書く HTML の表。1行が `出す HTML = 入れるケースファイルのパターン`（`,` 区切り。グロブ可。rootdir からのパス）。[1回の実行で表を分ける](#1回の実行で表を分ける-casebook_html_reports)を参照 |
+| `casebook_lang` | `en` | HTML レポートと、メッセージ（比較の失敗、YAML の書き方の誤り、ケースを実行するときの誤り）の言語。`en` か `ja`。ケースファイルごとに `lang:` で変えられる |
 
 ## つまずいたら
 

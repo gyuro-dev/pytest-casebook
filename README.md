@@ -197,6 +197,27 @@ A failed case can be expanded below its row to show the diff.
 
 ![Diff of a failed case](https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/docs/images/report-failure-en.png)
 
+### Several sheets from one run (casebook_html_reports)
+
+A sheet usually has one reader: the customer, the development team, the English-speaking reviewers. When the cases for different readers live in different YAML files, the `casebook_html_reports` ini option writes one sheet per reader from a single run. Each line is `<html file> = <case file patterns>`: the HTML to write, then the case files to put in it, separated by commas. Both are relative to pytest's rootdir, and the patterns take globs (`*`, `**`), so a directory of case files can become one sheet.
+
+```toml
+[tool.pytest.ini_options]
+casebook_html_reports = [
+  "reports/customer.html = tests/casebook_shop.yaml, tests/casebook_orders.yaml",
+  "reports/ja.html       = tests/*_ja.yaml",
+  "reports/en.html       = tests/*_en.yaml",
+]
+```
+
+- `--casebook-html` still writes the whole sheet with every case, so a file that no line matches is never silently lost. The two can be used together.
+- A sheet's headings and result labels follow the `lang:` of the case files in it when they agree (see [the whole YAML file](#the-whole-yaml-file)); when files of both languages are mixed, the `casebook_lang` ini option decides, as for the whole sheet.
+- A sheet with no cases (a misspelled pattern, or everything filtered out with `-k` / `-m`) is not written, and the end of the run says so.
+- `--collect-only`, `casebook_html_golden` and `-k` / `-m` apply to each sheet in the same way.
+- To run without the extra sheets (for example a run against a real environment that should not overwrite them), pass `-o casebook_html_reports=` (empty).
+
+[21_reports](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/21_reports) is a complete example: the same CLI checked in English and Japanese, each language as its own sheet.
+
 ### Golden contents in the report
 
 A case compared with a golden file (one without `expect:`) also shows the compared parts of its golden file, folded under the case's row in the same way. How much is shown is chosen with the `casebook_html_golden` ini option (`off`: nothing / `summary`: the default, cut at `casebook_html_golden_lines` lines, 40 by default / `full`: everything). A button next to the filter expands or collapses all of them at once. `<…>` in the golden contents, such as `<datetime>`, stands for a value replaced because it changes between runs (a one-line note under the file heading says so). The contents also appear with `--collect-only`, so the plan can be reviewed as a specification with expected values before the implementation.
@@ -373,6 +394,7 @@ uv run pytest examples-en/shop --casebook-html=reports/shop.html
 ```yaml
 title: Title                   # report heading (defaults to the file name)
 description: Description
+lang: en                       # language of this file's messages and report rows (default: ini casebook_lang)
 levels: [Category, Subcategory, Item]  # names of the levels, any number (default: ini casebook_levels)
 command_prefix: [python, -m, mytool]  # {casebook_dir} becomes the YAML's directory
 states:                        # state name -> content (a named setup:; see "States")
@@ -389,6 +411,8 @@ cases: [...]                   # list of cases or groups
 ```
 
 `command_prefix` and a case's `command` each take either a string, split like a shell command (`store add 'apple pie'`), or a list, passed as is without splitting (`[store, add, apple pie]`). The two forms can be mixed: `command_prefix: store` with `command: [add, 'apple pie']` runs `store add "apple pie"`. The prefix is always placed before the command's arguments. Without `command_prefix` in the file, the ini option `casebook_command_prefix` is used.
+
+`lang` (`en` or `ja`) sets the language of this file: the messages of its cases (failed comparisons, errors while running, mistakes in the YAML), the texts in its report rows (preconditions, expected results), the default `levels`, and the default of `run_case()`. Without it, the `casebook_lang` ini option applies. Use it when files for different readers are in different languages, e.g. with [several sheets from one run](#several-sheets-from-one-run-casebook_html_reports).
 
 ### Groups
 
@@ -781,7 +805,7 @@ Write them in conftest.py. Each hook only needs the arguments it uses (e.g. `def
 | `casebook_env` fixture | once at the start (session) | the value passed to each hook as `env` (default None) |
 | `pytest_casebook_setup(case, data, env, workdir)` | before every case (`data` is empty without setup: / states:) | a context manager for cleanup, or None |
 | `pytest_casebook_request(case, request, env, workdir)` | to run a request | `HttpResponse`. Required when using request: |
-| `pytest_casebook_run_command(case, argv, env, cwd)` | to run a command | `CommandResult` (what `run_in_process` returns). None runs it in a subprocess |
+| `pytest_casebook_run_command(case, argv, env, cwd)` | to run a command | `CommandResult` (what `run_in_process` returns). None runs it in a subprocess. `argv` is `command_prefix` followed by the command's arguments; `case.command_argv` is the command's arguments alone, without the prefix |
 | `pytest_casebook_prepare_call(case, env, args, kwargs, workdir)` | before a call | nothing (modify `args` / `kwargs` in place) |
 | `pytest_casebook_observe(target, case, env, workdir)` | after the action | the observed value (None fails) |
 | `pytest_casebook_placeholders(env)` | before comparing | list of `(actual value, replacement)` |
@@ -922,7 +946,8 @@ All options start with `--casebook-`. Generic names such as `--update-golden` ma
 | `casebook_html_title` | depends on `casebook_lang` (`en`: `Test Specification`, `ja`: `試験項目表`) | title of the HTML report |
 | `casebook_html_golden` | `summary` | how much of each golden file is shown in the HTML report: `off` (nothing), `summary` (cut at the line limit) or `full` (everything) |
 | `casebook_html_golden_lines` | `40` | number of lines shown when `casebook_html_golden` is `summary` |
-| `casebook_lang` | `en` | language of the HTML report and the messages (failed comparisons, mistakes in the YAML, errors while running a case): `en` or `ja` |
+| `casebook_html_reports` | (none) | additional HTML sheets written from one run, one per line: `<html file> = <case file patterns>` (comma-separated, globs allowed, relative to rootdir). See [several sheets from one run](#several-sheets-from-one-run-casebook_html_reports) |
+| `casebook_lang` | `en` | language of the HTML report and the messages (failed comparisons, mistakes in the YAML, errors while running a case): `en` or `ja`. A case file can set its own with `lang:` |
 
 ## Troubleshooting
 

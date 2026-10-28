@@ -187,3 +187,44 @@ def test_examples_targets(examples: str) -> None:
     mixed = _run_examples(examples, "--target", "staging", "-m", "not local_only")
     assert mixed.returncode == 1
     assert "list_items" in mixed.stdout
+
+
+@pytest.mark.parametrize("examples", EXAMPLE_DIRS)
+def test_examples_reports(examples: str, tmp_path: Path) -> None:
+    """21_reports: lang: のある 2 本の YAML を、言語ごとの表に分けて書ける。"""
+    if not (ROOT / examples).is_dir():
+        pytest.skip(f"{examples} がない")
+    out = tmp_path.as_posix()
+    reports = (
+        f"{out}/ja.html = {examples}/21_reports/*_ja.yaml\n"
+        f"{out}/en.html = {examples}/21_reports/*_en.yaml"
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            f"{examples}/21_reports",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "-o",
+            f"casebook_html_reports={reports}",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env={**__import__("os").environ, "PYTHONIOENCODING": "utf-8"},
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout[-2000:]
+    ja = (tmp_path / "ja.html").read_text(encoding="utf-8")
+    en = (tmp_path / "en.html").read_text(encoding="utf-8")
+    assert '<html lang="ja">' in ja
+    assert "casebook_hello_ja.yaml" in ja
+    assert "casebook_hello_en.yaml" not in ja
+    assert '<html lang="en">' in en
+    assert "<th>Preconditions</th>" in en
+    assert "casebook_hello_en.yaml" in en

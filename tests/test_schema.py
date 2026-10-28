@@ -85,6 +85,7 @@ def test_examples_follow_schema(path: Path) -> None:
     "doc",
     [
         {"cases": [{"name": "a", "call": "m:f", "arg": [1]}]},  # 打ち間違い
+        {"lang": "fr", "cases": [{"name": "a", "call": "m:f"}]},  # 知らない言語
         {"cases": [{"name": "a", "command": "x", "call": "m:f"}]},  # 操作が2つ
         {"cases": [{"name": "a"}]},  # 操作がない
         {"cases": [{"name": "a b", "call": "m:f"}]},  # 名前に空白

@@ -74,12 +74,34 @@ def _outcome_of(report: pytest.TestReport) -> str:
     return "passed"
 
 
-class CasebookHtmlReport:
-    """`--casebook-html` を付けたときに登録する pytest プラグイン。"""
+@dataclass
+class ReportOutput:
+    """
+    出す HTML の 1 つ（`--casebook-html` の全体の表か、ini の casebook_html_reports の 1 行）。
 
-    def __init__(self, path: Path, title: str, lang: str = "en") -> None:
-        self.path = path
-        self.title = title
+    `files` は入れるケースファイル（rootdir からの相対パス。None なら全部）。
+    枠・見出しの言語は、入ったケースのファイルの言語がそろっていればそれ、混ざっていれば
+    ini の casebook_lang。`title` は ini の casebook_html_title（なければ言語の既定）。
+    """
+
+    path: Path
+    files: frozenset[str] | None = None
+    title: str | None = None
+    # 書いたときに決まる（書かなかったときは None）
+    lang: str | None = None
+
+    def select(self, rows: list[CaseRow]) -> list[CaseRow]:
+        if self.files is None:
+            return rows
+        return [row for row in rows if row.meta["file"] in self.files]
+
+
+class CasebookHtmlReport:
+    """`--casebook-html` か ini の casebook_html_reports があるときに登録する pytest プラグイン。"""
+
+    def __init__(self, outputs: list[ReportOutput], lang: str = "en") -> None:
+        self.outputs = outputs
+        # ini の言語（ファイルの言語が混ざった表の枠と、書かなかった表の知らせに使う）
         self.lang = lang
         self.rows: dict[str, CaseRow] = {}
 
@@ -127,17 +149,25 @@ class CasebookHtmlReport:
             row.details.append(report.longreprtext)
 
     def pytest_sessionfinish(self, session: pytest.Session) -> None:
-        if not self.rows:
-            return
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(
-            build_html(self.title, list(self.rows.values()), datetime.datetime.now(), self.lang),
-            encoding="utf-8",
-        )
+        now = datetime.datetime.now()
+        for output in self.outputs:
+            rows = output.select(list(self.rows.values()))
+            # 入るケースのない表は書かない（空の表を出さない。知らせは実行の最後に出す）
+            if not rows:
+                continue
+            langs = {row.meta.get("lang", self.lang) for row in rows}
+            output.lang = next(iter(langs)) if len(langs) == 1 else self.lang
+            title = output.title or TEXTS[output.lang]["title"]
+            output.path.parent.mkdir(parents=True, exist_ok=True)
+            output.path.write_text(build_html(title, rows, now, output.lang), encoding="utf-8")
 
     def pytest_terminal_summary(self, terminalreporter: Any) -> None:
-        if self.rows:
-            terminalreporter.write_sep("-", TEXTS[self.lang]["written"].format(path=self.path))
+        for output in self.outputs:
+            if output.lang is not None:
+                line = TEXTS[output.lang]["written"].format(path=output.path)
+            else:
+                line = TEXTS[self.lang]["not_written"].format(path=output.path)
+            terminalreporter.write_sep("-", line)
 
 
 # =============================================================================

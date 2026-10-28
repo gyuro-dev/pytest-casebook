@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
+# casebook_hello_ja.yaml と同じケースの英語版。lang: en なので、このファイルのケースの
+# 失敗のメッセージと表の行は英語になり、英語の表（casebook_html_reports の *_en.yaml）に入る。
+lang: en
+title: Greetings (English)
+command_prefix: [python, hello.py, --lang, en]
+
+cases:
+  - name: hello
+    description: Greets the given name
+    command: Alice
+
+  - name: bye
+    description: --bye says goodbye instead
+    command: --bye Alice

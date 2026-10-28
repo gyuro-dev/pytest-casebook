@@ -7,7 +7,24 @@ incompatible change raises the minor version).
 
 ## [Unreleased]
 
+### Added
+
+- `lang:` at the top of a case file sets that file's language (`en` or `ja`): the messages
+  of its cases (failed comparisons, errors while running, mistakes in the YAML), the texts in
+  its report rows, the default `levels`, and the default language of `run_case()`. Without
+  it, the `casebook_lang` ini option applies as before.
+- The `casebook_html_reports` ini option writes several HTML sheets from one run, one per
+  line: `<html file> = <case file patterns>` (comma-separated, globs allowed, relative to
+  rootdir). A sheet's headings and labels follow the `lang:` of the files in it when they
+  agree; a sheet with no cases is not written and the end of the run says so. `--casebook-html`
+  still writes the whole sheet, and `-o casebook_html_reports=` turns the extra sheets off for
+  a run. Example: `examples/21_reports`.
+
 ### Changed
+
+- The headings and labels of the `--casebook-html` sheet also follow the `lang:` of the case
+  files in it when they agree (files without `lang:` keep the ini language, so existing
+  reports do not change).
 
 - `--casebook-update` and `--casebook-update-headers` print `Updated golden files: 0 (N
   unchanged)` when nothing was rewritten. Before, such a run printed nothing and could not be

@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
+# Check the same CLI in English and Japanese, and write an English sheet and a Japanese sheet
+# from one run. This file becomes the English sheet; casebook_hello_ja.yaml (lang: ja) the
+# Japanese one.
+#
+#   uv run pytest examples-en/21_reports --casebook-update   # create the golden files (first time)
+#   uv run pytest examples-en/21_reports \
+#     -o "casebook_html_reports=reports/hello_en.html = examples-en/21_reports/*_en.yaml"
+#
+# Normally this goes in pyproject.toml (one line per sheet: "<html file> = <case file patterns>",
+# comma-separated, globs allowed, relative to rootdir; written in addition to the whole sheet
+# of `--casebook-html`):
+#
+#   [tool.pytest.ini_options]
+#   casebook_html_reports = [
+#     "reports/hello_en.html = examples-en/21_reports/*_en.yaml",
+#     "reports/hello_ja.html = examples-en/21_reports/*_ja.yaml",
+#   ]
+#
+# The frame of a sheet (headings, result labels) follows the lang: of the files in it when they
+# agree.
+lang: en
+title: Greetings (English)
+command_prefix: [python, hello.py, --lang, en]
+
+cases:
+  - name: hello
+    description: Greets the given name
+    command: Alice
+
+  - name: bye
+    description: --bye says goodbye instead
+    command: --bye Alice

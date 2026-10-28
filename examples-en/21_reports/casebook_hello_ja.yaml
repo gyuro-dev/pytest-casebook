@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
+# The same cases as casebook_hello_en.yaml, in Japanese. With lang: ja, this file's failure
+# messages and sheet rows are in Japanese, and it goes into the Japanese sheet
+# (the *_ja.yaml line of casebook_html_reports).
+lang: ja
+title: あいさつ（日本語）
+command_prefix: [python, hello.py, --lang, ja]
+
+cases:
+  - name: hello
+    description: 名前を渡すとあいさつする
+    command: 佐藤
+
+  - name: bye
+    description: --bye を付けると別れのあいさつになる
+    command: --bye 佐藤
