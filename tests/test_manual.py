@@ -14,6 +14,7 @@ import pytest_casebook
 CASES = """
 cases:
   - group: 印刷
+    env: {CASEBOOK_M: group}   # 実行する auto だけが受け継ぐ（手動のケースには効かない）
     cases:
       - name: layout
         description: 印刷しても表が崩れない
@@ -70,6 +71,18 @@ def test_manual_cases_in_html_report(project: pytest.Pytester) -> None:
     assert page.count(" ms</td>") == 1
     # 手動のケースのスキップの理由は、バッジで分かるので出さない
     assert "result: がまだありません" not in page
+    # グループの env: は、実行する auto の前提条件にだけ出る（手動のケースは受け継がない）
+    assert page.count("<div class='line'>環境変数: CASEBOOK_M=group</div>") == 1
+
+
+def test_manual_cases_do_not_inherit_env(tmp_path: Path) -> None:
+    """手動のケースは実行しないので、timeout と同じく外側の env: を受け継がない。"""
+    path = tmp_path / "casebook_m.yaml"
+    path.write_text(CASES, encoding="utf-8")
+    env = {c.name: c.env for c in pytest_casebook.load(path).cases}
+    assert env["auto"] == {"CASEBOOK_M": "group"}
+    assert env["layout"] == {}
+    assert env["checked"] == {}
 
 
 def test_plan_report_shows_manual(project: pytest.Pytester) -> None:

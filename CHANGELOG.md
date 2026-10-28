@@ -26,7 +26,8 @@ incompatible change raises the minor version).
   variables are put over `os.environ` (and restored afterwards), so a CLI run in-process by
   `pytest_casebook_run_command`, the function of a `call:` case and the hook of a `request:`
   case see them without wrapping anything. `env:` on a call / request case used to be an
-  error; now it works like on a command case.
+  error; now it works like on a command case. Manual cases, which are not run, do not
+  inherit `env:` (as with `timeout`).
 - The contents of `stdin_file:` are read when the case file is loaded and put into
   `case.stdin`, so a `pytest_casebook_run_command` hook (and `run_case()`) no longer has to
   read the file itself. A missing file is reported when the case file is collected, like a

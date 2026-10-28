@@ -341,7 +341,7 @@ class CasebookDoc:
     request_headers: dict[str, str] = field(default_factory=dict)
     # ファイル全体の meta（利用する側が自由に使う）
     meta: dict[str, Any] = field(default_factory=dict)
-    # ファイル全体の env（どの command のケースにも重ねる環境変数）
+    # ファイル全体の env（実行するどのケースにも重ねる環境変数。手動のケースは受け継がない）
     env: dict[str, str] = field(default_factory=dict)
     # このファイルのケースのメッセージ（比較の失敗・実行の誤り）と、レポートの行の言語
     # （YAML の lang:。なければ ini の casebook_lang か load() の lang）
@@ -981,7 +981,9 @@ def _parse_case(
         stdin=stdin,
         stdin_file=stdin_file,
         timeout=timeout,
-        env=_merge_env(env, own_env),
+        # 手動のケースは実行しないので、受け継いだ env も timeout と同じく使わない
+        # （ケース自身の env: は _MANUAL_FORBIDDEN_KEYS で先に誤りにしている）
+        env=_merge_env(env, own_env) if manual is None else {},
         state=state,
         state_data=state_data,
         marks=(*marks, *_str_list(item.get("marks"), loc, "marks")),
