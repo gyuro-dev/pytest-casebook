@@ -318,6 +318,10 @@ ERRORS: dict[str, dict[str, str]] = {
         "matcher_string": "{where}: {name} には文字列を書いてください",
         "matcher_list": "{where}: {name} にはリストを書いてください",
         "command_not_found": "コマンドが見つかりません: {program}",
+        "command_not_found_hint": (
+            "（{cwd} で実行しました。インストール済みのコマンドか、そこからのパスで書いた"
+            "スクリプト（command_prefix: [python, my_cli.py] など）にしてください）"
+        ),
         "workdir_hint": (
             "（files を使うケースは一時の作業ディレクトリで実行します。"
             "YAML からの相対パスは {{casebook_dir}}/... で書いてください）"
@@ -451,6 +455,10 @@ ERRORS: dict[str, dict[str, str]] = {
         "matcher_string": "{where}: {name} needs a string",
         "matcher_list": "{where}: {name} needs a list",
         "command_not_found": "command not found: {program}",
+        "command_not_found_hint": (
+            " (it ran in {cwd}; use an installed command, or a script by its path from there, "
+            "e.g. command_prefix: [python, my_cli.py])"
+        ),
         "workdir_hint": (
             " (a case with files runs in a temporary working directory; write paths relative "
             "to the YAML as {{casebook_dir}}/...)"

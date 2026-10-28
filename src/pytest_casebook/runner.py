@@ -34,6 +34,10 @@ class CasebookRunError(Exception):
     """
 
 
+class CommandNotFoundError(CasebookRunError):
+    """コマンドが見つからない（呼び出す側が、ケースに合わせた直し方を添えられるように分ける）。"""
+
+
 @dataclass(frozen=True)
 class CommandResult:
     """
@@ -97,7 +101,7 @@ def run_subprocess(
             process_group=None if sys.platform == "win32" else 0,
         )
     except FileNotFoundError:
-        raise CasebookRunError(error("command_not_found", program=argv[0])) from None
+        raise CommandNotFoundError(error("command_not_found", program=argv[0])) from None
     except OSError as e:
         # 実行の権限がない・ディレクトリを指したなど
         raise CasebookRunError(error("command_start_failed", program=argv[0], error=e)) from None

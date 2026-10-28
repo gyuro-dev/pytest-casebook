@@ -103,14 +103,25 @@ HTTP の API を確かめるときも、HTTP のライブラリは増えませ�
 
 CLI を実行して確かめるだけなら、作るのは YAML のファイル1つです。\
 conftest.py も Python のテストコードも要りません。\
-ここでは、名前を渡すとあいさつを表示する、自作の CLI `hello` を確かめます。
+ここでは、名前を渡すとあいさつを表示する小さな CLI `hello.py` を確かめます。\
+自作の CLI の代わりで、写せば以下の手順がそのまま動きます。
 
 ```text
 myproject/
 └── tests/
+    ├── hello.py                   ← 確かめたい CLI（自作のもの）
     ├── casebook_hello.yaml        ← 1. これを作る
     └── golden/casebook_hello/     ← 2. pytest --casebook-update で自動で作られる
         └── greet.txt
+```
+
+```python
+# tests/hello.py
+import argparse
+
+parser = argparse.ArgumentParser(prog="hello")
+parser.add_argument("--name", required=True)
+print(f"こんにちは、{parser.parse_args().name}さん")
 ```
 
 **1. `tests/casebook_hello.yaml` を作る**
@@ -120,7 +131,7 @@ myproject/
 ```yaml
 # yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 title: hello コマンド
-command_prefix: [hello]              # どのケースでも先頭に付ける部分（確かめたいコマンド）
+command_prefix: [python, hello.py]  # どのケースでも先頭に付ける部分（確かめたいコマンド）
 
 cases:
   - name: greet                         # ケース名: 日本語を含む文字・数字・_ - .（先頭は . と - 以外）
@@ -135,8 +146,9 @@ cases:
       stderr: {$contains: --name}
 ```
 
-各ケースは `hello --name 佐藤` のように、`command_prefix` と `command` をつないで実行します。\
-実行するディレクトリは YAML のあるディレクトリ（ここでは `tests/`）なので、コマンドはそこから実行できる必要があります（インストール済みのコマンドや、`[python, "{casebook_dir}/../hello.py"]` のようにパスで指したスクリプトなど）。
+各ケースは `python hello.py --name 佐藤` のように、`command_prefix` と `command` をつないで実行します。\
+実行するディレクトリは YAML のあるディレクトリ（ここでは `tests/`）なので、コマンドはそこから実行できる必要があります。\
+インストール済みのコマンド（`command_prefix: [mycli]`）か、ここのようにそのディレクトリからのパスで指したスクリプトです。
 
 **2. 期待出力ファイルを作る**
 
@@ -151,7 +163,7 @@ uv run pytest --casebook-update
 
 ```text
 # case: greet
-# command: hello --name 佐藤
+# command: python hello.py --name 佐藤
 # exit_code: 0
 ----- stdout -----
 こんにちは、佐藤さん
@@ -1135,12 +1147,12 @@ pytest がテストの場所として受け取るので、JUnit XML（xunit1）�
 | 名前 | 既定値 | 内容 |
 |---|---|---|
 | `casebook_files` | `casebook_*.yaml` `casebook_*.yml` `*.casebook.yaml` `*.casebook.yml` | 集めるファイル名のパターン |
-| `casebook_golden_dir` | `golden` | 期待出力ファイルの置き場所。その下に、ケースファイル名（拡張子なし）のディレクトリを作る |
-| `casebook_golden_description` | `false` | `--casebook-update`・`--casebook-update-headers` が書く期待出力ファイルに、ケースの `description:` を `# description:` の行として書く |
-| `casebook_levels` | `Category` `Subcategory` `Item`（`casebook_lang` が `ja` なら `大項目` `中項目` `小項目`） | 階層の呼び名 |
 | `casebook_command_prefix` | （なし） | command の前に付ける引数 |
 | `casebook_encoding` | `utf-8` | command の出力の文字コード |
+| `casebook_golden_dir` | `golden` | 期待出力ファイルの置き場所。その下に、ケースファイル名（拡張子なし）のディレクトリを作る |
+| `casebook_golden_description` | `false` | `--casebook-update`・`--casebook-update-headers` が書く期待出力ファイルに、ケースの `description:` を `# description:` の行として書く |
 | `casebook_builtin_patterns` | `true` | 日時と UUID を `<datetime>` / `<uuid>` に置き換える |
+| `casebook_levels` | `Category` `Subcategory` `Item`（`casebook_lang` が `ja` なら `大項目` `中項目` `小項目`） | 階層の呼び名 |
 | `casebook_html_title` | `Test Specification`（`casebook_lang` が `ja` なら `試験項目表`） | HTML レポートの題名 |
 | `casebook_html_golden` | `summary` | HTML レポートに期待出力ファイルの内容をどれだけ出すか。`off`（出さない）・`summary`（行数を打ち切る）・`full`（全部） |
 | `casebook_html_golden_lines` | `40` | `casebook_html_golden` が `summary` のときに出す行数 |

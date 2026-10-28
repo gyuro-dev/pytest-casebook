@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 import textwrap
@@ -118,6 +119,38 @@ def test_examples_pass(examples: str) -> None:
         check=False,
     )
     assert proc.returncode == 0, proc.stdout[-3000:]
+
+
+def _code_blocks(text: str, lang: str) -> list[str]:
+    """Markdown の ```lang のコードブロックの中身を、出てくる順に返す。"""
+    return re.findall(rf"^```{lang}\n(.*?)^```$", text, flags=re.MULTILINE | re.DOTALL)
+
+
+@pytest.mark.parametrize(
+    ("readme", "heading"),
+    [("README.md", "## Getting started"), ("README.ja.md", "## はじめかた")],
+)
+def test_readme_getting_started_runs(pytester: pytest.Pytester, readme: str, heading: str) -> None:
+    """
+    README の「はじめかた」を書いてあるとおりに写すと動く（README の最初の例が実際に動くこと）。
+
+    hello.py と YAML を README のコードブロックから写し、--casebook-update で作られた
+    期待出力が README に載せたものと同じになることを確かめる。
+    """
+    text = (ROOT / readme).read_text(encoding="utf-8")
+    section = text[text.index(heading) :]
+    section = section[: section.index("\n## ", 1)]
+    script = _code_blocks(section, "python")[0]
+    yaml_text = _code_blocks(section, "yaml")[0]
+    golden = next(b for b in _code_blocks(section, "text") if b.startswith("# case: greet"))
+    tests = pytester.mkdir("tests")
+    (tests / "hello.py").write_text(script, encoding="utf-8")
+    (tests / "casebook_hello.yaml").write_text(yaml_text, encoding="utf-8")
+
+    pytester.runpytest("--casebook-update").assert_outcomes(passed=3)
+    written = tests / "golden" / "casebook_hello" / "greet.txt"
+    assert written.read_text(encoding="utf-8") == golden
+    pytester.runpytest().assert_outcomes(passed=3)
 
 
 def test_setup_hook_runs_for_every_case(pytester: pytest.Pytester) -> None:
