@@ -224,22 +224,28 @@ def pytest_terminal_summary(
     """
     `--casebook-update`（と `--casebook-update-headers`）で書き直した期待出力ファイルの一覧を、
     実行の最後に出す。
+
+    書き直したファイルがないときも、オプションが付いていれば「0 件（N 件は同じ）」の 1 行を
+    出す（ふつうの実行と見分けがつき、オプションが効いたことが分かる）。
     """
-    # 書き直したテストの user_properties から、期待出力のパスの表記を集める
+    # 書き直した・同じだったテストの user_properties から、期待出力のパスの表記を集める
     # （pytest-xdist でも、ワーカーの結果はまとめ役の stats に集まる）
-    labels = {
-        value
-        for reports in terminalreporter.stats.values()
-        for report in reports
-        if getattr(report, "when", None) == "call"
-        for key, value in getattr(report, "user_properties", [])
-        if key == "casebook_updated" and isinstance(value, str) and value
-    }
-    if not labels:
-        return
-    terminalreporter.write_sep("-", _texts(config)["updated_golden"].format(n=len(labels)))
-    for label in sorted(labels):
-        terminalreporter.write_line(label)
+    recorded: dict[str, set[str]] = {"casebook_updated": set(), "casebook_unchanged": set()}
+    for reports in terminalreporter.stats.values():
+        for report in reports:
+            if getattr(report, "when", None) != "call":
+                continue
+            for key, value in getattr(report, "user_properties", []):
+                if key in recorded and isinstance(value, str) and value:
+                    recorded[key].add(value)
+    labels = recorded["casebook_updated"]
+    if labels:
+        terminalreporter.write_sep("-", _texts(config)["updated_golden"].format(n=len(labels)))
+        for label in sorted(labels):
+            terminalreporter.write_line(label)
+    elif config.getoption("--casebook-update") or config.getoption("--casebook-update-headers"):
+        n = len(recorded["casebook_unchanged"])
+        terminalreporter.write_sep("-", _texts(config)["updated_golden_none"].format(n=n))
 
 
 @pytest.fixture(scope="session")
@@ -1094,6 +1100,8 @@ def _compare_golden(
         # ヘッダーだけの違いで差分が出ないようにする）
         if (expected is None or golden_differs(expected, got)) and write_golden(path, actual):
             _record_update(request, path, _result_changes(expected, got))
+        else:
+            _record_unchanged(request, path)
         # 書かなかったときも読み直す（同じファイルを使う前のケースが書いていることがある）
         _refresh_report_golden(request, doc, case)
         return
@@ -1112,12 +1120,11 @@ def _compare_golden(
     # --casebook-update が書くのと同じ形（# case: などを含む）に書き直される。
     # 同じファイルを使うほかのケースが先に書いていれば書かない（# case: の違いで、
     # ケースごとに書き直し合わないように）
-    if (
-        config.getoption("--casebook-update-headers")
-        and _claim_golden(request, case, path, label, got, m)
-        and write_golden(path, actual)
-    ):
-        _record_update(request, path, "")
+    if config.getoption("--casebook-update-headers"):
+        if _claim_golden(request, case, path, label, got, m) and write_golden(path, actual):
+            _record_update(request, path, "")
+        else:
+            _record_unchanged(request, path)
 
 
 def _refresh_report_golden(request: pytest.FixtureRequest, doc: CasebookDoc, case: Case) -> None:
@@ -1200,8 +1207,20 @@ def _record_update(request: pytest.FixtureRequest, path: Path, note: str) -> Non
     値は rootdir からのパスの表記に注記を添えたもの（実行の最後の一覧に出す。HTML レポートは
     真偽しか見ないので、空でない文字列でも「更新」と出る）。
     """
-    updated = Path(os.path.relpath(path, request.config.rootpath)).as_posix()
-    request.node.user_properties.append(("casebook_updated", updated + note))
+    request.node.user_properties.append(("casebook_updated", _golden_label(request, path) + note))
+
+
+def _record_unchanged(request: pytest.FixtureRequest, path: Path) -> None:
+    """
+    `--casebook-update` / `--casebook-update-headers` で、結果が同じなので書き直さなかった
+    期待出力を、テストの user_properties に残す（書き直しが 0 件のときの「N 件は同じ」に使う）。
+    """
+    request.node.user_properties.append(("casebook_unchanged", _golden_label(request, path)))
+
+
+def _golden_label(request: pytest.FixtureRequest, path: Path) -> str:
+    """期待出力ファイルの、実行の最後の一覧に出す表記（rootdir からの相対パス）。"""
+    return Path(os.path.relpath(path, request.config.rootpath)).as_posix()
 
 
 def _is_instance_of(error: BaseException, name: str) -> bool:

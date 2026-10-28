@@ -8,6 +8,7 @@ JSON Schema（casebook.schema.json）の確認。
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,39 @@ def errors(doc: Any) -> list[str]:
 
 def test_schema_itself_is_valid() -> None:
     jsonschema.Draft202012Validator.check_schema(SCHEMA)
+
+
+def _patterns(node: Any) -> list[str]:
+    if isinstance(node, dict):
+        return (
+            [node["pattern"]]
+            if "pattern" in node and isinstance(node["pattern"], str)
+            else [p for child in node.values() for p in _patterns(child)]
+        )
+    if isinstance(node, list):
+        return [p for child in node for p in _patterns(child)]
+    return []
+
+
+def test_patterns_mean_the_same_in_javascript() -> None:
+    """
+    Schema の pattern に、JS の正規表現で意味が変わる書き方がない。
+
+    `\\w` `\\d` `\\b` は Python の re では Unicode（日本語の名前も通る）だが、エディタ
+    （VS Code の YAML 拡張など）の JS では ASCII だけなので、日本語のケース名に赤線が出る。
+    jsonschema（Python）のテストでは見つからないので、書き方で確かめる。
+    """
+    patterns = _patterns(SCHEMA)
+    assert patterns, "no pattern found in the schema"
+    assert [p for p in patterns if re.search(r"\\[wdb]", p)] == []
+
+
+@pytest.mark.parametrize("name", ["一覧", "ログイン_成功", "Grüße.v2"])
+def test_schema_accepts_non_ascii_names(name: str) -> None:
+    """読み込み（NAME_RE）が通す日本語などの名前は、Schema も通す。"""
+    assert pytest_casebook.model.NAME_RE.match(name)
+    assert errors({"cases": [{"name": name, "call": "m:f"}]}) == []
+    assert errors({"cases": [{"name": "t", "call": "m:f", "params": [{"name": name}]}]}) == []
 
 
 @pytest.mark.parametrize(

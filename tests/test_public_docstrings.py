@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import inspect
+import re
 from collections.abc import Iterator
 from typing import Any
 
@@ -15,6 +16,10 @@ import pytest
 
 import pytest_casebook
 from pytest_casebook import hookspecs, http, plugin
+
+# 日本語（ひらがな・カタカナ・漢字）を含むか。英語の段落にも ✓ / ✗ や → のような記号は
+# 出てくるので、「ASCII だけ」ではなく「日本語がない」で英語の段落と見る
+_JAPANESE = re.compile(r"[぀-ヿ一-鿿]")
 
 
 def _public_objects() -> Iterator[tuple[str, Any]]:
@@ -50,10 +55,10 @@ def test_public_docstring_is_english_then_japanese(name: str) -> None:
     doc = inspect.getdoc(PUBLIC[name])
     assert doc, f"{name} has no docstring"
     paragraphs = [p for p in doc.split("\n\n") if p.strip()]
-    # 最初の段落が英語（ASCII）で、日本語の段落がある（:param などの説明より前）
-    assert paragraphs[0].isascii(), f"{name}: the first paragraph must be English"
+    # 最初の段落が英語（日本語を含まない）で、日本語の段落がある（:param などの説明より前）
+    assert not _JAPANESE.search(paragraphs[0]), f"{name}: the first paragraph must be English"
     body = [p for p in paragraphs if not p.lstrip().startswith(":")]
-    assert any(not p.isascii() for p in body), f"{name}: no Japanese paragraph"
+    assert any(_JAPANESE.search(p) for p in body), f"{name}: no Japanese paragraph"
 
 
 def test_public_objects_are_covered() -> None:
