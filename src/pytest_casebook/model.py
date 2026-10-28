@@ -77,6 +77,7 @@ _TOP_KEYS = {
     "request_defaults",
     "title",
     "description",
+    "lang",
     "levels",
     "states",
     "command_prefix",
@@ -197,8 +198,9 @@ class Case:
     groups: tuple[Group, ...] = ()
     # command: に書いた文字列（リストで書いたときは、表示用に1行にしたもの）
     command: str | None = None
-    # command: の引数（command_prefix は含まない）。リストで書いたときはそのまま、文字列で
-    # 書いたときは shell の書き方として区切ったもの。command のケース以外では None
+    # command: の引数（command_prefix は含まない。prefix を合わせた引数は、hook の argv に渡る）。
+    # リストで書いたときはそのまま、文字列で書いたときは shell の書き方として区切ったもの。
+    # command のケース以外では None
     command_argv: tuple[str, ...] | None = None
     call: str | None = None
     # HTTP のリクエスト（request_defaults の headers を重ねたもの）
@@ -341,6 +343,9 @@ class CasebookDoc:
     meta: dict[str, Any] = field(default_factory=dict)
     # ファイル全体の env（どの command のケースにも重ねる環境変数）
     env: dict[str, str] = field(default_factory=dict)
+    # このファイルのケースのメッセージ（比較の失敗・実行の誤り）と、レポートの行の言語
+    # （YAML の lang:。なければ ini の casebook_lang か load() の lang）
+    lang: str = "en"
     # load(ini=True) で読んだ ini の casebook_* の値。run_case() の既定に使う
     # （lang・encoding・builtin_patterns・description。ini=False なら空）
     options: dict[str, Any] = field(default_factory=dict)
@@ -597,9 +602,10 @@ def load(
                 if golden_dir
                 else path.parent / DEFAULT_GOLDEN_DIR / path.stem
             ),
-            levels=levels if levels is not None else TEXTS[lang]["levels"],
+            levels=levels,
             command_prefix=command_prefix,
             source_lines=loader.lines,
+            lang=lang,
         )
     doc.options = options
     return doc
@@ -631,9 +637,10 @@ def parse_document(
     path: Path,
     *,
     golden_dir: Path,
-    levels: tuple[str, ...],
+    levels: tuple[str, ...] | None,
     command_prefix: tuple[str, ...] = (),
     source_lines: dict[int, int] | None = None,
+    lang: str = "en",
 ) -> CasebookDoc:
     """
     YAML を読み込んだ値を検証して `CasebookDoc` にする。
@@ -641,9 +648,10 @@ def parse_document(
     :param data: YAML を読み込んだ値（`yaml.safe_load` と同じ形）
     :param path: ケースファイルのパス
     :param golden_dir: YAML に `golden_dir` がないときの期待出力の置き場所
-    :param levels: YAML に `levels` がないときの階層の呼び名
+    :param levels: YAML に `levels` がないときの階層の呼び名（None ならファイルの言語の既定）
     :param command_prefix: YAML に `command_prefix` がないときに command の前に付ける引数
     :param source_lines: マッピングの id -> 始まる行（`_LineLoader.lines`）。ケースの行番号に使う
+    :param lang: YAML に `lang` がないときの、ファイルの言語（ini の casebook_lang）
     :return: 検証済みのケースファイルの内容
     :raises CasebookError: 書き方に誤りがあるとき
     """
@@ -651,7 +659,35 @@ def parse_document(
     if not isinstance(data, dict):
         raise CasebookError(error("top_mapping", where=where))
     _check_keys(data, _TOP_KEYS, where)
+    if "lang" in data:
+        lang = _str(data["lang"], where, "lang", required=True)
+        if lang not in TEXTS:
+            raise CasebookError(error("bad_lang", where=where, values=" / ".join(TEXTS)))
+    # lang: を書いたファイルは、書き方の誤りもその言語で知らせる（書いた人が読む言語なので）
+    with language(lang):
+        return _parse_mapping(
+            data,
+            path,
+            golden_dir=golden_dir,
+            levels=levels if levels is not None else TEXTS[lang]["levels"],
+            command_prefix=command_prefix,
+            source_lines=source_lines,
+            lang=lang,
+        )
 
+
+def _parse_mapping(
+    data: dict[str, Any],
+    path: Path,
+    *,
+    golden_dir: Path,
+    levels: tuple[str, ...],
+    command_prefix: tuple[str, ...],
+    source_lines: dict[int, int] | None,
+    lang: str,
+) -> CasebookDoc:
+    """parse_document の本体（キーと lang: を確かめたあと）。"""
+    where = path.name
     states = data.get("states")
     if states is not None and not (
         isinstance(states, dict) and all(isinstance(k, str) for k in states)
@@ -683,6 +719,7 @@ def parse_document(
         cases=[],
         meta=_meta(data.get("meta"), where),
         env=_merge_env({}, _env(data.get("env"), where)),
+        lang=lang,
         _source_lines=source_lines or {},
     )
 

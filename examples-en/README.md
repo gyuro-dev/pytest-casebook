@@ -26,6 +26,7 @@ These are the English versions of the samples in [examples](../examples). The ca
 | [18_manual](18_manual) | Put checks that cannot be automated (visual checks, printed forms) in the same sheet, with results written by hand | YAML |
 | [19_aws](19_aws) | Put inputs in S3 and DynamoDB, run, and check DynamoDB, SQS and S3 (moto's mock) | YAML + conftest.py |
 | [20_params](20_params) | Write many cases that differ only in arguments as rows with params | YAML |
+| [21_reports](21_reports) | Check the same CLI in English and Japanese, and write an English sheet and a Japanese sheet from one run (`lang:` in the YAML and the `casebook_html_reports` ini option) | YAML |
 | [shop](shop) | Commands, functions, exceptions, files, a DB and states combined in one small shop app (three levels of groups; golden files and `expect:` side by side) | YAML + conftest.py |
 
 ## Running

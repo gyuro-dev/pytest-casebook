@@ -17,6 +17,14 @@
       "type": "string",
       "description": "Description shown in the report / レポートに出す説明"
     },
+    "lang": {
+      "type": "string",
+      "enum": [
+        "en",
+        "ja"
+      ],
+      "description": "Language of this file's messages and report rows (default: the casebook_lang ini option) / このファイルのメッセージとレポートの行の言語（省略時は ini の casebook_lang）"
+    },
     "levels": {
       "type": "array",
       "items": {

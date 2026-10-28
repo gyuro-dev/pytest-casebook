@@ -1,0 +1,5 @@
+# case: hello
+# command: python hello.py --lang en Alice
+# exit_code: 0
+----- stdout -----
+Hello, Alice

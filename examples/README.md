@@ -24,6 +24,7 @@
 | [18_manual](18_manual) | 自動にできない確認（目視・帳票など）も同じ表に載せ、結果を手で書く | YAML |
 | [19_aws](19_aws) | S3・DynamoDB に入力を置いて実行し、DynamoDB・SQS・S3 の中身を確かめる（moto のモック） | YAML ＋ conftest.py |
 | [20_params](20_params) | 引数だけ違うケースを params で表の形に並べる | YAML |
+| [21_reports](21_reports) | 同じ CLI を日本語と英語で確かめ、1回の実行で日本語の表と英語の表に分けて出す（YAML の `lang:` と ini の `casebook_html_reports`） | YAML |
 | [shop](shop) | コマンド・関数・例外・ファイル・DB・状態を、1つの小さなお店のアプリで組み合わせた例（3階層のグループ。期待出力ファイルと `expect:` を並べています） | YAML ＋ conftest.py |
 
 ## 実行のしかた

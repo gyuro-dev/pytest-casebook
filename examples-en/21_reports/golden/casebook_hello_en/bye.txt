@@ -1,0 +1,5 @@
+# case: bye
+# command: python hello.py --lang en --bye Alice
+# exit_code: 0
+----- stdout -----
+Goodbye, Alice
