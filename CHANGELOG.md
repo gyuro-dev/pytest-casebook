@@ -9,9 +9,23 @@ incompatible change raises the minor version).
 
 ### Changed
 
+- **Incompatible**: the check for golden files left over after a case was removed is now
+  named `unused_golden_files` (it was `golden_orphans`), so the test id reads
+  `casebook_x.yaml::unused_golden_files`. Update `-k` expressions and deselections that
+  name it. A case can no longer be named `unused_golden_files` while the check is on;
+  `golden_orphans` is free again. The YAML key `check_orphans` is unchanged. The failure
+  message now says how to fix it.
+- When an HTML report holds a single case file and `casebook_html_title` is not set, the
+  browser tab reads "<the file's title:> - Test Specification", so the tabs of several
+  reports can be told apart. The heading on the page is unchanged.
 - In the HTML report, the expected-result column always reads "Golden file (…)", whether or
   not the golden contents are shown in the fold below. It no longer becomes a "See the golden
   file below (…)" link, which pointed at the row right under it and meant nothing on paper.
+
+### Fixed
+
+- When `unused_golden_files` fails, the HTML report lists the unused golden files in the
+  case file's section. Before, pytest failed while the report showed every case passed.
 
 ## [0.9.1] - 2026-10-29
 

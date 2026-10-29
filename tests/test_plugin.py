@@ -76,7 +76,7 @@ def test_orphan_golden_is_reported(project: pytest.Pytester) -> None:
 
     result = project.runpytest()
     result.assert_outcomes(passed=1, failed=1)
-    result.stdout.fnmatch_lines(["*にない期待出力が*['old.txt']*"])
+    result.stdout.fnmatch_lines(["*使われていない期待出力ファイルが*['old.txt']*"])
 
 
 def test_orphan_check_follows_golden_extensions(project: pytest.Pytester) -> None:
@@ -96,7 +96,7 @@ def test_orphan_check_follows_golden_extensions(project: pytest.Pytester) -> Non
 
     result = project.runpytest()
     result.assert_outcomes(passed=2, failed=1)
-    result.stdout.fnmatch_lines(["*にない期待出力が*[[]'old.json'[]]*"])
+    result.stdout.fnmatch_lines(["*使われていない期待出力ファイルが*[[]'old.json'[]]*"])
 
 
 # =============================================================================
@@ -220,7 +220,7 @@ def test_stdin_file_is_read_into_case_stdin(project: pytest.Pytester) -> None:
           - {name: a, command: x, stdin_file: stdin_data.txt, expect: {stdout: "stdin='from file'"}}
         """,
     )
-    project.runpytest().assert_outcomes(passed=2)  # 2 つ目は golden_orphans
+    project.runpytest().assert_outcomes(passed=2)  # 2 つ目は unused_golden_files
 
 
 def test_command_env(project: pytest.Pytester) -> None:
@@ -538,7 +538,7 @@ def test_groups_can_be_selected_with_k(project: pytest.Pytester) -> None:
         ("cases:\n  - name: a\n    call: m:f\n    timeout: 0\n", "0 より大きい秒数"),
         ("cases:\n  - name: a\n    call: m:f\n    timeout: -1\n", "0 より大きい秒数"),
         ("cases:\n  - name: a\n    call: m:f\n    timeout: .inf\n", "0 より大きい秒数"),
-        ("cases:\n  - name: golden_orphans\n    call: m:f\n", "消し忘れの確認に使う"),
+        ("cases:\n  - name: unused_golden_files\n    call: m:f\n", "消し忘れの確認に使う"),
         ("cases:\n  - name: a\n    call: m:f\n    skip: true\n", "例: skip: 不具合 #12"),
         ("cases:\n  - name: a\n    call: m:f\n    expect: {}\n", "1つ以上書いてください"),
         ("cases:\n  - name: a\n    call: m:f\n    params: {}\n", "params は、ケースに重ねる"),
@@ -585,11 +585,11 @@ def test_distinct_names_are_not_a_case_collision(project: pytest.Pytester) -> No
     project.runpytest().assert_outcomes(passed=3)
 
 
-def test_golden_orphans_is_a_case_name_without_the_check(project: pytest.Pytester) -> None:
-    """check_orphans: false なら、golden_orphans もケース名に使える（確かめのテストがないため）。"""
+def test_unused_golden_files_is_a_case_name_without_the_check(project: pytest.Pytester) -> None:
+    """check_orphans: false なら、unused_golden_files もケース名に使える（確かめがないため）。"""
     write_casebook(
         project,
-        "check_orphans: false\ncases:\n  - name: golden_orphans\n    call: calc:add\n"
+        "check_orphans: false\ncases:\n  - name: unused_golden_files\n    call: calc:add\n"
         "    args: [1, 2]\n    expect: {return: 3}\n",
     )
     project.runpytest().assert_outcomes(passed=1)
@@ -610,7 +610,7 @@ def test_shared_golden_with_different_results_fails_on_update(project: pytest.Py
         """,
     )
     result = project.runpytest("--casebook-update")
-    result.assert_outcomes(passed=3, failed=1)  # passed のうち1つは golden_orphans
+    result.assert_outcomes(passed=3, failed=1)  # passed のうち1つは unused_golden_files
     shared = "golden/casebook_calc/sum.txt はケース casebook_calc.yaml::three も使っていて"
     result.stdout.fnmatch_lines([f"*[[]seven[]] 期待出力 {shared}*"])
     assert "3" in golden(project, "sum")
@@ -684,7 +684,7 @@ def test_params_rows_run_as_their_own_cases(project: pytest.Pytester) -> None:
         """,
     )
     result = project.runpytest()
-    result.assert_outcomes(passed=3, failed=1)  # passed のうち1つは golden_orphans
+    result.assert_outcomes(passed=3, failed=1)  # passed のうち1つは unused_golden_files
     result.stdout.fnmatch_lines(["*[[]shipping-2999[]]（7 行目）*"])
 
 
@@ -746,7 +746,7 @@ def test_html_report_has_levels_and_merged_cells(project: pytest.Pytester) -> No
     result.stdout.fnmatch_lines(["*試験項目表（HTML）:*report.html*"])
 
     page = report.read_text(encoding="utf-8")
-    assert "<title>試験項目表</title>" in page
+    assert "<h1>試験項目表</h1>" in page
     assert "計算ツール" in page
     for label in ("大項目", "中項目", "小項目"):
         assert f"<th class='level'>{label}</th>" in page
@@ -827,7 +827,7 @@ def test_html_report_in_english(project: pytest.Pytester) -> None:
 
     page = report.read_text(encoding="utf-8")
     assert '<html lang="en">' in page
-    assert "<title>Test Specification</title>" in page
+    assert "<h1>Test Specification</h1>" in page
     # levels を書かなければ、階層の呼び名も英語の既定になる
     assert "<th class='level'>Category</th>" in page
     assert "<th>Preconditions</th>" in page
@@ -835,7 +835,7 @@ def test_html_report_in_english(project: pytest.Pytester) -> None:
     assert "Golden file (add.txt)" in page
     assert "raises contains &quot;zero&quot;" in page
     assert '<span class="badge passed">Passed 2</span>' in page
-    assert "3 cases in total" not in page  # golden_orphans はレポートに出ない
+    assert "3 cases in total" not in page  # unused_golden_files はレポートに出ない
     assert "2 cases in total" in page
 
 
@@ -918,7 +918,7 @@ def test_expect_failures_in_english(project: pytest.Pytester) -> None:
         """,
     )
     result = project.runpytest("-o", "casebook_lang=en")
-    result.assert_outcomes(failed=4, passed=1)  # passed は golden_orphans
+    result.assert_outcomes(failed=4, passed=1)  # passed は unused_golden_files
     result.stdout.fnmatch_lines(
         [
             "*[[]wrong_return[]] (line 2)*",
@@ -946,7 +946,7 @@ def test_golden_failures_in_english(project: pytest.Pytester) -> None:
     (golden / "sub.txt").unlink()
 
     result = project.runpytest("-o", "casebook_lang=en")
-    result.assert_outcomes(failed=2, passed=1)  # passed は golden_orphans
+    result.assert_outcomes(failed=2, passed=1)  # passed は unused_golden_files
     result.stdout.fnmatch_lines(
         [
             "*The output differs from the golden file. If the change is intended,*",
@@ -1313,7 +1313,7 @@ def test_env_is_visible_to_an_in_process_hook(project: pytest.Pytester) -> None:
           - {name: unset, command: x, expect: {stdout: unset}}
         """,
     )
-    project.runpytest().assert_outcomes(passed=3)  # 3 つ目は golden_orphans
+    project.runpytest().assert_outcomes(passed=3)  # 3 つ目は unused_golden_files
 
 
 def test_relative_program_in_workdir_gets_a_hint(project: pytest.Pytester) -> None:

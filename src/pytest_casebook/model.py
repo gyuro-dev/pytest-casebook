@@ -143,7 +143,7 @@ MANUAL_RESULTS = ("passed", "failed", "skipped")
 DEFAULT_STATE = "default"
 DEFAULT_GOLDEN_DIR = "golden"
 # 期待出力の消し忘れを確かめるテストの名前（check_orphans: true のとき、ケース名には使えない）
-ORPHANS_TEST_NAME = "golden_orphans"
+UNUSED_GOLDEN_TEST_NAME = "unused_golden_files"
 
 # expect に書ける、実行結果そのものの項目（それ以外のキーは observe の対象として扱う）
 COMMAND_EXPECT_KEYS = ("exit_code", "stdout", "stderr")
@@ -752,8 +752,8 @@ def _check_names(doc: CasebookDoc, where: str) -> None:
     if collided:
         raise CasebookError(error("duplicate_names_case", where=where, names=", ".join(collided)))
     # 同じ名前のテストが2つになり、-k や結果で区別できなくなるため
-    if doc.check_orphans and ORPHANS_TEST_NAME in seen:
-        raise CasebookError(error("reserved_name", where=where, name=ORPHANS_TEST_NAME))
+    if doc.check_orphans and UNUSED_GOLDEN_TEST_NAME in seen:
+        raise CasebookError(error("reserved_name", where=where, name=UNUSED_GOLDEN_TEST_NAME))
 
 
 @dataclass(frozen=True)

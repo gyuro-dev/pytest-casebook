@@ -291,7 +291,7 @@ def test_orphan_check_looks_into_subdirectories(project: pytest.Pytester) -> Non
     (project.path / "golden" / "casebook_calc" / "sub" / "old.txt").write_text("x", "utf-8")
     result = project.runpytest()
     result.assert_outcomes(passed=1, failed=1)
-    result.stdout.fnmatch_lines(["*にない期待出力が*['sub/old.txt']*"])
+    result.stdout.fnmatch_lines(["*使われていない期待出力ファイルが*['sub/old.txt']*"])
 
 
 def _two_yamls(project: pytest.Pytester, a_golden_dir: str, b_golden_dir: str | None) -> None:
@@ -319,7 +319,7 @@ def test_shared_golden_dir_does_not_report_each_other(project: pytest.Pytester) 
     (project.path / "shared" / "old.txt").write_text("x", "utf-8")
     result = project.runpytest()
     result.assert_outcomes(passed=2, failed=2)
-    result.stdout.fnmatch_lines(["*にない期待出力が*['old.txt']*"])
+    result.stdout.fnmatch_lines(["*使われていない期待出力ファイルが*['old.txt']*"])
 
 
 def test_nested_golden_dir_is_left_to_its_owner(project: pytest.Pytester) -> None:
@@ -331,7 +331,7 @@ def test_nested_golden_dir_is_left_to_its_owner(project: pytest.Pytester) -> Non
     result = project.runpytest()
     # b の確認だけが失敗する（a は b の置き場所の中を見ない）
     result.assert_outcomes(passed=3, failed=1)
-    result.stdout.fnmatch_lines(["*FAILED casebook_b.yaml::golden_orphans*"])
+    result.stdout.fnmatch_lines(["*FAILED casebook_b.yaml::unused_golden_files*"])
 
 
 def test_orphan_check_ignores_unreadable_siblings(project: pytest.Pytester) -> None:

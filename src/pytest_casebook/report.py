@@ -82,6 +82,8 @@ class ReportOutput:
     `files` は入れるケースファイル（rootdir からの相対パス。None なら全部）。
     枠・見出しの言語は、入ったケースのファイルの言語がそろっていればそれ、混ざっていれば
     ini の casebook_lang。`title` は ini の casebook_html_title（なければ言語の既定）。
+    title がなく、入ったケースファイルが 1 つだけなら、ブラウザのタブの題名（<title>）は
+    「そのファイルの title: - 言語の既定」にする（表ごとにタブを見分けられるように）。
     """
 
     path: Path
@@ -104,6 +106,8 @@ class CasebookHtmlReport:
         # ini の言語（ファイルの言語が混ざった表の枠と、書かなかった表の知らせに使う）
         self.lang = lang
         self.rows: dict[str, CaseRow] = {}
+        # ケースファイル（rootdir からの相対パス）ごとの、どのケースにも使われていない期待出力
+        self.unused: dict[str, list[str]] = {}
 
     def pytest_collection_finish(self, session: pytest.Session) -> None:
         """
@@ -120,6 +124,10 @@ class CasebookHtmlReport:
 
     def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
         props = dict(report.user_properties)
+        # unused_golden_files のテストは表の行にせず、残っている期待出力だけを覚える
+        unused = props.get("casebook_unused_golden")
+        if isinstance(unused, dict):
+            self.unused[unused["file"]] = list(unused["files"])
         meta = props.get("casebook")
         outcome = _outcome_of(report)
         # pytest-rerunfailures の "rerun" のような、ほかのプラグインの結果は数えない
@@ -158,8 +166,14 @@ class CasebookHtmlReport:
             langs = {row.meta.get("lang", self.lang) for row in rows}
             output.lang = next(iter(langs)) if len(langs) == 1 else self.lang
             title = output.title or TEXTS[output.lang]["title"]
+            page_title = title
+            if not output.title and len({row.meta["file"] for row in rows}) == 1:
+                page_title = f"{rows[0].meta['title']} - {title}"
+            html = build_html(
+                title, rows, now, output.lang, page_title=page_title, unused=self.unused
+            )
             output.path.parent.mkdir(parents=True, exist_ok=True)
-            output.path.write_text(build_html(title, rows, now, output.lang), encoding="utf-8")
+            output.path.write_text(html, encoding="utf-8")
 
     def pytest_terminal_summary(self, terminalreporter: Any) -> None:
         for output in self.outputs:
@@ -221,6 +235,17 @@ def _problem_list(texts: dict[str, Any], rows: list[CaseRow]) -> str:
         for r in problems
     )
     return f"<div class='problems'><h3>{_e(texts['problems'])}</h3><ul>{items}</ul></div>"
+
+
+def _unused_golden(texts: dict[str, Any], files: list[str]) -> str:
+    """どのケースにも使われていない期待出力ファイル（unused_golden_files が失敗したとき）。"""
+    if not files:
+        return ""
+    items = "".join(f"<li>{_e(name)}</li>" for name in files)
+    return (
+        f"<div class='problems'><h3>{_e(texts['unused_golden'])}</h3>"
+        f"<div class='muted'>{_e(texts['unused_golden_hint'])}</div><ul>{items}</ul></div>"
+    )
 
 
 def _height(row: CaseRow) -> int:
@@ -438,8 +463,11 @@ def _list(lines: list[str]) -> str:
     return "".join(f"<div class='line'>{_e(line)}</div>" for line in lines)
 
 
-def _file_section(texts: dict[str, Any], rows: list[CaseRow]) -> str:
-    """1つのケースファイルの節（見出し・件数・大項目ごとの集計・確認が必要なケース・表）。"""
+def _file_section(texts: dict[str, Any], rows: list[CaseRow], unused: list[str]) -> str:
+    """
+    1つのケースファイルの節（見出し・件数・大項目ごとの集計・確認が必要なケース・
+    使われていない期待出力・表）。
+    """
     first = rows[0].meta
     # 階層の列は、実際に使われているグループの深さだけ出す（levels に書いた数ではない）。
     # 大項目しかないファイルに、空の中項目・小項目の列が出ないようにする
@@ -458,27 +486,42 @@ def _file_section(texts: dict[str, Any], rows: list[CaseRow]) -> str:
         f"{desc}{golden}"
         f"<div class='counts'>{_e(texts['cases'].format(n=len(rows)))} {_counts(texts, rows)}</div>"
         f"{_summary_table(texts, rows, labels[0] if labels else texts['group'])}"
-        f"{_problem_list(texts, rows)}{_case_table(texts, rows, labels)}</section>"
+        f"{_problem_list(texts, rows)}{_unused_golden(texts, unused)}"
+        f"{_case_table(texts, rows, labels)}</section>"
     )
 
 
 def build_html(
-    title: str, rows: list[CaseRow], generated_at: datetime.datetime, lang: str = "en"
+    title: str,
+    rows: list[CaseRow],
+    generated_at: datetime.datetime,
+    lang: str = "en",
+    *,
+    page_title: str | None = None,
+    unused: dict[str, list[str]] | None = None,
 ) -> str:
-    """結果の行から HTML 全体を組み立てる。"""
+    """
+    結果の行から HTML 全体を組み立てる。
+
+    `title` は見出し（<h1>）、`page_title` はブラウザのタブの題名（なければ title）。
+    `unused` はケースファイルごとの、どのケースにも使われていない期待出力。
+    """
     texts = TEXTS[lang]
     rows = sorted(rows, key=lambda r: r.meta["order"])
     files: dict[str, list[CaseRow]] = {}
     for row in rows:
         files.setdefault(row.meta["file"], []).append(row)
-    sections = "".join(_file_section(texts, items) for items in files.values())
+    unused = unused or {}
+    sections = "".join(
+        _file_section(texts, items, unused.get(name, [])) for name, items in files.items()
+    )
     generated = texts["generated"].format(at=generated_at.strftime("%Y-%m-%d %H:%M:%S"))
     return f"""<!doctype html>
 <html lang="{lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{_e(title)}</title>
+<title>{_e(page_title or title)}</title>
 <style>{_CSS}</style>
 </head>
 <body>

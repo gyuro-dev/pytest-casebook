@@ -43,7 +43,7 @@ def test_manual_cases_are_not_run(project: pytest.Pytester) -> None:
     """result: がなければスキップ、passed / failed / skipped はそのとおりの結果にする。"""
     write_casebook(project, CASES)
     result = project.runpytest("-rs", "--casebook-update")
-    # passed: checked・auto・golden_orphans、skipped: layout・later
+    # passed: checked・auto・unused_golden_files、skipped: layout・later
     result.assert_outcomes(passed=3, failed=1, skipped=2)
     result.stdout.fnmatch_lines(
         [
