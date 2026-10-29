@@ -832,7 +832,7 @@ def test_html_report_in_english(project: pytest.Pytester) -> None:
     assert "<th class='level'>Category</th>" in page
     assert "<th>Preconditions</th>" in page
     assert "State: empty" in page
-    assert "See the golden file below (add.txt)" in page
+    assert "Golden file (add.txt)" in page
     assert "raises contains &quot;zero&quot;" in page
     assert '<span class="badge passed">Passed 2</span>' in page
     assert "3 cases in total" not in page  # golden_orphans はレポートに出ない
@@ -974,10 +974,8 @@ def test_html_report_marks_updated(project: pytest.Pytester) -> None:
     assert '<span class="badge passed">成功 1</span>' in report.read_text(encoding="utf-8")
 
 
-# add.txt の期待出力の折りたたみ（id は、期待結果の列のリンクの行き先。番号は実行ごとに変わる）
-GOLDEN_ADD_SUMMARY = (
-    r"<details class='golden' id='case-\d+-golden'><summary>期待出力（add.txt）</summary>"
-)
+# add.txt の期待出力の折りたたみ
+GOLDEN_ADD_SUMMARY = r"<details class='golden'><summary>期待出力（add.txt）</summary>"
 
 
 def test_html_report_shows_golden_contents(project: pytest.Pytester) -> None:
@@ -1053,12 +1051,10 @@ def test_collect_only_shows_golden_contents(project: pytest.Pytester) -> None:
     assert "<pre>----- return -----\n3</pre>" in page
 
 
-def test_golden_file_line_links_to_the_contents(project: pytest.Pytester) -> None:
+def test_golden_file_line_is_the_same_with_or_without_contents(project: pytest.Pytester) -> None:
     """
-    期待出力の内容を出すときは、期待結果の列の「期待出力ファイル（…）」を、下の折りたたみへの
-    リンクにする（同じファイル名が2回並ばないように）。内容を出さないときは今までどおりの文字。
-
-    リンクを押すと折りたたみが開く動きは、埋め込みの JavaScript（ここでは HTML だけを確かめる）。
+    期待結果の列は、期待出力の内容を下の行に出すときも出さないときも「期待出力ファイル（…）」の
+    文字にする（下の折りたたみへのリンクにはしない。印刷しても読めるように）。
     """
     write_casebook(
         project,
@@ -1072,26 +1068,20 @@ def test_golden_file_line_links_to_the_contents(project: pytest.Pytester) -> Non
     report = project.path / "report.html"
     project.runpytest(f"--casebook-html={report}")
     page = report.read_text(encoding="utf-8")
-    links = re.findall(
-        r"<div class='line'><a class='golden-link' href='#([\w-]+)'>"
-        r"下の期待出力を見る（add.txt）</a></div>",
-        page,
-    )
-    assert len(links) == 1  # expect: のケースにはリンクを出さない
-    assert f"<details class='golden' id='{links[0]}'>" in page
-    assert "<div class='line'>期待出力ファイル（add.txt）</div>" not in page
-    assert "a.golden-link" in page  # 押したときに開く JavaScript と、リンクの見た目
+    assert page.count("<div class='line'>期待出力ファイル（add.txt）</div>") == 1
+    assert page.count("<details class='golden'>") == 1  # expect: のケースには出さない
+    assert "<a " not in page.split("<table class='cases'>", 1)[1]
 
     project.runpytest("-o", "casebook_lang=en", f"--casebook-html={report}")
     page = report.read_text(encoding="utf-8")
-    assert "'>See the golden file below (add.txt)</a></div>" in page
+    assert "<div class='line'>Golden file (add.txt)</div>" in page
     assert not JAPANESE.search(page)
 
-    # 内容を出さないとき（off）は、今までどおりの文字（リンクも折りたたみもない）
+    # 内容を出さないとき（off）も同じ文字（折りたたみはない）
     project.runpytest("-o", "casebook_html_golden=off", f"--casebook-html={report}")
     page = report.read_text(encoding="utf-8")
     assert "<div class='line'>期待出力ファイル（add.txt）</div>" in page
-    assert "class='golden-link'" not in page
+    assert "<details class='golden'>" not in page
 
 
 def test_expect_and_manual_cases_show_no_golden_contents(project: pytest.Pytester) -> None:
