@@ -422,7 +422,7 @@
     },
     "env": {
       "type": "object",
-      "description": "Environment variables for running command: cases, put over the current ones. Inner levels (file, group, case) override outer ones; null removes an outer value / command: のケースを実行するときの環境変数（今の環境変数に重ねる）。内側（ファイル・グループ・ケース）が外側を上書きし、null で外側の値を消す. {casebook_dir} in a value becomes the YAML's directory / 値の中の {casebook_dir} は YAML のディレクトリになる",
+      "description": "Environment variables while a case runs (command:, call:, request: and the hooks), put over the current ones. Inner levels (file, group, case) override outer ones; null removes an outer value / ケースを実行する間の環境変数（command:・call:・request: と hook。今の環境変数に重ねる）。内側（ファイル・グループ・ケース）が外側を上書きし、null で外側の値を消す. {casebook_dir} in a value becomes the YAML's directory / 値の中の {casebook_dir} は YAML のディレクトリになる",
       "propertyNames": {
         "pattern": "^[^=]+$"
       },

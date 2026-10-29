@@ -20,6 +20,12 @@ incompatible change raises the minor version).
 - The README's "Getting started" example runs as written: it now includes the small CLI it
   tests (`hello.py`) instead of a `hello` command that does not exist. A test copies the
   example from both READMEs and runs it.
+- With `casebook_html_reports` and no `--casebook-html`, the reports of a `--casebook-update`
+  run now show the golden files that run wrote, instead of an empty or old one. The
+  "… (N more lines)" note under a golden file follows the YAML's `lang:` like the rest of its
+  row, not `casebook_lang`.
+- The JSON Schema and the README say that `env:` applies to every kind of case, as it has
+  since 0.9.0, not only to `command:` cases.
 
 ## [0.9.0] - 2026-10-28
 

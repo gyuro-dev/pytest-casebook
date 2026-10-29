@@ -671,6 +671,28 @@ def test_html_shows_the_golden_written_by_update(project: pytest.Pytester) -> No
     assert shown() == ["----- return -----\n3"]
 
 
+def test_html_reports_show_the_golden_written_by_update(project: pytest.Pytester) -> None:
+    """
+    ini の casebook_html_reports だけでも、書き直したあとの期待出力を出す。
+
+    省略した行の注記は、ini の言語（ja）ではなく YAML の lang: の言語で書く。
+    """
+    write_casebook(
+        project,
+        f"""
+        lang: en
+        cases:
+          - name: long
+            command: [{PY}, -c, "[print(i) for i in range(50)]"]
+        """,
+    )
+    project.runpytest(
+        "--casebook-update", "-o", "casebook_html_reports=report.html = casebook_calc.yaml"
+    )
+    page = (project.path / "report.html").read_text(encoding="utf-8")
+    assert "… (12 more lines)</pre>" in page  # 52 行を既定の 40 行で打ち切る
+
+
 def test_update_list_notes_failing_results_of_new_golden(project: pytest.Pytester) -> None:
     """新しく作る期待出力でも、失敗の結果（0 でない exit_code・raises）は一覧で注記する。"""
     write_casebook(

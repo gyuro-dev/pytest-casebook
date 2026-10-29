@@ -474,7 +474,7 @@ check_orphans: true            # ケースのない期待出力ファイルが�
 normalize:                     # 出力に当てる置き換え
   - {pattern: 'req-[0-9a-f]+', replace: '<request-id>'}
 meta: {owner: qa}              # 自由に使う情報（下の「meta」を参照）
-env: {LANG: C}                 # command のケースの環境変数（下の「環境変数」を参照）
+env: {LANG: C}                 # ケースの環境変数（下の「環境変数」を参照）
 timeout: 5                     # 中のケースの既定の timeout（グループやケースの値が優先）
 cases: [...]                   # ケースまたはグループのリスト
 ```
@@ -498,7 +498,7 @@ cases: [...]                   # ケースまたはグループのリスト
   state: outage            # 中のケースの既定の状態
   marks: [slow]            # 中のケースに付ける pytest のマーク
   meta: {area: price}      # 中のケースに付ける meta
-  env: {TZ: UTC}           # 中の command のケースに付ける環境変数
+  env: {TZ: UTC}           # 中のケースに付ける環境変数
   timeout: 5               # 中のケースの既定の timeout
   skip: 仕様が決まるまで止める  # 中のケースすべてを、この理由でスキップする（xfail: も書ける）
   cases: [...]
@@ -517,7 +517,7 @@ HTML レポートの階層の列は、実際に使われているグループの
 | `stdin` | command の標準入力 |
 | `stdin_file` | 標準入力に渡すファイル。YAML のディレクトリからの相対パス。`stdin` とは同時に書けない |
 | `timeout` | ケースを時間切れで失敗にするまでの秒数（`command`・`call`・`request`。[詳しく](#時間の上限-timeout)） |
-| `env` | command を実行するときの環境変数。今の環境変数に重ねる（[書き方](#環境変数-env)） |
+| `env` | ケースを実行する間の環境変数。今の環境変数に重ねる（[書き方](#環境変数-env)） |
 | `call` | 呼び出す関数（`モジュール:関数`、`モジュール:クラス.メソッド`）。`async def` の関数は終わるまで待つ |
 | `args` / `kwargs` | 関数に渡す引数 |
 | `request` | 送る HTTP のリクエスト（`"POST /users"` か、method・path・query・headers・json・body。[書き方](#http-の-api-request)） |
@@ -846,7 +846,7 @@ YAML のほかの部分を共有したいときは、アンカー（`&` / `*` / 
 ファイルの先頭・グループ・ケースのどこにでも書けます。
 
 ```yaml
-env: {LANG: C, TZ: UTC}          # ファイルのすべての command のケース
+env: {LANG: C, TZ: UTC}          # ファイルのすべてのケース
 cases:
   - group: デバッグ出力
     env: {MYTOOL_DEBUG: 1}       # 数値は文字列（"1"）にする

@@ -415,7 +415,7 @@ check_orphans: true            # fail if golden files without a case are left ov
 normalize:                     # replacements applied to the output
   - {pattern: 'req-[0-9a-f]+', replace: '<request-id>'}
 meta: {owner: qa}              # free-form information (see "meta")
-env: {LANG: C}                 # environment variables for command cases (see "Environment variables")
+env: {LANG: C}                 # environment variables for the cases (see "Environment variables")
 timeout: 5                     # default seconds for the cases (a group's or case's value wins)
 cases: [...]                   # list of cases or groups
 ```
@@ -432,7 +432,7 @@ cases: [...]                   # list of cases or groups
   state: outage              # default state for the cases inside
   marks: [slow]              # pytest marks for the cases inside
   meta: {area: price}        # meta for the cases inside
-  env: {TZ: UTC}             # environment variables for the command cases inside
+  env: {TZ: UTC}             # environment variables for the cases inside
   timeout: 5                 # default timeout for the cases inside
   skip: paused until the spec is decided  # skip all cases inside with this reason (xfail: too)
   cases: [...]
@@ -450,7 +450,7 @@ You can select by group name, e.g. `-k Pricing`. The HTML report only shows as m
 | `stdin` | Standard input for the command |
 | `stdin_file` | File passed to standard input, relative to the YAML's directory (not together with `stdin`) |
 | `timeout` | Seconds before the case fails as too slow (`command`, `call` and `request`; [details](#timeouts-timeout)) |
-| `env` | Environment variables for the command, put over the current ones ([how](#environment-variables-env)) |
+| `env` | Environment variables while the case runs, put over the current ones ([how](#environment-variables-env)) |
 | `call` | Function to call (`module:function`, `module:Class.method`). `async def` functions are awaited |
 | `args` / `kwargs` | Arguments for the function |
 | `request` | HTTP request to send (`"POST /users"`, or method, path, query, headers, json, body; [how](#http-apis-request)) |
@@ -707,7 +707,7 @@ An element's keys replace the template's keys wholesale (there is no deep merge)
 `env:` sets environment variables for the cases. Write it at the top of the file, on groups, or on cases.
 
 ```yaml
-env: {LANG: C, TZ: UTC}          # every command case in the file
+env: {LANG: C, TZ: UTC}          # every case in the file
 cases:
   - group: Debug output
     env: {MYTOOL_DEBUG: 1}       # numbers become strings ("1")
