@@ -7,6 +7,8 @@ incompatible change raises the minor version).
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-10-29
+
 ### Changed
 
 - "command not found" now says where the command ran and how to fix it: use an installed
@@ -391,7 +393,8 @@ The first release.
 - Checked with Python 3.11-3.15, pytest 8 / 9 and pytest-xdist (Windows and Ubuntu 22.04 on
   WSL), mypy (strict) and ruff
 
-[Unreleased]: https://github.com/gyuro-dev/pytest-casebook/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/gyuro-dev/pytest-casebook/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/gyuro-dev/pytest-casebook/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/gyuro-dev/pytest-casebook/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/gyuro-dev/pytest-casebook/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/gyuro-dev/pytest-casebook/compare/v0.7.0...v0.7.1
