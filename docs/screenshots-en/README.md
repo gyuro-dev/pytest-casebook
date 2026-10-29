@@ -6,7 +6,7 @@ These cases produce the images of the HTML report (`--casebook-html`) shown in [
 |---|---|
 | `casebook_demo_en.yaml` | the cases. One failure, one skip and one known bug (xfail) are included on purpose |
 | `store_en.py` | the target (a CLI and Python functions) |
-| `conftest.py` | a hook that runs the CLI in-process, and a hook that applies the stock of a state |
+| `conftest.py` | a hook that runs the CLI in-process, and a hook that sets up the stock for each state |
 | `golden/` | golden files. `receipt_free_shipping.txt` is written by hand with the correct spec (free shipping) so that it fails |
 
 `docs/` is not in pytest's `testpaths`, so a normal `uv run pytest` does not collect these.

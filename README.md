@@ -75,15 +75,15 @@ pip install pytest-casebook
 uv add --dev pytest-casebook
 ```
 
-Works with Python 3.11+ and pytest 8+. Installing it is enough: pytest loads it automatically, no configuration needed.
+Installing it is enough: pytest loads it automatically, so no configuration is needed.
 
 On Python 3.15, PyYAML is built from source until it ships 3.15 wheels. If that fails on Windows without a C compiler, install with the environment variable `PYYAML_FORCE_LIBYAML=0` (PyYAML without the C extension).
 
-The only dependencies are pytest, PyYAML and pluggy (which pytest needs anyway). Testing HTTP APIs does not add an HTTP library either (requests are sent with your framework's test client, e.g. FastAPI's or Flask's).
+The only dependencies are pytest, PyYAML and pluggy (which pytest needs anyway). Testing HTTP APIs needs no extra HTTP library either (requests are sent with your framework's test client, e.g. FastAPI's or Flask's).
 
 ## Getting started: you only write one YAML file
 
-To test a CLI, all you write is one YAML file — no conftest.py, no Python test code. Here we test `hello.py`, a small CLI that greets the name it is given. It stands in for your own CLI; copy it and the steps below work as they are.
+To test a CLI, all you write is one YAML file — no conftest.py, no Python test code. Here we test `hello.py`, a small CLI that greets the name it is given. It stands in for your own CLI: copy the files below and the steps work as written.
 
 ```text
 myproject/
@@ -125,7 +125,7 @@ cases:
       stderr: {$contains: --name}
 ```
 
-Each case runs `command_prefix` followed by `command`, e.g. `python hello.py --name Alice`. It runs in the directory of the YAML file (`tests/` here), so the command must be runnable from there: an installed command (`command_prefix: [mycli]`), or a script referenced by its path from that directory, as here.
+Each case runs `command_prefix` followed by `command`, e.g. `python hello.py --name Alice`. The command runs in the directory of the YAML file (`tests/` here), so `command_prefix` is either an installed command (`[mycli]`) or, as here, a script given by its path from that directory.
 
 **2. Generate the golden file**
 
@@ -186,12 +186,13 @@ Add `--casebook-html=report.html` to write the results as a test specification s
 
 - counts and results per top-level group
 - a list of cases that need attention (links to their rows)
+- golden files not used by any case, when some are left over (see [Golden files](#golden-files))
 - a table whose level columns (`levels`) are merged vertically, with case name, action, description, preconditions, expected result, result and time. Failed rows can be expanded to show the diff
 - for cases compared with a golden file, the compared parts of the file, folded under the row (a button opens or closes all of them; [details](#golden-contents-in-the-report) below)
 - preconditions show non-default state names and the case's own `setup:`. Skip and known-bug reasons are shown under the result
 - the time only counts running the case (not session fixtures that build the environment)
 
-At the top of the page you can narrow the table down. Click a result (e.g. Failed) to show only those cases (click more results to add them, "All" to reset), and type in the box to keep only the cases whose group, case name, command, description, preconditions or expected results contain the text (case-insensitive; several words must all match). The merged group cells are rebuilt for the rows that remain, and files with no matching case are hidden. The per-file counts always describe the whole run. The report stays a single HTML file; without JavaScript the full table is shown.
+At the top of the page you can narrow the table down. Click a result (e.g. Failed) to show only those cases (click more results to show the cases with any of them, "All" to reset), and type in the box to keep only the cases whose group, case name, command, description, preconditions or expected results contain the text (case-insensitive; several words must all match). The merged group cells are rebuilt for the rows that remain, and files with no matching case are hidden. The per-file counts always describe the whole run. The report is a single HTML file that loads nothing else; without JavaScript, the filter is hidden and the full table is shown.
 
 To submit "what will be checked" before testing, use it with `--collect-only`. The cases are not run, and every result is "Not run" (the precondition and expected result columns come from the YAML; manual cases without `result:` show "Manual").
 
@@ -209,7 +210,7 @@ A failed case can be expanded below its row to show the diff.
 
 ### Several sheets from one run (casebook_html_reports)
 
-A sheet usually has one reader: the customer, the development team, the English-speaking reviewers. When the cases for different readers live in different YAML files, the `casebook_html_reports` ini option writes one sheet per reader from a single run. Each line is `<html file> = <case file patterns>`: the HTML to write, then the case files to put in it, separated by commas. Both are relative to pytest's rootdir, and the patterns take globs (`*`, `**`), so a directory of case files can become one sheet.
+A sheet is usually written for one audience: the customer, the development team, or English-speaking reviewers. When the cases for each audience live in their own YAML files, the `casebook_html_reports` ini option writes one sheet per audience from a single run. Each line is `<html file> = <case file patterns>`: the HTML to write, then the case files to put in it, separated by commas. Both are relative to pytest's rootdir, and the patterns take globs (`*`, `**`), so a directory of case files can become one sheet.
 
 ```toml
 [tool.pytest.ini_options]
@@ -220,11 +221,12 @@ casebook_html_reports = [
 ]
 ```
 
-- `--casebook-html` still writes the whole sheet with every case, so a file that no line matches is never silently lost. The two can be used together.
+- The whole sheet written by `--casebook-html` always has every case, so a file that no line matches still appears there. The two can be used together.
 - A sheet's headings and result labels follow the `lang:` of the case files in it when they agree (see [the whole YAML file](#the-whole-yaml-file)); when files of both languages are mixed, the `casebook_lang` ini option decides, as for the whole sheet.
+- When a sheet holds a single case file, the browser tab shows that file's `title:` (or `casebook_html_title`, when it is set).
 - A sheet with no cases (a misspelled pattern, or everything filtered out with `-k` / `-m`) is not written, and the end of the run says so.
 - `--collect-only`, `casebook_html_golden` and `-k` / `-m` apply to each sheet in the same way.
-- To run without the extra sheets (for example a run against a real environment that should not overwrite them), pass `-o casebook_html_reports=` (empty).
+- To run without the extra sheets, pass `-o casebook_html_reports=` (empty), for example when a run against a production-like environment should not overwrite the usual sheets.
 
 [21_reports](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/21_reports) is a complete example: the same CLI checked in English and Japanese, each language as its own sheet.
 
@@ -238,7 +240,7 @@ Results are one of: passed, updated (rewritten by `--casebook-update`), manual (
 
 Most things can be done in YAML alone. Add pytest hooks to conftest.py only when you use a DB or want to pass a test environment.
 
-Each row has a ready-to-run sample in [examples-en](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en) (except the rows whose sample column is "—"). You can start by copying a sample directory and renaming things.
+Most rows have a ready-to-run sample in [examples-en](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en) (the rows whose sample column is "—" do not). You can start by copying a sample directory and renaming things.
 
 | What you want to do | Where | What to write | Sample |
 |---|---|---|---|
@@ -265,8 +267,6 @@ Each row has a ready-to-run sample in [examples-en](https://github.com/gyuro-dev
 | Put manual checks (visual checks, printed forms) in the same sheet | YAML | `manual:` and `result:` ([how](#manual-cases-manual)) | [18_manual](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/18_manual) |
 | Write the sheet of what will be checked, before testing | command line | `pytest --collect-only --casebook-html=plan.html` (results are "Not run"; [how](#html-report)) | — |
 | Measure coverage while writing the HTML report | pyproject.toml + command line | pytest-cov and coverage.py's `patch = ["subprocess"]` ([how](#measuring-coverage)) | — |
-
-[examples-en/shop](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en/shop) has commands, functions, exceptions, files, a DB and states combined in one small shop app (three levels of groups; golden files and `expect:` side by side).
 
 Timestamps (e.g. `2026-10-19T12:34:56Z`) and UUIDs are replaced with `<datetime>` / `<uuid>` before comparison, without any setup.
 
@@ -567,8 +567,8 @@ With `casebook_golden_description = true` in the ini, golden files written by `-
 
 - Writing `files:` in `setup` (or in the case's state) makes the case run in a fresh temporary working directory: the files are placed there, and both commands and calls run in that directory. This holds even for an empty `files: {}`, which gives each case a clean directory (e.g. for a CLI that refuses a non-empty output directory). Without `files:` (and without fetching `files` in `observe:` / `expect:`), the case runs in the YAML's directory. The working directory's path in the output is replaced with `<tmp>`
 - The working directory is not the YAML's directory. Refer to scripts next to the YAML with `{casebook_dir}` (e.g. `command_prefix: [python, "{casebook_dir}/tool.py"]`). The YAML directory's path in the output is replaced with `{casebook_dir}`
-- Everything except `files` is passed to `pytest_casebook_setup`. If the hook returns a context manager, it is exited after observe (use it for cleanup)
-- Preparation is applied for every case. Nothing carries over from the previous case
+- Everything except `files` is passed to `pytest_casebook_setup`. If the hook returns a context manager, it is exited after the case has run and its values have been read (use it for cleanup)
+- The preparation is redone for every case, so nothing carries over from the previous case
 
 ### States (states)
 
@@ -655,7 +655,7 @@ The golden file contains `# status:` and, if the body is JSON, a formatted `----
 - **call / request**: the function (for request, the `pytest_casebook_request` hook) runs in a separate thread, and the case fails if it has not finished in time. Python cannot stop a thread, so **the function is not stopped**: it keeps running in the background until it returns. Its output after the timeout is not captured, and it does not keep pytest from exiting. To stop a hanging test for real, use [pytest-timeout](https://pypi.org/project/pytest-timeout/)
 - **command (`run_in_process`)**: up to the `pytest_casebook_run_command` hook (it can read `case.timeout`)
 
-Without `timeout:`, the function and the hook run in the test's own thread, as before. With it, they run in another thread, so objects that can only be used from the thread that created them (e.g. an `sqlite3` connection made in `pytest_casebook_setup`) cannot be used. Context variables (`contextvars`) set before the call are visible to the function (it receives a copy).
+Without `timeout:`, the function and the hook run in the test's own thread. With it, they run in another thread, so objects that can only be used from the thread that created them (e.g. an `sqlite3` connection made in `pytest_casebook_setup`) cannot be used. Context variables (`contextvars`) set before the call are visible to the function (it receives a copy).
 
 The current directory is shared by the whole process. A case with `setup.files` (even `files: {}`) runs in its own working directory, and that directory is left when the case ends. A function that keeps running after a timeout therefore sees another current directory: the original one, or the working directory of a later case. If it reads or writes files with relative paths, it can touch the wrong files (and break the `files` comparison of a later case). In a function that may time out, use absolute paths.
 
@@ -698,9 +698,9 @@ cases:
       - {name: "3000", description: Free shipping from 3000 yen, args: [3000], expect: {return: 0}}
 ```
 
-This expands into three cases named `shipping-0`, `shipping-2999` and `shipping-3000`. Every element needs a `name` (the case name becomes `<case name>-<element name>`) and usually has its own `description`, so each row of the HTML test specification sheet stays readable on its own.
+This expands into three cases named `shipping-0`, `shipping-2999` and `shipping-3000`. Every element needs a `name` (the case name becomes `<case name>-<element name>`). Give each element its own `description` too, so that each row of the HTML test specification sheet reads on its own.
 
-An element's keys replace the template's keys wholesale (there is no deep merge): an element's `expect:` replaces the whole template `expect:`. The merged result is validated like any other case. To share other parts of the YAML, anchors (`&` / `*` / `<<:`) remain an alternative.
+An element's keys replace the template's keys wholesale (there is no deep merge): an element's `expect:` replaces the whole template `expect:`. The merged result is validated like any other case. To share other parts of the YAML, anchors (`&` / `*` / `<<:`) also work.
 
 ### Environment variables (env)
 
@@ -803,7 +803,7 @@ case = next(c for c in doc.cases if c.name == "add_cli")
 print(pytest_casebook.run_case(doc, case, hooks=conftest), end="")  # the text ends with a newline
 ```
 
-`run_case()` runs one case (setup hook → action → observe → cleanup) and returns exactly the text that `--casebook-update` writes, with changing values already normalized — no comparison is made. `hooks` is any object or module whose functions are named `pytest_casebook_*`, such as an imported conftest module; the hooks get the same arguments as under pytest, except that `config` is None. Manual cases cannot be run and raise `pytest_casebook.CasebookRunError`, as do failures such as a command that is not found; an exception from a `call:` case or a non-zero exit code is not a failure and comes back inside the returned text.
+`run_case()` runs one case (setup hook → action → observe → cleanup) and returns exactly the text that `--casebook-update` writes. Values that change between runs are already replaced, and nothing is compared with a golden file. `hooks` is any object or module whose functions are named `pytest_casebook_*`, such as an imported conftest module; the hooks get the same arguments as under pytest, except that `config` is None. Manual cases cannot be run and raise `pytest_casebook.CasebookRunError`, as do failures such as a command that is not found; an exception from a `call:` case or a non-zero exit code is not a failure and comes back inside the returned text.
 
 ### Hooks and fixtures
 
@@ -865,7 +865,7 @@ pytest-casebook does not talk to AWS itself. Put inputs in with `pytest_casebook
 Things to know with moto (a mock of AWS):
 
 - moto's `mock_aws()` only works inside the pytest process. `call:` and `request:` (and `command:` with `run_in_process`) are mocked; a CLI run as a subprocess by `command:` is not. For that, start moto's server or LocalStack and pass `AWS_ENDPOINT_URL` with `env:`
-- DynamoDB returns numbers as `Decimal`; pytest-casebook turns them into numbers, so `price: 300` in the YAML matches as is
+- DynamoDB returns numbers as `Decimal`; pytest-casebook turns them into plain numbers (int / float), so `price: 300` in the YAML matches as is
 - DynamoDB scans and SQS receives have no fixed order. Sort in the hook, or use `$unordered` in `expect:`
 - SQS returns at most 10 messages per call. Receive until the queue is empty, and delete what you received (otherwise the messages come back in a later case after the visibility timeout)
 
