@@ -1257,11 +1257,13 @@ def _refresh_report_golden(request: pytest.FixtureRequest, doc: CasebookDoc, cas
     期待出力は、ここで読み直さないとレポートに出ない（または古いまま出る）。
     """
     config = request.config
-    if not config.getoption("--casebook-html"):
+    if not _html_enabled(config):
         return
     meta = dict(request.node.user_properties).get("casebook")
     if isinstance(meta, dict):
-        meta["golden_text"] = _golden_text(doc, case, *_html_golden_options(config), _texts(config))
+        # 集めるときと同じく、このファイルの言語（YAML の lang:。なければ ini）
+        texts = TEXTS[doc.lang]
+        meta["golden_text"] = _golden_text(doc, case, *_html_golden_options(config), texts)
 
 
 def _claim_golden(

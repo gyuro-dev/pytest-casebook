@@ -3,7 +3,8 @@ pytest-casebook: a pytest plugin that removes the need to maintain test specific
 sheets and automated tests separately.
 
 - Write cases in YAML as "preconditions -> action -> expected result". The action is one of
-  running a CLI, calling a Python function, or sending a request to an HTTP API
+  running a CLI, calling a Python function, or sending a request to an HTTP API. Checks that
+  cannot be automated can be written as steps (manual cases) and go in the same sheet
 - Cases can be classified by groups into any number of levels (e.g. category / subcategory / item),
   and `--casebook-html` outputs the results as a table in that hierarchy (a test specification
   sheet)
@@ -11,7 +12,8 @@ sheets and automated tests separately.
 pytest-casebook: 試験項目表と自動テストの二重管理をなくす pytest プラグイン。
 
 - YAML に「前提条件 → 操作 → 期待結果」の形でケースを書く。操作は CLI の実行・
-  Python 関数の呼び出し・HTTP の API へのリクエストのどれか
+  Python 関数の呼び出し・HTTP の API へのリクエストのどれか。自動化できない確認は、
+  手順を書いて（手動のケース）同じ表に入れられる
 - ケースはグループで大項目・中項目・小項目のように何階層でも分類でき、
   `--casebook-html` でその階層の表（試験項目表）として結果を出力できる
 """
