@@ -6,7 +6,7 @@ README に載せる HTML レポート（`--casebook-html`）の画像を作る�
 |---|---|
 | `casebook_demo.yaml` | ケース。失敗・スキップ・既知の不具合を、見せるためにわざと1件ずつ入れている |
 | `store.py` | 確かめる対象（CLI と Python の関数） |
-| `conftest.py` | CLI を同じプロセスで動かす hook と、在庫の状態を当てる hook |
+| `conftest.py` | CLI を同じプロセスで動かす hook と、状態に合わせて在庫を用意する hook |
 | `golden/` | 期待出力ファイル。`receipt_free_shipping.txt` は失敗させるため、正しい仕様（送料0円）を手で書いている |
 
 `docs/` は pytest の `testpaths` に入っていないので、ふだんの `uv run pytest` では集めません。

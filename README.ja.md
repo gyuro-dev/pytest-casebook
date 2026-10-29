@@ -8,7 +8,7 @@
 [English](README.md) | 日本語
 
 YAML に書いたテストケースを pytest で実行し、結果を、大項目・中項目・小項目で整理した**試験項目表**（HTML）として出力する pytest プラグインです。\
-Excel の試験項目表と自動テストを別々に管理して、内容がずれていく問題をなくします。
+試験項目表と自動テストを同じ YAML から作るので、Excel の表と自動テストを別々に直して内容がずれていく、ということがなくなります。
 
 ## できること
 
@@ -27,8 +27,8 @@ Excel の試験項目表と自動テストを別々に管理して、内容が�
 
 ![試験項目表の HTML レポート](docs/images/report-top.png)
 
-**[デモのレポート（実物）](https://gyuro-dev.github.io/pytest-casebook/)** も触れます。\
-スクショでは分からない、失敗の差分の展開や絞り込みを試してみてください。
+**[デモのレポート（実物）](https://gyuro-dev.github.io/pytest-casebook/)** で、実際に操作できます。\
+失敗した差分を開いたり、表を絞り込んだりしてみてください（画像では分からないところです）。
 
 > **レポートを日本語にする**: HTML レポートとメッセージ（比較の失敗、YAML の書き方の誤りなど）の既定は英語です。\
 > 日本語にするときは、`pyproject.toml` に一度だけ書きます（[ini の設定](#ini-の設定)）。
@@ -70,9 +70,9 @@ cases:
 
 ## 向いている場面
 
-Python のまま書けば、型の補完もデバッガも使えます。\
-単体のテストなら `@pytest.mark.parametrize` とスナップショットテスト（syrupy など）で十分です。\
-pytest-casebook が向いているのは、次のような場面です。
+テストを Python で書けば、型の補完もデバッガも使えます。\
+単体テストなら、`@pytest.mark.parametrize` とスナップショットテスト（syrupy など）で足ります。\
+pytest-casebook は、次のような場面に向いています。
 
 - テストの一覧を、エンジニア以外（QA・顧客・企画）にも見せたい。\
   試験項目表として提出したい
@@ -90,21 +90,21 @@ pip install pytest-casebook
 uv add --dev pytest-casebook
 ```
 
-Python 3.11 以上と pytest 8 以上で動きます。\
-インストールするだけで pytest に読み込まれ、設定は要りません。
+インストールすると pytest が自動で読み込むので、設定は要りません。
 
 Python 3.15 では、PyYAML に 3.15 用の wheel がまだないため、インストールのときに PyYAML がソースからビルドされます。\
 C コンパイラのない Windows で失敗するときは、環境変数 `PYYAML_FORCE_LIBYAML=0` を付けて入れてください（C 拡張を使わない PyYAML になります）。
 
 依存は pytest・PyYAML・pluggy（pytest にも含まれる）だけです。\
-HTTP の API を確かめるときも、HTTP のライブラリは増えません（リクエストは、FastAPI や Flask などフレームワークのテスト用クライアントで送ります）。
+HTTP の API を確かめるときも、HTTP のライブラリを追加で入れる必要はありません（リクエストは、FastAPI や Flask などフレームワークのテスト用クライアントで送ります）。
 
 ## はじめかた: 作るのは YAML 1つだけ
 
 CLI を実行して確かめるだけなら、作るのは YAML のファイル1つです。\
 conftest.py も Python のテストコードも要りません。\
 ここでは、名前を渡すとあいさつを表示する小さな CLI `hello.py` を確かめます。\
-自作の CLI の代わりで、写せば以下の手順がそのまま動きます。
+`hello.py` は自作の CLI の代わりです。\
+下のファイルをそのまま写せば、手順のとおりに動きます。
 
 ```text
 myproject/
@@ -134,7 +134,7 @@ title: hello コマンド
 command_prefix: [python, hello.py]  # どのケースでも先頭に付ける部分（確かめたいコマンド）
 
 cases:
-  - name: greet                         # ケース名: 日本語を含む文字・数字・_ - .（先頭は . と - 以外）
+  - name: greet                         # ケース名: 文字（日本語も可）・数字・_ - .（先頭に . と - は不可）
     description: 名前を渡すとあいさつする
     command: --name 佐藤
 
@@ -147,8 +147,8 @@ cases:
 ```
 
 各ケースは `python hello.py --name 佐藤` のように、`command_prefix` と `command` をつないで実行します。\
-実行するディレクトリは YAML のあるディレクトリ（ここでは `tests/`）なので、コマンドはそこから実行できる必要があります。\
-インストール済みのコマンド（`command_prefix: [mycli]`）か、ここのようにそのディレクトリからのパスで指したスクリプトです。
+コマンドは、YAML のあるディレクトリ（ここでは `tests/`）で実行します。\
+そのため `command_prefix` には、インストール済みのコマンド（`[mycli]` など）か、この例のように、そのディレクトリからのパスでスクリプトを書きます。
 
 **2. 期待出力ファイルを作る**
 
@@ -216,6 +216,7 @@ casebook_lang = "ja"
 
 - 大項目ごとの件数と結果
 - 確認が必要なケースの一覧（表の行へのリンク）
+- どのケースにも使われていない期待出力ファイル（残っているときだけ。[期待出力ファイル](#期待出力ファイル)を参照）
 - 階層（`levels`）の列を縦に結合した表。\
   ケース名・実行内容・確認内容・前提条件・期待結果・結果・時間を並べます。\
   失敗した行では差分を開いて見られます
@@ -226,11 +227,12 @@ casebook_lang = "ja"
 - 時間はケースの実行だけを数えます（session の fixture で環境を作る時間は含みません）
 
 ページの上部で、表を絞り込めます。\
-結果（「失敗」など）を押すと、その結果のケースだけを出します（複数押すと足し合わせ、「すべて」で元に戻ります）。\
+結果（「失敗」など）を押すと、その結果のケースだけを出します（複数押すと、どれかに当てはまるケースを出します。「すべて」で元に戻ります）。\
 入力欄に文字を入れると、グループ・ケース名・コマンド・確認内容・前提条件・期待結果にその文字を含むケースだけを出します（大文字と小文字は区別せず、空白で区切った語はすべて含むものに絞ります）。\
 縦に結合したグループの列は残った行に合わせて結合し直し、合うケースのないファイルは隠します。\
 ファイルごとの件数は、絞り込みによらず実行の全体を表します。\
-レポートは1つの HTML ファイルのままで、JavaScript が動かないときは今までどおり表の全体を出します。
+レポートは1つの HTML ファイルで、ほかのファイルを読みません。\
+JavaScript が動かない環境では、絞り込みの欄を出さずに、表の全体を出します。
 
 試験の前に「これから何を確かめるか」を提出するときは、`--collect-only` と一緒に使います。\
 ケースを実行せずに、結果の列が「未実施」の表を出します（前提条件と期待結果の列は、YAML から出ます。`result:` のない手動のケースは「手動」のまま）。
@@ -249,8 +251,8 @@ uv run pytest --collect-only --casebook-html=reports/plan.html
 
 ### 1回の実行で表を分ける (casebook_html_reports)
 
-試験項目表には、ふつう読む人が1人います（お客さん、開発チーム、英語で読むレビュアー、など）。\
-読む人ごとの YAML を別のファイルにしてあれば、ini の `casebook_html_reports` で、1回の実行から読む人ごとの表を出せます。\
+試験項目表は、ふつう決まった相手に向けて作ります（お客さん、開発チーム、英語で読むレビュアーなど）。\
+相手ごとに YAML のファイルを分けてあれば、ini の `casebook_html_reports` で、1回の実行から相手ごとの表を出せます。\
 1行が「出す HTML = 入れるケースファイルのパターン」で、パターンは `,` で区切ります。\
 どちらも pytest の rootdir からのパスで、パターンにはグロブ（`*`・`**`）が使えるので、ディレクトリごとに1枚の表にもできます。
 
@@ -263,13 +265,15 @@ casebook_html_reports = [
 ]
 ```
 
-- `--casebook-html` の全体の表は、今までどおりすべてのケースを入れて書きます。\
-  どの行にも合わないファイルも全体の表には必ず出るので、黙って消えることはありません。両方を一緒に使えます
+- `--casebook-html` で出す全体の表には、いつもすべてのケースが入ります。\
+  どの行のパターンにも合わないファイルも、全体の表には必ず出ます。\
+  2つは一緒に使えます
 - 表の見出しと結果の文言は、入ったケースファイルの `lang:` がそろっていればその言語になります（[YAML の全体](#yaml-の全体)を参照）。\
   両方の言語のファイルが混ざった表は、全体の表と同じく ini の `casebook_lang` で決まります
+- 表に入ったケースファイルが1つだけなら、ブラウザのタブの題名にそのファイルの `title:` を使います（ini に `casebook_html_title` を書いたときは、その題名）
 - 入るケースのない表（パターンの綴りの誤り、`-k` / `-m` で全部除いたとき）は書かず、実行の最後にそう知らせます
 - `--collect-only`・`casebook_html_golden`・`-k` / `-m` は、どの表にも同じように効きます
-- 追加の表を出さずに実行するとき（実環境に流す実行で上書きしたくないときなど）は、`-o casebook_html_reports=`（空）を付けます
+- 追加の表を出さずに実行するときは、`-o casebook_html_reports=`（空）を付けます（本番に近い環境で流すときに、いつもの表を上書きしたくない場合など）
 
 完成例は [21_reports](examples/21_reports) にあります（同じ CLI を日本語と英語で確かめ、言語ごとに1枚の表にします）。
 
@@ -290,7 +294,7 @@ pytest-html は要りません（一緒に使うこともできます）。
 ほとんどのことは YAML だけでできます。\
 DB を使うときや、テスト用の環境を渡したいときだけ、conftest.py に hook（決まった名前の関数）を足します。
 
-表の各行には、そのまま動くサンプルを [examples](examples) に用意しています（サンプルの列が「—」の行には、サンプルはありません）。\
+表のほとんどの行に、そのまま動くサンプルを [examples](examples) に用意しています（サンプルの列が「—」の行にはありません）。\
 サンプルのディレクトリをコピーして、名前を書き換えるところから始められます。
 
 | やりたいこと | 書く場所 | 書くもの | サンプル |
@@ -318,8 +322,6 @@ DB を使うときや、テスト用の環境を渡したいときだけ、conft
 | 手動の確認（目視・帳票など）も同じ表に載せたい | YAML | `manual:` と `result:`（[書き方](#手動のケース-manual)） | [18_manual](examples/18_manual) |
 | 試験の前に、これから確かめる項目の表を出したい | コマンドライン | `pytest --collect-only --casebook-html=plan.html`（結果は「未実施」。[やり方](#html-レポート)） | — |
 | HTML レポートを出しながら、カバレッジも測りたい | pyproject.toml ＋ コマンドライン | pytest-cov と、coverage.py の `patch = ["subprocess"]`（[やり方](#カバレッジを測る)） | — |
-
-[examples/shop](examples/shop) は、コマンド・関数・例外・ファイル・DB・状態を、1つの小さなお店のアプリで組み合わせた例です（3階層のグループ。期待出力ファイルと `expect:` を並べています）。
 
 日時（`2026-10-19T12:34:56Z` など）と UUID は、何もしなくても `<datetime>` / `<uuid>` に置き換えてから比べます。
 
@@ -634,8 +636,8 @@ apple x 3 = 324 円
 - `--casebook-update` は、結果が変わったときだけファイルを書き直します。\
   手で書いた期待出力ファイルは、結果が同じなら書き方を変えません
 - ケースを消したり名前を変えたりしたのに期待出力ファイルだけが残っていると、`unused_golden_files` という確認が失敗します（サブディレクトリの中も見ます）。
-  - この確認は、pytest-casebook が YAML 1 本につき 1 件のテストとして足します。\
-    そのため pytest の collected は、ファイルごとにケースの数より 1 件多くなります
+  - この確認は、pytest-casebook が YAML 1本につき1件のテストとして足します。\
+    そのため pytest の collected は、ファイルごとにケースの数より1件多くなります
   - HTML レポートの行にはしませんが、失敗したときは、そのファイルの節に使われていない期待出力ファイルを出します
   - 調べるのは `.txt` と、`golden:` で使った拡張子（`.json` など）のファイルです。\
     置き場所に置いたメモなど、ほかのファイルは知らせません
@@ -674,7 +676,7 @@ ini に `casebook_golden_description = true` を書くと、`--casebook-update` 
   YAML の隣のスクリプトなどは `{casebook_dir}` を付けて指します（例: `command_prefix: [python, "{casebook_dir}/tool.py"]`）。\
   出力に出る YAML のディレクトリのパスは `{casebook_dir}` に置き換えます
 - `files` 以外の内容は `pytest_casebook_setup` に渡します。\
-  hook がコンテキストマネージャを返すと、observe のあとにそれを抜けます（後片付けに使えます）
+  hook がコンテキストマネージャを返したときは、ケースを実行して値を取り出し終えたあとに、それを閉じます（後片付けに使えます）
 - 準備はケースごとにやり直すので、前のケースの影響は残りません
 
 ### 状態 (states)
@@ -779,7 +781,7 @@ def pytest_casebook_request(request, env):
   止まったテストを本当に打ち切りたいときは、[pytest-timeout](https://pypi.org/project/pytest-timeout/) を使ってください
 - **command（`run_in_process`）**: `pytest_casebook_run_command` hook に任せます（`case.timeout` で秒数を読めます）
 
-`timeout:` がなければ、関数と hook は今までどおりテストと同じスレッドで動きます。\
+`timeout:` がなければ、関数と hook はテストと同じスレッドで動きます。\
 書いたときは別のスレッドで動くので、作ったスレッドでしか使えないもの（`pytest_casebook_setup` で作った `sqlite3` の接続など）は使えません。\
 呼ぶ前に設定したコンテキスト変数（`contextvars`）は、関数からも読めます（複製を渡します）。
 
@@ -812,7 +814,7 @@ cases:
 
 - HTML レポートでは、ケース名の下に手順を、期待結果の列に `expect:` を出します
 - `result:` がなければ、pytest ではスキップになり、レポートには**手動**と出ます。\
-  手で確かめる残りを見るのに使えます
+  まだ手で確かめていないケースを見つけるのに使えます
 - `result: passed` / `failed` / `skipped` と書くと、pytest でもレポートでも、成功・失敗・スキップになります。\
   結果を書き込めば、`pytest --casebook-html=…` を1回実行するだけで、自動と手動の結果がそろった試験項目表になります
 - `setup:` と `state:` は書けますが、前提条件として表に出すだけです（`pytest_casebook_setup` hook は呼びません）。\
@@ -836,12 +838,12 @@ cases:
 
 `shipping-0`・`shipping-2999`・`shipping-3000` という3件のケースになります。\
 各要素には `name` が必須で、ケース名は `<ケース名>-<要素名>` になります。\
-たいてい要素ごとに `description` も書くので、試験項目表（HTML）の各行はそれだけで読めます。
+要素ごとに `description` も書いておくと、試験項目表（HTML）の各行がそれだけで読めます。
 
 要素のキーはテンプレートのキーをまるごと置き換えます（深い併合はしません）。\
 要素に `expect:` を書くと、テンプレートの `expect:` 全体が置き換わります。\
 重ねた結果は、ふつうのケースと同じように検証します。\
-YAML のほかの部分を共有したいときは、アンカー（`&` / `*` / `<<:`）も今までどおり使えます。
+YAML のほかの部分を共有したいときは、アンカー（`&` / `*` / `<<:`）も使えます。
 
 ### 環境変数 (env)
 
@@ -863,7 +865,8 @@ cases:
 
 - ケースを実行する間、pytest のプロセスの環境変数（`os.environ`）に上書きで重ね、終わったら元に戻します。\
   どの種類のケースにも効きます。\
-  別プロセスで実行する command はその環境を受け継ぎ（ここで `PATH` を変えると、プログラムもその `PATH` で探します）、`pytest_casebook_run_command` で同じプロセスで動かす CLI からも、`call:` の関数や `request:` の hook からも見えます
+  別プロセスで実行する command は、その環境を受け継ぎます（ここで `PATH` を変えると、プログラムもその `PATH` で探します）。\
+  `pytest_casebook_run_command` で同じプロセスで動かす CLI、`call:` の関数、`request:` の hook からも見えます
 - 値の中の `{casebook_dir}` は、`command:` と同じく YAML のディレクトリになります（例: `env: {DATA_DIR: "{casebook_dir}/data"}`）
 - 内側が外側を、変数ごとに上書きします（ファイル → グループ → ケース）。\
   値は文字列か数値で書きます。\
@@ -895,7 +898,7 @@ cases:
 
 `skip:` は、いつでもスキップします。\
 環境に足りないもの（ディスクイメージ・テスト用のデータ・サービス）があるときだけスキップしたいときは、YAML だけでは書けません。\
-`marks:` に書けるのはマークの名前だけなので、`skipif(条件)` は書けないためです。\
+`marks:` にはマークの名前しか書けず、`skipif(条件)` は書けないからです。\
 ケースにマークを付け、スキップは conftest.py で足します。
 
 ```yaml
@@ -962,7 +965,8 @@ print(pytest_casebook.run_case(doc, case, hooks=conftest), end="")  # 文字列�
 ```
 
 `run_case()` はケースを1件実行し（setup hook → 操作 → observe → 後片付け）、`--casebook-update` が書くものと同じ文字列を返します。\
-実行ごとに変わる値は正規化済みで、比較はしません。\
+実行ごとに変わる値は、置き換えたあとの形で入ります。\
+期待出力ファイルとは比べません。\
 `hooks` は、`pytest_casebook_*` という名前の関数を持つオブジェクトやモジュールで、import した conftest モジュールをそのまま渡せます。\
 hook には pytest で動かすときと同じ引数が渡りますが、`config` だけは None です。\
 手動のケースは実行できず、`pytest_casebook.CasebookRunError` を出します。\
@@ -995,7 +999,7 @@ pytest の外で `run_case()` から実行したときは `config` が None な�
 ### 複数の環境に流す
 
 同じケースを、別々の環境（ローカルとステージング、モックと本物の AWS など）に流せます。\
-専用の機能はなく、pytest と pytest-casebook の今の仕組みを組み合わせます。
+専用の機能はなく、pytest と pytest-casebook にある仕組みを組み合わせます。
 
 | やりたいこと | やり方 |
 |---|---|
@@ -1028,7 +1032,7 @@ uv run pytest --target staging -o casebook_golden_dir=golden_staging -m "not loc
 
 ### AWS (moto と実 AWS)
 
-pytest-casebook は、自分では AWS に繋ぎません。\
+pytest-casebook は、自分では AWS につなぎません。\
 入力は `pytest_casebook_setup` で入れ、結果は `pytest_casebook_observe` で取り出します（どちらも boto3 で書きます。[19_aws](examples/19_aws)）。
 
 - `setup: {s3: {バケット/キー: 中身}, dynamodb: {テーブル: [行]}}` で、S3 にファイルを置き、DynamoDB に行を入れる
@@ -1039,8 +1043,8 @@ moto（AWS のモック）での注意です。
 - moto の `mock_aws()` は、pytest のプロセスの中でしか効きません。\
   `call:` と `request:`（と `run_in_process` を使う `command:`）はモックになりますが、`command:` で別プロセスとして動かす CLI はモックになりません。\
   そのときは、moto のサーバーか LocalStack を立て、`env:` で `AWS_ENDPOINT_URL` を渡します
-- DynamoDB は数を `Decimal` で返しますが、pytest-casebook が数にします。\
-  YAML の `price: 300` がそのまま一致します
+- DynamoDB は数を `Decimal` で返しますが、pytest-casebook がふつうの数（int / float）に直します。\
+  そのため、YAML の `price: 300` がそのまま一致します
 - DynamoDB の scan と SQS の受信は、順番が決まっていません。\
   hook で並べるか、`expect:` に `$unordered` を使います
 - SQS は1回で 10 件までしか受け取れません。\
@@ -1052,9 +1056,9 @@ moto（AWS のモック）での注意です。
 - **本物のデータを消さない**。\
   サンプルの後片付けは、行・メッセージ・ファイルをすべて消します。\
   テスト専用のアカウントを使うか、実行ごとに違う名前（`casebook-1a2b3c4d-orders` など）でリソースを作り、最後に丸ごと消してください。\
-  確かめる側のコードは、テーブル・キュー・バケットの名前を設定や環境変数から受け取る作りにしておくと、テストの名前を渡せます
+  確かめるアプリを、テーブル・キュー・バケットの名前を設定や環境変数から受け取る作りにしておくと、テスト用の名前を渡せます
 - **`command:` がそのまま使える**。\
-  別プロセスからも同じ AWS に繋がります。\
+  別プロセスからも同じ AWS につながります。\
   `AWS_PROFILE` やリソースの名前は `env:` で渡します
 - **非同期の処理は待つ**。\
   S3 に置くと Lambda が動いて DynamoDB に書くような作りでは、実行の直後にはまだ結果がありません。\
@@ -1156,7 +1160,7 @@ pytest がテストの場所として受け取るので、JUnit XML（xunit1）�
 | `casebook_golden_description` | `false` | `--casebook-update`・`--casebook-update-headers` が書く期待出力ファイルに、ケースの `description:` を `# description:` の行として書く |
 | `casebook_builtin_patterns` | `true` | 日時と UUID を `<datetime>` / `<uuid>` に置き換える |
 | `casebook_levels` | `Category` `Subcategory` `Item`（`casebook_lang` が `ja` なら `大項目` `中項目` `小項目`） | 階層の呼び名 |
-| `casebook_html_title` | `Test Specification`（`casebook_lang` が `ja` なら `試験項目表`） | HTML レポートの題名。書かないとき、ケースファイルが 1 つだけの表では、ブラウザのタブの題名にそのファイルの `title:` を使う（例: `お店 - 試験項目表`） |
+| `casebook_html_title` | `Test Specification`（`casebook_lang` が `ja` なら `試験項目表`） | HTML レポートの題名。書かないとき、ケースファイルが1つだけの表では、ブラウザのタブの題名にそのファイルの `title:` を使う（例: `お店 - 試験項目表`） |
 | `casebook_html_golden` | `summary` | HTML レポートに期待出力ファイルの内容をどれだけ出すか。`off`（出さない）・`summary`（行数を打ち切る）・`full`（全部） |
 | `casebook_html_golden_lines` | `40` | `casebook_html_golden` が `summary` のときに出す行数 |
 | `casebook_html_reports` | （なし） | 1回の実行で追加で書く HTML の表。1行が `出す HTML = 入れるケースファイルのパターン`（`,` 区切り。グロブ可。rootdir からのパス）。[1回の実行で表を分ける](#1回の実行で表を分ける-casebook_html_reports)を参照 |

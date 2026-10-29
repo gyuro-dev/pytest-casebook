@@ -1,12 +1,12 @@
 # 実起動の試験
 
-PostgreSQL と API サーバーを Docker で本当に起動し、pytest-casebook のケース（HTTP・CLI・関数 ＋ 実際の DB）を実行します。インメモリの DB やテスト用クライアントではなく、本物のサーバーとネットワークで動くことを確かめるためのものです。
+PostgreSQL と API サーバーを Docker で実際に起動し、pytest-casebook のケース（HTTP・CLI・関数 ＋ 実際の DB）を実行します。インメモリの DB やテスト用クライアントではなく、本物のサーバーとネットワークで動くことを確かめるためのものです。
 
 | 動かすもの | 中身 |
 |---|---|
 | `db` | PostgreSQL 17.6（`db/init.sql` で todos テーブルを作る） |
 | `api` | FastAPI + uvicorn の TODO API（`api/`。依存の版は `api/requirements.txt` で固定） |
-| CLI | `todo_cli.py`（試験を動かす側で、別プロセスとして起動し、PostgreSQL に直接読み書きする） |
+| CLI | `todo_cli.py`（コンテナではなく、pytest を動かす側で別プロセスとして起動する。PostgreSQL に直接読み書きする） |
 
 | ケースのファイル | 確かめること |
 |---|---|
