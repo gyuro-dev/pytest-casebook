@@ -633,7 +633,10 @@ apple x 3 = 324 円
 - 書いていない見出しは、空であることを期待します（stderr の見出しがなければ、stderr は空でなければなりません）
 - `--casebook-update` は、結果が変わったときだけファイルを書き直します。\
   手で書いた期待出力ファイルは、結果が同じなら書き方を変えません
-- ケースを消したのに期待出力ファイルだけが残っていると、`golden_orphans` という確認が失敗します（サブディレクトリの中も見ます）。
+- ケースを消したり名前を変えたりしたのに期待出力ファイルだけが残っていると、`unused_golden_files` という確認が失敗します（サブディレクトリの中も見ます）。
+  - この確認は、pytest-casebook が YAML 1 本につき 1 件のテストとして足します。\
+    そのため pytest の collected は、ファイルごとにケースの数より 1 件多くなります
+  - HTML レポートの行にはしませんが、失敗したときは、そのファイルの節に使われていない期待出力ファイルを出します
   - 調べるのは `.txt` と、`golden:` で使った拡張子（`.json` など）のファイルです。\
     置き場所に置いたメモなど、ほかのファイルは知らせません
   - 同じディレクトリのほかのケースファイルが使う期待出力は「使われている」と数えるので、複数の YAML で `golden_dir:` を共有しても、消し忘れと誤って報告しません
@@ -1153,7 +1156,7 @@ pytest がテストの場所として受け取るので、JUnit XML（xunit1）�
 | `casebook_golden_description` | `false` | `--casebook-update`・`--casebook-update-headers` が書く期待出力ファイルに、ケースの `description:` を `# description:` の行として書く |
 | `casebook_builtin_patterns` | `true` | 日時と UUID を `<datetime>` / `<uuid>` に置き換える |
 | `casebook_levels` | `Category` `Subcategory` `Item`（`casebook_lang` が `ja` なら `大項目` `中項目` `小項目`） | 階層の呼び名 |
-| `casebook_html_title` | `Test Specification`（`casebook_lang` が `ja` なら `試験項目表`） | HTML レポートの題名 |
+| `casebook_html_title` | `Test Specification`（`casebook_lang` が `ja` なら `試験項目表`） | HTML レポートの題名。書かないとき、ケースファイルが 1 つだけの表では、ブラウザのタブの題名にそのファイルの `title:` を使う（例: `お店 - 試験項目表`） |
 | `casebook_html_golden` | `summary` | HTML レポートに期待出力ファイルの内容をどれだけ出すか。`off`（出さない）・`summary`（行数を打ち切る）・`full`（全部） |
 | `casebook_html_golden_lines` | `40` | `casebook_html_golden` が `summary` のときに出す行数 |
 | `casebook_html_reports` | （なし） | 1回の実行で追加で書く HTML の表。1行が `出す HTML = 入れるケースファイルのパターン`（`,` 区切り。グロブ可。rootdir からのパス）。[1回の実行で表を分ける](#1回の実行で表を分ける-casebook_html_reports)を参照 |

@@ -35,6 +35,10 @@ TEXTS: dict[str, dict[str, Any]] = {
         "count": "件数",
         "result": "結果",
         "problems": "確認が必要なケース",
+        "unused_golden": "どのケースにも使われていない期待出力ファイル",
+        "unused_golden_hint": (
+            "ケースを消した・名前を変えたときの残りなら、ファイルを消してください"
+        ),
         "columns": ("ケース", "確認内容", "前提条件", "期待結果", "結果", "時間"),
         "details": "失敗の詳細",
         "golden_contents": "期待出力（{name}）",
@@ -84,6 +88,8 @@ TEXTS: dict[str, dict[str, Any]] = {
         "count": "Cases",
         "result": "Results",
         "problems": "Cases to check",
+        "unused_golden": "Golden files not used by any case",
+        "unused_golden_hint": "If they are left over from a removed or renamed case, delete them",
         "columns": (
             "Case",
             "What is checked",
@@ -158,7 +164,10 @@ MESSAGES: dict[str, dict[str, str]] = {
             "[{name}] 期待出力 {label} はケース {other} も使っていて、結果が違います。"
             "golden: でファイルを分けてください。"
         ),
-        "golden_orphans": "{yaml} にない期待出力が {golden_dir} にあります: {orphans}",
+        "unused_golden_files": (
+            "{yaml} のどのケースにも使われていない期待出力ファイルが {golden_dir} にあります: "
+            "{files}。ケースを消した・名前を変えたときの残りなら消してください"
+        ),
         "no_files": "（ファイルなし）",
         "manual_not_run": "手動のケース（result: がまだありません）",
         "manual_failed": "[{name}] 手動で確かめた結果が failed です",
@@ -196,7 +205,10 @@ MESSAGES: dict[str, dict[str, str]] = {
             "[{name}] The golden file {label} is also used by case {other} with a different "
             "result. Give the cases separate files with golden:."
         ),
-        "golden_orphans": "golden files not used by {yaml} are left in {golden_dir}: {orphans}",
+        "unused_golden_files": (
+            "golden files in {golden_dir} not used by any case of {yaml}: {files}. "
+            "Delete them if they are left over from a removed or renamed case"
+        ),
         "no_files": "(no files)",
         "manual_not_run": "manual case (no result: yet)",
         "manual_failed": "[{name}] the manual check result is failed",

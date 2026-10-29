@@ -75,7 +75,7 @@ def test_lang_in_yaml_applies_to_run_errors_and_manual_cases(project: pytest.Pyt
         """,
     )
     result = project.runpytest("-rs")
-    result.assert_outcomes(passed=1, failed=2, skipped=1)  # passed は golden_orphans
+    result.assert_outcomes(passed=1, failed=2, skipped=1)  # passed は unused_golden_files
     out = result.stdout.str()
     assert "command not found: no-such-command-xyz (it ran in " in out
     assert "manual case (no result: yet)" in out
@@ -150,7 +150,7 @@ def test_report_frame_follows_the_files_when_they_agree(project: pytest.Pytester
     result.stdout.fnmatch_lines(["*Test specification (HTML):*report.html*"])
     page = report.read_text(encoding="utf-8")
     assert '<html lang="en">' in page
-    assert "<title>Test Specification</title>" in page
+    assert "<h1>Test Specification</h1>" in page
     assert "<th>Preconditions</th>" in page
 
 
@@ -322,3 +322,62 @@ def test_html_reports_under_xdist(project: pytest.Pytester) -> None:
     en = (project.path / "reports" / "en.html").read_text(encoding="utf-8")
     assert "2 cases in total" in en
     assert '<span class="badge passed">Passed 2</span>' in en
+
+
+# =============================================================================
+# ブラウザのタブの題名と、使われていない期待出力
+# =============================================================================
+
+
+def test_page_title_names_the_only_case_file(project: pytest.Pytester) -> None:
+    """
+    表に入ったケースファイルが 1 つだけなら、タブの題名（<title>）をそのファイルの title: にする。
+
+    見出し（<h1>）は今までどおり。ファイルが 2 つ以上か、ini の casebook_html_title があれば、
+    タブの題名も今までどおり。
+    """
+    _write(
+        project,
+        "casebook_a",
+        "title: 注文の画面\ncases:\n  - {name: a, call: calc:add, args: [1, 2]}\n",
+    )
+    _write(project, "casebook_b", "cases:\n  - {name: b, call: calc:add, args: [2, 2]}\n")
+    _ini(project, "reports/a.html = casebook_a.yaml", "reports/all.html = casebook_*.yaml")
+    project.runpytest("--casebook-update")
+    page = (project.path / "reports" / "a.html").read_text(encoding="utf-8")
+    assert "<title>注文の画面 - 試験項目表</title>" in page
+    assert "<h1>試験項目表</h1>" in page
+    page = (project.path / "reports" / "all.html").read_text(encoding="utf-8")
+    assert "<title>試験項目表</title>" in page
+
+    project.runpytest("-o", "casebook_html_title=受け入れ試験")
+    page = (project.path / "reports" / "a.html").read_text(encoding="utf-8")
+    assert "<title>受け入れ試験</title>" in page
+
+
+def test_unused_golden_files_are_shown_in_the_report(project: pytest.Pytester) -> None:
+    """
+    unused_golden_files のテストは表の行にしないが、失敗したら、そのファイルの節に
+    使われていない期待出力ファイルを出す（表だけを見ても、残っていることが分かるように）。
+    """
+    _write(project, "casebook_a", "cases:\n  - {name: a, call: calc:add, args: [1, 2]}\n")
+    project.runpytest("--casebook-update")
+    report = project.path / "report.html"
+    project.runpytest(f"--casebook-html={report}").assert_outcomes(passed=2)
+    page = report.read_text(encoding="utf-8")
+    assert "どのケースにも使われていない期待出力ファイル" not in page
+    assert "unused_golden_files" not in page
+
+    (project.path / "golden" / "casebook_a" / "old.txt").write_text("3\n", encoding="utf-8")
+    result = project.runpytest(f"--casebook-html={report}")
+    result.assert_outcomes(passed=1, failed=1)
+    result.stdout.fnmatch_lines(["*FAILED casebook_a.yaml::unused_golden_files*"])
+    page = report.read_text(encoding="utf-8")
+    assert "<h3>どのケースにも使われていない期待出力ファイル</h3>" in page
+    assert "<li>old.txt</li>" in page
+    assert "1 件" in page  # 件数には入れない
+
+    project.runpytest("-o", "casebook_lang=en", f"--casebook-html={report}")
+    page = report.read_text(encoding="utf-8")
+    assert "<h3>Golden files not used by any case</h3>" in page
+    assert "使われていない" not in page

@@ -58,7 +58,7 @@ def test_missing_files_in_english(project: pytest.Pytester) -> None:
     assert not JAPANESE.search(result.stdout.str())
 
 
-def test_golden_orphans_in_english(project: pytest.Pytester) -> None:
+def test_unused_golden_files_in_english(project: pytest.Pytester) -> None:
     write_casebook(project, "cases:\n  - {name: add, call: calc:add, args: [1, 2]}\n")
     project.runpytest("--casebook-update")
     (project.path / "golden" / "casebook_calc" / "removed.txt").write_text("3\n", encoding="utf-8")
@@ -66,7 +66,7 @@ def test_golden_orphans_in_english(project: pytest.Pytester) -> None:
     result = project.runpytest("-o", "casebook_lang=en")
     result.assert_outcomes(passed=1, failed=1)
     result.stdout.fnmatch_lines(
-        ["*golden files not used by casebook_calc.yaml are left in *: [[]'removed.txt'[]]"]
+        ["*golden files in * not used by any case of casebook_calc.yaml: [[]'removed.txt'[]]*"]
     )
 
 
@@ -85,13 +85,13 @@ def test_english_is_the_default(pytester: pytest.Pytester) -> None:
     )
     report = pytester.path / "report.html"
     result = pytester.runpytest(f"--casebook-html={report}")
-    result.assert_outcomes(failed=1, passed=1)  # passed は golden_orphans
+    result.assert_outcomes(failed=1, passed=1)  # passed は unused_golden_files
     result.stdout.fnmatch_lines(
         ["*Differs from the expected result:", "*return: expected 4 / actual 3"]
     )
     page = report.read_text(encoding="utf-8")
     assert '<html lang="en">' in page
-    assert "<title>Test Specification</title>" in page
+    assert "<h1>Test Specification</h1>" in page
     assert "<th class='level'>Category</th>" in page
 
 

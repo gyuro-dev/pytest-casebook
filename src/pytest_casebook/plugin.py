@@ -48,8 +48,8 @@ from .model import (
     DEFAULT_STATE,
     EXPECT_KEYS_BY_KIND,
     FILES_TARGET,
-    ORPHANS_TEST_NAME,
     TEXT_EXPECT_KEYS,
+    UNUSED_GOLDEN_TEST_NAME,
     Case,
     CasebookDoc,
     CasebookError,
@@ -338,7 +338,7 @@ def pytest_collect_file(file_path: Path, parent: pytest.Collector) -> pytest.Col
 class CasebookItem(pytest.Function):
     """1件のケース（または期待出力の消し忘れの確認）のテスト。"""
 
-    # ケースを書いた YAML の行（0 始まり。golden_orphans には行がない）
+    # ケースを書いた YAML の行（0 始まり。unused_golden_files には行がない）
     casebook_line: int | None = None
 
     def reportinfo(self) -> tuple[Path, int, str]:
@@ -387,7 +387,7 @@ class CasebookFile(pytest.File):
             yield item
         if doc.check_orphans:
             yield CasebookItem.from_parent(
-                self, name=ORPHANS_TEST_NAME, callobj=_make_orphan_test(doc)
+                self, name=UNUSED_GOLDEN_TEST_NAME, callobj=_make_orphan_test(doc, file_label)
             )
 
 
@@ -618,22 +618,26 @@ def _find_orphans(doc: CasebookDoc, others: list[CasebookDoc]) -> list[str]:
     return sorted(orphans)
 
 
-def _make_orphan_test(doc: CasebookDoc) -> Callable[..., None]:
-    def golden_orphans(request: pytest.FixtureRequest) -> None:
+def _make_orphan_test(doc: CasebookDoc, file_label: str) -> Callable[..., None]:
+    def unused_golden_files(request: pytest.FixtureRequest) -> None:
         """ケースを消したのに期待出力だけが残っていないことを確認する。"""
         if not doc.golden_dir.is_dir():
             return
         orphans = _find_orphans(doc, _sibling_docs(request.config, doc))
+        # HTML レポートは、このファイルの節に残っている期待出力を出す（このテストは表の行にしない）
+        request.node.user_properties.append(
+            ("casebook_unused_golden", {"file": file_label, "files": orphans})
+        )
         if orphans:
-            message = MESSAGES[doc.lang]["golden_orphans"]
+            message = MESSAGES[doc.lang]["unused_golden_files"]
             # ほかのメッセージと同じく、YAML のディレクトリからの相対パスで示す
             golden_dir = Path(os.path.relpath(doc.golden_dir, doc.path.parent)).as_posix()
             pytest.fail(
-                message.format(yaml=doc.path.name, golden_dir=golden_dir, orphans=orphans),
+                message.format(yaml=doc.path.name, golden_dir=golden_dir, files=orphans),
                 pytrace=False,
             )
 
-    return golden_orphans
+    return unused_golden_files
 
 
 # =============================================================================

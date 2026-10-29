@@ -57,7 +57,7 @@
     },
     "check_orphans": {
       "type": "boolean",
-      "description": "Fail if golden files without a case are left over / ケースがない期待出力が残っていたら失敗にする"
+      "description": "Fail (the unused_golden_files test) if golden files not used by any case are left over / どのケースにも使われていない期待出力ファイルが残っていたら失敗にする（unused_golden_files のテスト）"
     },
     "normalize": {
       "type": "array",

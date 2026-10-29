@@ -131,7 +131,7 @@ def test_env_applies_to_call_and_request_cases(project: pytest.Pytester) -> None
         """,
     )
     assert "CASEBOOK_T" not in os.environ
-    project.runpytest().assert_outcomes(passed=5)  # 5 つ目は golden_orphans
+    project.runpytest().assert_outcomes(passed=5)  # 5 つ目は unused_golden_files
     assert "CASEBOOK_T" not in os.environ
 
 
