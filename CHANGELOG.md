@@ -7,6 +7,12 @@ incompatible change raises the minor version).
 
 ## [Unreleased]
 
+### Changed
+
+- In the HTML report, the expected-result column always reads "Golden file (…)", whether or
+  not the golden contents are shown in the fold below. It no longer becomes a "See the golden
+  file below (…)" link, which pointed at the row right under it and meant nothing on paper.
+
 ## [0.9.1] - 2026-10-29
 
 ### Changed
