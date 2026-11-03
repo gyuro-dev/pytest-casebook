@@ -116,6 +116,20 @@ def ini_lines(value: IniValue) -> list[str]:
     return [line.strip() for line in value.split("\n") if line.strip()]
 
 
+def ini_encoding(name: str, value: IniValue) -> str:
+    """
+    文字コードの名前の値（base64 のように文字コードでないものも誤りにする）。
+
+    :raises ValueError: 文字コードの名前でないとき
+    """
+    text = str(value)
+    try:
+        "".encode(text)
+    except (LookupError, ValueError) as e:
+        raise ValueError(f"{name} must be a text encoding: {text!r} ({e})") from None
+    return text
+
+
 def ini_bool(name: str, value: IniValue) -> bool:
     """
     bool の値（pytest と同じく true / false・yes / no・on / off・1 / 0 を、大文字小文字を問わず）。

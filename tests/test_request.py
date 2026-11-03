@@ -8,6 +8,7 @@ FastAPI / Flask で実際に動くことは、入っているときだけ確か�
 from __future__ import annotations
 
 import textwrap
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -267,8 +268,8 @@ class _Res:
         self.text = '{"ok": true}'
         self.headers = {"Content-Type": "application/json"}
 
-    def get_data(self, as_text: bool) -> str:
-        return self.text
+    def get_data(self) -> bytes:
+        return self.text.encode()
 
 
 class _FakeHttpxClient:
@@ -370,3 +371,57 @@ def test_header_override_is_case_insensitive(tmp_path: Any) -> None:
     (case,) = pytest_casebook.load(path).cases
     assert case.request is not None
     assert case.request.headers == {"authorization": "Bearer mine", "X-Keep": "a"}
+
+
+def test_query_in_both_the_path_and_query_is_an_error(tmp_path: Path) -> None:
+    """両方に書くと URL が /a?x=1?y=2 になり、クライアントによっては片方が捨てられる。"""
+    path = tmp_path / "casebook_x.yaml"
+    path.write_text(
+        'cases:\n  - {name: a, request: {path: "/a?x=1", query: {y: 2}}, expect: {status: 200}}\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(pytest_casebook.CasebookError, match="/a\\?x=1"):
+        pytest_casebook.load(path)
+
+
+@pytest.mark.parametrize(
+    "request_text",
+    ['"GET /a?x=1"', '{path: "/a?x=1"}', '{path: "/a?x=1", query: {}}'],
+)
+def test_query_in_the_path_alone_is_allowed(tmp_path: Path, request_text: str) -> None:
+    path = tmp_path / "casebook_x.yaml"
+    path.write_text(
+        f"cases:\n  - {{name: a, request: {request_text}, expect: {{status: 200}}}}\n",
+        encoding="utf-8",
+    )
+    case = pytest_casebook.load(path).cases[0]
+    assert case.request is not None
+    assert case.request.url == "/a?x=1"
+
+
+def test_send_with_werkzeug_client_replaces_bytes_that_are_not_utf8() -> None:
+    """画像などの本文でも落ちない（httpx の .text と同じく置換文字にする）。"""
+
+    class BinaryRes(_Res):
+        def get_data(self) -> bytes:
+            return b"ok\xff"
+
+    class Client(_FakeWerkzeugClient):
+        def open(self, path: str, **kwargs: Any) -> _Res:
+            return BinaryRes()
+
+    res = send_with_werkzeug_client(Client(), HttpRequest("GET", "/b"))
+    assert res.body == "ok\ufffd"
+
+
+def test_flask_binary_response() -> None:
+    flask = pytest.importorskip("flask")
+    app = flask.Flask("binary")
+
+    @app.get("/b")
+    def binary() -> Any:
+        return flask.Response(b"\xff\xfe", mimetype="application/octet-stream")
+
+    res = send_with_werkzeug_client(app.test_client(), HttpRequest("GET", "/b"))
+    assert res.status == 200
+    assert res.body == "\ufffd\ufffd"

@@ -6,6 +6,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -111,3 +112,24 @@ def test_bad_module_name_is_reported(spec: str) -> None:
     """空のモジュール名（ValueError）・相対 import（TypeError）も import の誤りにする。"""
     with pytest.raises(runner.CasebookRunError, match="cannot import module"):
         runner.import_callable(spec)
+
+
+@pytest.mark.parametrize(("value", "code"), [(True, 1), (False, 0)])
+def test_run_in_process_exit_with_a_bool(value: bool, code: int) -> None:
+    """sys.exit(not ok) の真偽値は、別プロセスと同じ数の終了コードにする。"""
+
+    def main(argv: list[str]) -> None:
+        sys.exit(value)
+
+    exit_code = runner.run_in_process(main, []).exit_code
+    assert type(exit_code) is int
+    assert exit_code == code
+
+
+def test_kill_tree_falls_back_when_taskkill_cannot_start(monkeypatch: pytest.MonkeyPatch) -> None:
+    """taskkill が使えなくても、例外にせず、子プロセスだけは止める。"""
+    monkeypatch.setattr(runner.sys, "platform", "win32")
+    monkeypatch.setattr(runner.subprocess, "run", mock.Mock(side_effect=FileNotFoundError))
+    proc = mock.Mock(pid=1)
+    runner._kill_tree(proc)
+    proc.kill.assert_called_once_with()

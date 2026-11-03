@@ -16,7 +16,9 @@ BUILTIN_PATTERNS: list[tuple[re.Pattern[str], str]] = [
 ]
 
 
-_CONTROL_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+_CONTROL_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f\u2028\u2029\ud800-\udfff]")
+# 改行として扱うもの（str.splitlines は \x0c や \u2028 でも行を分けるので使わない）
+_NEWLINE_RE = re.compile(r"\r\n|\r|\n")
 
 
 def show_controls(text: str) -> str:
@@ -24,8 +26,15 @@ def show_controls(text: str) -> str:
     制御文字（ANSI の色の ESC など）を `\\x1b` の形にして見えるようにする（改行とタブは残す）。
 
     失敗の差分に生のまま出すと、端末が色として解釈して、どこが違うのか見えないため。
+    `\\u2028` のような行の区切りと、UTF-8 にできないサロゲート文字も `\\u2028` の形にする
+    （サロゲート文字は pytest-xdist の結果の受け渡しや、レポートの書き込みで例外になる）。
     """
-    return _CONTROL_RE.sub(lambda m: f"\\x{ord(m.group()):02x}", text)
+
+    def escaped(match: re.Match[str]) -> str:
+        code = ord(match.group())
+        return f"\\x{code:02x}" if code < 0x100 else f"\\u{code:04x}"
+
+    return _CONTROL_RE.sub(escaped, text)
 
 
 def compile_patterns(
@@ -43,14 +52,16 @@ class Normalizer:
     1. `placeholders`（実際の値 -> 置き換え後）を、長い値から順に置き換える
        （短い ID が長い ID の一部を先に置き換えてしまわないように）
     2. `patterns`（正規表現 -> 置き換え後）を順に当てる
-    3. 改行を LF にそろえ、行末の空白を消す（末尾の改行もなくなる）
+    3. 改行（CRLF・CR・LF）を LF にそろえ、行末の空白を消す（末尾の改行もなくなる）。
+       `\\x0c` や `\\u2028` は改行にしない（出力の違いを見逃さないように）
     """
 
     placeholders: list[tuple[str, str]] = field(default_factory=list)
     patterns: list[tuple[re.Pattern[str], str]] = field(default_factory=list)
 
     def __call__(self, text: str) -> str:
-        return "\n".join(line.rstrip() for line in self.replace(text).splitlines())
+        lines = _NEWLINE_RE.sub("\n", self.replace(text)).removesuffix("\n").split("\n")
+        return "\n".join(line.rstrip() for line in lines)
 
     def replace(self, text: str) -> str:
         """1 と 2 だけを当てる（改行や空白はそのまま。値の中の文字列に使う）。"""

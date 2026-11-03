@@ -64,14 +64,14 @@ import yaml
 
 from .expect import find_matcher_errors
 from .http import HttpRequest
-from .inifile import IniValue, ini_bool, ini_lines, read_ini
+from .inifile import IniValue, ini_bool, ini_encoding, ini_lines, read_ini
 from .messages import TEXTS, error, language
 
 # ケース名は期待出力のファイル名になるため、ファイル名に使える文字だけにする。
 # 先頭の . と - は認めない（.foo.txt は隠しファイルになり、消し忘れの確認からも漏れる）。
 # JSON Schema の pattern はこれより緩い（空白と / \ : [ ] を弾くだけ）。エディタの JS の
 # 正規表現では \w が ASCII だけで日本語の名前に赤線が出るため、文字の種類はここでだけ確かめる
-NAME_RE = re.compile(r"^\w[\w.\-]*$")
+NAME_RE = re.compile(r"\w[\w.\-]*")
 
 _TOP_KEYS = {
     "request_defaults",
@@ -374,7 +374,8 @@ def one_line(text: Any) -> str:
 
 
 def _check_keys(obj: dict[str, Any], allowed: set[str], where: str) -> None:
-    unknown = sorted(set(obj) - allowed)
+    # キーは文字列とは限らない（YAML では on: が True、1: が 1 になる）
+    unknown = sorted({str(key) for key in obj} - allowed)
     if unknown:
         raise CasebookError(error("unknown_keys", where=where, keys=", ".join(unknown)))
 
@@ -446,8 +447,12 @@ def _normalize_rules(value: Any, where: str) -> list[tuple[re.Pattern[str], str]
             raise CasebookError(error("normalize_item", where=loc))
         _check_keys(rule, {"pattern", "replace"}, loc)
         pattern = _str(rule.get("pattern"), loc, "pattern", required=True)
+        replace = _str(rule.get("replace"), loc, "replace")
         try:
-            rules.append((re.compile(pattern), _str(rule.get("replace"), loc, "replace")))
+            compiled = re.compile(pattern)
+            # 置き換えの書き間違い（\\1 に当たるグループがないなど）も、実行の前に知らせる
+            compiled.sub(replace, "")
+            rules.append((compiled, replace))
         except re.error as e:
             raise CasebookError(error("bad_regex", where=loc, error=e)) from None
     return rules
@@ -573,7 +578,7 @@ def load(
     if ini:
         options = {
             "lang": lang,
-            "encoding": str(values.get("casebook_encoding", "utf-8")),
+            "encoding": ini_encoding("casebook_encoding", values.get("casebook_encoding", "utf-8")),
             "builtin_patterns": ini_bool(
                 "casebook_builtin_patterns", values.get("casebook_builtin_patterns", "true")
             ),
@@ -862,7 +867,8 @@ def _parse_case(item: dict[str, Any], doc: CasebookDoc, inherited: _Inherited, l
     """
     _check_keys(item, _CASE_KEYS, loc)
     name = _str(item.get("name"), loc, "name", required=True)
-    if not NAME_RE.match(name):
+    # match と $ では、末尾の改行（name: | で書いたときなど）を通してしまう
+    if not NAME_RE.fullmatch(name):
         raise CasebookError(error("bad_name", where=loc, name=repr(name)))
     loc = f"{loc}{error('in_case', name=name)}"
 
@@ -1182,12 +1188,21 @@ def _golden_name(item: dict[str, Any], loc: str) -> str | None:
 
 def _is_inside(name: str) -> bool:
     """
-    基準のディレクトリの中を指す相対パスか（絶対パス・ドライブ名・.. を含まない）。
+    基準のディレクトリの中のファイルを指す相対パスか（絶対パス・ドライブ名・.. を含まず、
+    制御文字がなく、`.` や `sub/` のようにディレクトリを指すものでない）。
 
     setup.files のファイル名と golden: に使い、ディレクトリの外に書かないようにする。
     """
-    p = PurePosixPath(name.replace("\\", "/"))
-    return bool(name.strip()) and not p.is_absolute() and ":" not in name and ".." not in p.parts
+    posix = name.replace("\\", "/")
+    p = PurePosixPath(posix)
+    return (
+        bool(name.strip())
+        and not p.is_absolute()
+        and ":" not in name
+        and ".." not in p.parts
+        and posix.rsplit("/", 1)[-1] not in ("", ".")
+        and not any(ord(c) < 0x20 for c in name)
+    )
 
 
 def _check_text_expect(value: Any, loc: str, key: str) -> None:
@@ -1296,6 +1311,9 @@ def _parse_request(value: Any, default_headers: dict[str, str], loc: str) -> Htt
         query = {}
     if not (isinstance(query, dict) and all(isinstance(k, str) for k in query)):
         raise CasebookError(error("query_mapping", where=loc))
+    # 両方に書くと /a?x=1?y=2 になり、クライアントによっては片方が黙って捨てられる
+    if query and "?" in path:
+        raise CasebookError(error("request_query_twice", where=loc, path=repr(path)))
     if "json" in value and "body" in value:
         raise CasebookError(error("json_and_body", where=loc))
     own_headers = _str_mapping(value.get("headers"), loc, "request.headers")

@@ -128,9 +128,14 @@ def test_golden_round_trip(
     # 比べるヘッダー（exit_code / status）は値ごと戻り、説明のヘッダーは比べる部分に入らない
     assert content.results == ({result[0]: str(result[1])} if result else {})
     # 本文は、末尾の空白を除いて元に戻る（ファイルの末尾は改行 1 つにそろえる）。
-    # 既定の見出しの空の本文は「書いていない」のと同じなので、戻らなくてよい
+    # 既定の見出しの空の本文は「書いていない」のと同じなので、戻らなくてよい。
+    # サロゲート文字は UTF-8 で書けないので、\\ud83d という文字になって戻る。
+    # 比べるのは ascii() の表記（失敗の説明に生のまま入ると、pytest-xdist が結果を送れない）
     for title, body in sections.items():
-        assert content.sections.get(title, "").rstrip() == body.rstrip(), title
+        written = body.encode("utf-8", "backslashreplace").decode("utf-8")
+        assert ascii(content.sections.get(title, "").rstrip()) == ascii(written.rstrip()), title
+    # どの本文でも、UTF-8 のファイルに書ける
+    text.encode("utf-8")
     assert set(content.sections) <= set(sections)
 
 

@@ -14,7 +14,9 @@ from pathlib import Path
 import pytest
 from helpers import PY, golden, write_casebook
 
-from pytest_casebook.golden import parse_golden
+from pytest_casebook.golden import parse_golden, read_golden, render, write_golden
+from pytest_casebook.model import Case
+from pytest_casebook.normalize import Normalizer, show_controls
 from pytest_casebook.serialize import to_jsonable
 
 
@@ -748,3 +750,397 @@ def test_diff_shows_control_characters(project: pytest.Pytester) -> None:
     result.assert_outcomes(passed=1, failed=1)
     result.stdout.fnmatch_lines([r"-\x1b[[]31mok\x1b[[]0m", r"+\x1b[[]32mok\x1b[[]0m"])
     assert "\x1b[" not in result.stdout.str()
+
+
+# =============================================================================
+# 比べるヘッダーと正規化
+# =============================================================================
+
+
+def test_digit_pattern_does_not_hide_a_changed_exit_code(project: pytest.Pytester) -> None:
+    """数字を置き換える normalize があっても、終了コードの違いは失敗になる。"""
+    project.makepyfile(prog="import sys; sys.exit(int(sys.argv[1]))")
+    text = rf"""
+    normalize:
+      - {{pattern: '\d+', replace: '<n>'}}
+    command_prefix: [{PY}, prog.py]
+    cases:
+      - {{name: run, command: "CODE"}}
+    """
+    write_casebook(project, text.replace("CODE", "0"))
+    project.runpytest("--casebook-update").assert_outcomes(passed=2)
+    assert "# exit_code: 0\n" in golden(project, "run")
+    write_casebook(project, text.replace("CODE", "3"))
+    project.runpytest().assert_outcomes(failed=1, passed=1)
+
+
+def test_digit_pattern_does_not_hide_a_changed_status(project: pytest.Pytester) -> None:
+    """status も同じ。新しい期待出力の注記（status 500）も作れる。"""
+    project.makeconftest(
+        """
+        from pytest_casebook import HttpResponse
+
+        def pytest_casebook_request(request):
+            return HttpResponse(int(request.path[1:]), "ok")
+        """
+    )
+    text = r"""
+    normalize:
+      - {pattern: '\d+', replace: '<n>'}
+    cases:
+      - {name: get, request: "GET /CODE", golden: get.txt}
+    """
+    write_casebook(project, text.replace("CODE", "500"))
+    result = project.runpytest("--casebook-update")
+    result.assert_outcomes(passed=2)
+    result.stdout.fnmatch_lines(["*get.txt (new, status 500)"])
+    assert "# status: 500\n" in golden(project, "get")
+    write_casebook(project, text.replace("CODE", "200"))
+    project.runpytest().assert_outcomes(failed=1, passed=1)
+
+
+# =============================================================================
+# 期待出力の文字コード
+# =============================================================================
+
+
+def _handwritten_golden(project: pytest.Pytester, data: bytes) -> None:
+    path = project.path / "golden" / "casebook_calc" / "add.txt"
+    path.parent.mkdir(parents=True)
+    path.write_bytes(data)
+
+
+ADD_CASE = """
+cases:
+  - {name: add, call: "calc:add", args: [1, 2]}
+"""
+
+
+def test_read_golden_drops_the_bom(tmp_path: Path) -> None:
+    path = tmp_path / "golden.txt"
+    path.write_bytes("\ufeff# exit_code: 0\n----- stdout -----\nout\n".encode())
+    content = parse_golden(read_golden(path), "stdout")
+    assert content.results == {"exit_code": "0"}
+    assert content.sections == {"stdout": "out"}
+
+
+def test_golden_with_a_bom_is_compared(project: pytest.Pytester) -> None:
+    """BOM つきの期待出力でも、1行目のヘッダーを比べる（終了コードの違いは失敗になる）。"""
+    _handwritten_golden(project, b"\xef\xbb\xbf# exit_code: 3\n----- stdout -----\n")
+    write_casebook(project, f"cases:\n  - {{name: add, command: {PY} -c pass}}\n")
+    project.runpytest().assert_outcomes(failed=1, passed=1)
+
+
+def test_golden_not_in_utf8_fails_with_a_message(project: pytest.Pytester) -> None:
+    _handwritten_golden(project, "合計".encode("cp932"))
+    write_casebook(project, ADD_CASE)
+    result = project.runpytest()
+    result.assert_outcomes(failed=1, passed=1)
+    result.stdout.fnmatch_lines(["*golden/casebook_calc/add.txt を UTF-8 で読めません*"])
+    assert "Traceback" not in result.stdout.str()
+
+
+def test_update_rewrites_a_golden_not_in_utf8(project: pytest.Pytester) -> None:
+    _handwritten_golden(project, "合計".encode("cp932"))
+    write_casebook(project, ADD_CASE)
+    project.runpytest("--casebook-update").assert_outcomes(passed=2)
+    assert "----- return -----\n3\n" in golden(project, "add")
+    project.runpytest().assert_outcomes(passed=2)
+
+
+# =============================================================================
+# to_jsonable がどんな値でも例外を上げないこと
+# =============================================================================
+
+
+class _Model:
+    def model_dump(self) -> dict[str, int]:
+        return {"x": 1}
+
+
+class _BrokenModel:
+    def model_dump(self) -> dict[str, int]:
+        raise RuntimeError("cannot dump")
+
+    def __repr__(self) -> str:
+        return "<_BrokenModel>"
+
+
+class _BrokenRepr:
+    def __repr__(self) -> str:
+        raise RuntimeError("cannot repr")
+
+
+def test_to_jsonable_uses_model_dump_of_an_instance() -> None:
+    assert to_jsonable(_Model()) == {"x": 1}
+
+
+def test_to_jsonable_of_a_model_class_is_its_repr() -> None:
+    assert to_jsonable(_Model) == repr(_Model)
+
+
+def test_to_jsonable_falls_back_when_model_dump_fails() -> None:
+    assert to_jsonable(_BrokenModel()) == "<_BrokenModel>"
+
+
+def test_to_jsonable_of_a_broken_repr_is_the_type_name() -> None:
+    assert to_jsonable([_BrokenRepr()]) == ["<_BrokenRepr>"]
+
+
+class _EndlessModel:
+    """MagicMock のように、model_dump が model_dump を持つものを何度でも返す。"""
+
+    calls = 0
+
+    def model_dump(self) -> _EndlessModel:
+        type(self).calls += 1
+        return _EndlessModel()
+
+    def __repr__(self) -> str:
+        return "<_EndlessModel>"
+
+
+def test_to_jsonable_does_not_follow_model_dump_endlessly() -> None:
+    """
+    MagicMock のような値は、model_dump をたどらない。
+
+    本物の MagicMock では確かめない。たどるようになると、pytest が失敗を表示するときに
+    メモリを何 GB も使い、PC が止まりかねないため（名前が1段ごとに長くなる）。
+    """
+    assert to_jsonable(_EndlessModel()) == "<_EndlessModel>"
+    assert _EndlessModel.calls == 1
+
+
+def test_to_jsonable_of_a_value_containing_itself_is_its_repr() -> None:
+    value: dict[str, object] = {}
+    value["self"] = value
+    assert to_jsonable(value) == repr(value)
+
+
+def test_function_returning_a_value_containing_itself(project: pytest.Pytester) -> None:
+    project.makepyfile(m="def f():\n    d = {}\n    d['self'] = d\n    return d\n")
+    write_casebook(project, 'cases:\n  - {name: f, call: "m:f"}\n')
+    project.runpytest("--casebook-update").assert_outcomes(passed=2)
+    assert "{'self': {...}}" in golden(project, "f")
+
+
+# =============================================================================
+# 失敗のメッセージの制御文字
+# =============================================================================
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        pytest.param(r"return '\x1b[31mred'", id="return"),
+        pytest.param(r"raise ValueError('\x1b[31mred')", id="raises"),
+        pytest.param(r"print('\x1b[31mred')", id="stdout"),
+    ],
+)
+def test_control_characters_are_shown_in_expect_failures(
+    project: pytest.Pytester, body: str
+) -> None:
+    """テストするプログラムの出力の ESC で、端末の表示を変えられないようにする。"""
+    project.makepyfile(m=f"def f():\n    {body}\n")
+    write_casebook(
+        project,
+        'cases:\n  - {name: f, call: "m:f", expect: {stdout: x, return: y}}\n',
+    )
+    result = project.runpytest()
+    result.assert_outcomes(failed=1, passed=1)
+    output = result.stdout.str()
+    assert "\x1b" not in output
+    assert "[31mred" in output
+
+
+def test_show_controls_covers_c1_controls() -> None:
+    """\\x9b は端末によっては ESC [ と同じに扱われる。"""
+    assert show_controls("a\x9bb\tc\n") == "a\\x9bb\tc\n"
+
+
+def test_control_characters_are_shown_in_run_errors(project: pytest.Pytester) -> None:
+    project.makepyfile(m=r"raise ImportError('\x1b[31mred')")
+    write_casebook(project, 'cases:\n  - {name: f, call: "m:f", expect: {return: 1}}\n')
+    result = project.runpytest()
+    result.assert_outcomes(failed=1, passed=1)
+    assert "\x1b[31m" not in result.stdout.str()
+
+
+# =============================================================================
+# サロゲート文字（UTF-8 にできない文字）
+# =============================================================================
+
+SURROGATE_CASE = 'cases:\n  - {name: a, call: "m:f"}\n'
+
+
+def test_render_writes_a_surrogate_as_text() -> None:
+    data = render(Case(name="a"), [], [("return", 'x\ud83d"')]).encode("utf-8")
+    assert b"x\\ud83d" in data
+
+
+def test_write_golden_keeps_the_file_when_text_cannot_be_encoded(tmp_path: Path) -> None:
+    """ファイルを開く前に変換するので、失敗しても今の内容は消えない。"""
+    path = tmp_path / "a.txt"
+    path.write_text("old\n", encoding="utf-8")
+    with pytest.raises(UnicodeEncodeError):
+        write_golden(path, "x\ud83d\n")
+    assert path.read_text(encoding="utf-8") == "old\n"
+
+
+def test_update_with_a_surrogate_makes_a_golden_that_matches(project: pytest.Pytester) -> None:
+    project.makepyfile(m=r"def f(): return 'x\ud83d'")
+    write_casebook(project, SURROGATE_CASE)
+    project.runpytest("--casebook-update").assert_outcomes(passed=2)
+    assert '"x\\ud83d"' in golden(project, "a")
+    project.runpytest().assert_outcomes(passed=2)
+
+
+def test_update_with_a_surrogate_rewrites_an_existing_golden(project: pytest.Pytester) -> None:
+    """以前は既存の期待出力の中身が消えて、0 バイトになっていた。"""
+    project.makepyfile(m=r"def f(): return 'x\ud83d'")
+    write_casebook(project, SURROGATE_CASE)
+    write_golden_file(project, "a", '"old"\n')
+    project.runpytest("--casebook-update").assert_outcomes(passed=2)
+    assert '"x\\ud83d"' in golden(project, "a")
+    assert '"old"' not in golden(project, "a")
+
+
+def test_surrogate_in_a_json_response(project: pytest.Pytester) -> None:
+    """JSON の応答の切れた絵文字。期待出力では JSON の書き方のまま読める。"""
+    project.makeconftest(
+        r"""
+        from pytest_casebook import HttpResponse
+
+        def pytest_casebook_request(request):
+            return HttpResponse(200, '{"name": "\\ud83d"}')
+        """
+    )
+    write_casebook(project, 'cases:\n  - {name: a, request: "GET /x"}\n')
+    project.runpytest("--casebook-update").assert_outcomes(passed=2)
+    assert '"name": "\\ud83d"' in golden(project, "a")
+    project.runpytest().assert_outcomes(passed=2)
+
+
+def test_html_survives_a_surrogate_in_a_failure(project: pytest.Pytester) -> None:
+    """以前は HTML が 0 バイトになり、ほかのケースの結果も失っていた。"""
+    project.makepyfile(m=r"def f(): return 'x\ud83d'")
+    write_casebook(
+        project,
+        """
+        cases:
+          - {name: bad, call: "m:f", expect: {return: y}}
+          - {name: fine, call: "calc:add", args: [1, 2], expect: {return: 3}}
+        """,
+    )
+    report = project.path / "report.html"
+    project.runpytest(f"--casebook-html={report}").assert_outcomes(failed=1, passed=2)
+    text = report.read_text(encoding="utf-8")
+    assert "fine" in text
+    assert "\\ud83d" in text
+
+
+def test_html_survives_a_surrogate_in_an_exception_from_a_hook(project: pytest.Pytester) -> None:
+    """casebook の外の例外（hook など）は show_controls を通らないので、書くときに置き換える。"""
+    project.makeconftest(
+        r"""
+        def pytest_casebook_setup():
+            raise ValueError("x\ud83d")
+        """
+    )
+    write_casebook(project, 'cases:\n  - {name: bad, call: "calc:add", args: [1, 2]}\n')
+    report = project.path / "report.html"
+    project.runpytest(f"--casebook-html={report}")
+    assert "\\ud83d" in report.read_text(encoding="utf-8")
+
+
+def test_surrogate_in_a_failure_under_xdist(project: pytest.Pytester) -> None:
+    """失敗のメッセージをワーカーからまとめ役へ送れる。"""
+    pytest.importorskip("xdist")
+    project.makepyfile(m=r"def f(): return 'x\ud83d'")
+    write_casebook(project, 'cases:\n  - {name: bad, call: "m:f", expect: {return: y}}\n')
+    project.runpytest("-n", "2").assert_outcomes(failed=1, passed=1)
+
+
+# =============================================================================
+# 改行として扱う文字
+# =============================================================================
+
+SEPARATORS = {
+    "ff": "\x0c",
+    "vt": "\x0b",
+    "fs": "\x1c",
+    "nel": "\x85",
+    "ls": "\u2028",
+    "ps": "\u2029",
+}
+
+SEPARATOR_PROGRAM = r"""
+import sys
+sep = {"nl": "\n", "ff": "\x0c", "vt": "\x0b", "fs": "\x1c", "nel": "\x85", "ls": "\u2028",
+       "ps": "\u2029"}[sys.argv[1]]
+sys.stdout.buffer.write(("page1" + sep + "page2\n").encode("utf-8"))
+"""
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("", ""),
+        ("\n", ""),
+        ("a", "a"),
+        ("a\n", "a"),
+        ("a\n\n", "a\n"),
+        ("a\r\nb\rc\n", "a\nb\nc"),
+        ("a  \nb\t\n", "a\nb"),
+    ],
+)
+def test_normalizer_line_endings(text: str, expected: str) -> None:
+    assert Normalizer()(text) == expected
+
+
+@pytest.mark.parametrize("sep", SEPARATORS.values(), ids=SEPARATORS.keys())
+def test_normalizer_keeps_separators_that_are_not_newlines(sep: str) -> None:
+    assert Normalizer()(f"a{sep}b") == f"a{sep}b"
+
+
+def _separator_case(sep: str) -> str:
+    return f"cases:\n  - {{name: a, command: [{PY}, prog.py, {sep}]}}\n"
+
+
+@pytest.mark.parametrize("sep", SEPARATORS, ids=str)
+def test_golden_notices_a_separator_changed_to_a_newline(
+    project: pytest.Pytester, sep: str
+) -> None:
+    """以前は \\x0c で作った期待出力が、本当の改行の出力とも一致していた。"""
+    project.makepyfile(prog=SEPARATOR_PROGRAM)
+    write_casebook(project, _separator_case(sep))
+    project.runpytest("--casebook-update").assert_outcomes(passed=2)
+    assert f"page1{SEPARATORS[sep]}page2\n" in golden(project, "a")
+    project.runpytest().assert_outcomes(passed=2)
+    write_casebook(project, _separator_case("nl"))
+    project.runpytest().assert_outcomes(failed=1, passed=1)
+
+
+def test_golden_diff_shows_the_separator(project: pytest.Pytester) -> None:
+    project.makepyfile(prog=SEPARATOR_PROGRAM)
+    write_casebook(project, _separator_case("ls"))
+    write_golden_file(project, "a", "page1\npage2\n")
+    result = project.runpytest()
+    result.assert_outcomes(failed=1, passed=1)
+    result.stdout.fnmatch_lines([r"+page1\u2028page2"])
+
+
+def test_expect_notices_a_separator_that_is_not_a_newline(project: pytest.Pytester) -> None:
+    project.makepyfile(prog=SEPARATOR_PROGRAM)
+    write_casebook(
+        project,
+        f"cases:\n  - name: a\n    command: [{PY}, prog.py, ff]\n"
+        '    expect: {stdout: "page1\\npage2"}\n',
+    )
+    project.runpytest().assert_outcomes(failed=1, passed=1)
+
+
+def test_show_controls_of_separators_and_surrogates() -> None:
+    # ascii() で比べる（失敗の説明にサロゲート文字が生のまま入ると、pytest-xdist が結果を送れない）
+    shown = show_controls("a\u2028b\u2029c\ud83d")
+    assert ascii(shown) == ascii("a\\u2028b\\u2029c\\ud83d")

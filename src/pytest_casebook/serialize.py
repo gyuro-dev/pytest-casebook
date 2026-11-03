@@ -21,8 +21,27 @@ def to_jsonable(value: Any) -> Any:
     - Enum は `クラス名.メンバー名`、日時は ISO 形式、パスは `/` 区切りにする
     - Decimal は数にする（DynamoDB の数は Decimal で返るため。整数なら int、そうでなければ float）
     - `model_dump()`（pydantic など）を持つものはその結果を使う
-    - bytes とそれ以外は repr() にする
+    - bytes とそれ以外は repr() にする（`model_dump()` が使えないもの、自分を含む値も）
+
+    ケースの結果を読める形にするためのものなので、どんな値でも例外を上げない。
     """
+    try:
+        return _to_jsonable(value)
+    except RecursionError:
+        return _safe_repr(value)
+
+
+def _safe_repr(value: Any) -> str:
+    """repr() にする（`__repr__` が例外を上げたり、深すぎたりするときは型名だけにする）。"""
+    try:
+        return repr(value)
+    # 利用する側のクラスの __repr__ は、どんな例外を上げるか分からない
+    except Exception:  # noqa: BLE001
+        return f"<{type(value).__name__}>"
+
+
+def _to_jsonable(value: Any) -> Any:
+    """to_jsonable の本体。"""
     if value is None or isinstance(value, bool | int | float | str):
         return value
     if isinstance(value, decimal.Decimal):
@@ -36,14 +55,14 @@ def to_jsonable(value: Any) -> Any:
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return {
             "__type__": type(value).__name__,
-            **{f.name: to_jsonable(getattr(value, f.name)) for f in dataclasses.fields(value)},
+            **{f.name: _to_jsonable(getattr(value, f.name)) for f in dataclasses.fields(value)},
         }
     if isinstance(value, dict):
-        return {str(k): to_jsonable(v) for k, v in value.items()}
+        return {str(k): _to_jsonable(v) for k, v in value.items()}
     if isinstance(value, list | tuple):
-        return [to_jsonable(v) for v in value]
+        return [_to_jsonable(v) for v in value]
     if isinstance(value, set | frozenset):
-        items = [to_jsonable(v) for v in value]
+        items = [_to_jsonable(v) for v in value]
         return sorted(items, key=lambda v: json.dumps(v, ensure_ascii=False, sort_keys=True))
     if isinstance(value, datetime.date | datetime.time):
         return value.isoformat()
@@ -51,10 +70,18 @@ def to_jsonable(value: Any) -> Any:
         return value.as_posix()
     if isinstance(value, bytes):
         return repr(value)
+    # クラス自身（インスタンスではない）の model_dump は、呼べない
     model_dump = getattr(value, "model_dump", None)
-    if callable(model_dump):
-        return to_jsonable(model_dump())
-    return repr(value)
+    if callable(model_dump) and not isinstance(value, type):
+        try:
+            dumped = model_dump()
+        # 利用する側のクラスの model_dump は、どんな例外を上げるか分からない
+        except Exception:  # noqa: BLE001
+            return _safe_repr(value)
+        # 結果もまた model_dump を持つなら、モデルではない（MagicMock は何度でも返す）
+        if not callable(getattr(dumped, "model_dump", None)):
+            return _to_jsonable(dumped)
+    return _safe_repr(value)
 
 
 def serialize(value: Any) -> str:

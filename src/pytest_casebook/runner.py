@@ -131,9 +131,10 @@ def _kill_tree(proc: subprocess.Popen[str]) -> None:
     """
     if sys.platform == "win32":
         # /T で子孫も止める（taskkill は Windows に標準である）
-        subprocess.run(
-            ["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, check=False
-        )
+        with contextlib.suppress(OSError):
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, check=False
+            )
     else:
         with contextlib.suppress(ProcessLookupError):
             os.killpg(proc.pid, signal.SIGKILL)
@@ -257,7 +258,8 @@ def run_in_process(
             # sys.exit("メッセージ") と同じく、メッセージを stderr に出して終了コード 1 にする
             print(code, file=sys.stderr)
             code = 1
-    return CommandResult(code or 0, out.getvalue(), err.getvalue())
+    # int() は sys.exit(True) の True を 1 にする（別プロセスの終了コードと同じ）
+    return CommandResult(int(code or 0), out.getvalue(), err.getvalue())
 
 
 def import_callable(spec: str) -> Callable[..., Any]:

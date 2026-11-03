@@ -413,3 +413,94 @@ def test_expect_values_get_the_same_replacements_as_the_output(project: pytest.P
         """,
     )
     project.runpytest().assert_outcomes(passed=6)
+
+
+def test_expect_text_ignores_trailing_spaces_like_the_output(project: pytest.Pytester) -> None:
+    """実際の出力の行末の空白は消えるので、そのまま書いた期待値も同じにする（複数行も）。"""
+    project.makepyfile(prog="print('value ')\nprint('next  ')\n")
+    write_casebook(
+        project,
+        rf"""
+        cases:
+          - name: same_text
+            command: [{sys.executable}, prog.py]
+            expect: {{stdout: "value \nnext  \n"}}
+        """,
+    )
+    project.runpytest().assert_outcomes(passed=2)
+
+
+def test_expect_contains_keeps_its_trailing_space(project: pytest.Pytester) -> None:
+    """{contains} の空白は語の区切りなので消さない（"foo " は "foobar" に合わない）。"""
+    project.makepyfile(prog="print('foobar')\n")
+    write_casebook(
+        project,
+        rf"""
+        cases:
+          - name: no_match
+            command: [{sys.executable}, prog.py]
+            expect: {{stdout: {{contains: "foo "}}}}
+        """,
+    )
+    project.runpytest().assert_outcomes(failed=1, passed=1)
+
+
+DATES_MODULE = """
+import datetime
+
+
+def date():
+    return datetime.date(2024, 1, 15)
+
+
+def dates():
+    return [{"at": datetime.date(2024, 1, 15), "n": 1}, {"at": datetime.date(2024, 1, 16), "n": 2}]
+
+
+def when():
+    return datetime.datetime(2024, 1, 15, 10, 0, 0)
+
+
+def one():
+    return 1
+
+
+def keyed():
+    return {1: "a", 2: {3: "b"}}
+"""
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        pytest.param('{name: a, call: "dates:date", expect: {return: 2024-01-15}}', id="date"),
+        pytest.param(
+            '{name: a, call: "dates:when", expect: {return: 2024-01-15 10:00:00}}', id="datetime"
+        ),
+        pytest.param(
+            '{name: a, call: "dates:dates", expect: {return: {$includes: [{at: 2024-01-16}]}}}',
+            id="in_a_matcher",
+        ),
+        pytest.param(
+            '{name: a, call: "dates:keyed", expect: {return: {1: a, 2: {3: b}}}}', id="number_keys"
+        ),
+    ],
+)
+def test_expect_values_read_by_yaml_as_non_json(project: pytest.Pytester, case: str) -> None:
+    """YAML が日付や数値のキーとして読んだ期待値も、実際の値と同じ形にして比べる。"""
+    project.makepyfile(dates=DATES_MODULE)
+    write_casebook(project, f"cases:\n  - {case}\n")
+    project.runpytest().assert_outcomes(passed=2)
+
+
+def test_expect_date_mismatch_is_a_readable_failure(project: pytest.Pytester) -> None:
+    """違っていたときも、JSON にできずに落ちるのではなく、ふつうの失敗になる。"""
+    project.makepyfile(dates=DATES_MODULE)
+    write_casebook(
+        project,
+        'cases:\n  - {name: a, call: "dates:one", expect: {return: 2024-01-15}}\n',
+    )
+    result = project.runpytest()
+    result.assert_outcomes(failed=1, passed=1)
+    result.stdout.fnmatch_lines(['*return*"2024-01-15"*1*'])
+    assert "TypeError" not in result.stdout.str()
