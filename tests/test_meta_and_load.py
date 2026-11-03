@@ -312,3 +312,97 @@ def test_string_command_is_split_when_loading(tmp_path: Path) -> None:
     assert doc.cases[0].command_argv == ("add", "red apple", "--n=2")
     assert doc.cases[1].command_argv == ("add", "red apple")
     assert doc.cases[1].command == "add 'red apple'"
+
+
+# =============================================================================
+# load() が書き方の誤りを CasebookError で知らせること
+# =============================================================================
+
+
+def _load_text(tmp_path: Path, text: str) -> pytest_casebook.CasebookDoc:
+    path = tmp_path / "casebook_x.yaml"
+    path.write_text(textwrap.dedent(text), encoding="utf-8")
+    return pytest_casebook.load(path)
+
+
+@pytest.mark.parametrize(
+    ("keys", "shown"),
+    [
+        pytest.param("on: x", "True", id="bool"),
+        pytest.param("1: x", "1", id="int"),
+        pytest.param("1: x, foo: y", "1, foo", id="mixed"),
+    ],
+)
+def test_keys_that_are_not_strings(tmp_path: Path, keys: str, shown: str) -> None:
+    """YAML が文字列以外として読むキー（on: は True）も、知らないキーとして知らせる。"""
+    with pytest.raises(pytest_casebook.CasebookError, match=shown):
+        _load_text(tmp_path, f'cases:\n  - {{name: a, call: "m:f", {keys}}}\n')
+
+
+def test_top_level_key_that_is_not_a_string(tmp_path: Path) -> None:
+    with pytest.raises(pytest_casebook.CasebookError, match="True"):
+        _load_text(tmp_path, 'on: x\ncases:\n  - {name: a, call: "m:f"}\n')
+
+
+def test_case_name_ending_with_a_newline(tmp_path: Path) -> None:
+    """末尾の改行は期待出力のファイル名に入ってしまうので、誤りにする。"""
+    with pytest.raises(pytest_casebook.CasebookError, match="name"):
+        _load_text(tmp_path, 'cases:\n  - {name: "a\\n", call: "m:f"}\n')
+
+
+# YAML のダブルクォートの中の書き方（\\\\ は \、\\n は改行）
+@pytest.mark.parametrize("name", [".", "sub/", "sub\\\\", "sub/.", "a\\nb"])
+def test_setup_file_must_name_a_file(tmp_path: Path, name: str) -> None:
+    text = f'cases:\n  - {{name: a, call: "m:f", setup: {{files: {{"{name}": x}}}}}}\n'
+    with pytest.raises(pytest_casebook.CasebookError, match=r"setup\.files"):
+        _load_text(tmp_path, text)
+
+
+@pytest.mark.parametrize("name", [".", "sub/"])
+def test_golden_must_name_a_file(tmp_path: Path, name: str) -> None:
+    with pytest.raises(pytest_casebook.CasebookError, match="golden"):
+        _load_text(tmp_path, f'cases:\n  - {{name: a, call: "m:f", golden: "{name}"}}\n')
+
+
+def test_setup_file_in_a_subdirectory_is_allowed(tmp_path: Path) -> None:
+    doc = _load_text(
+        tmp_path, 'cases:\n  - {name: a, call: "m:f", setup: {files: {"sub/a.txt": x}}}\n'
+    )
+    assert doc.cases[0].setup_files == {"sub/a.txt": "x"}
+
+
+@pytest.mark.parametrize("replace", [r"\1", r"\d"])
+def test_bad_normalize_replace_is_found_when_loading(tmp_path: Path, replace: str) -> None:
+    """置き換えの書き間違いを、ケースごとの実行の例外ではなく、YAML の誤りとして知らせる。"""
+    with pytest.raises(pytest_casebook.CasebookError, match=r"normalize\[0\]"):
+        _load_text(
+            tmp_path,
+            f"""
+            normalize:
+              - {{pattern: x, replace: '{replace}'}}
+            cases:
+              - {{name: a, call: "m:f"}}
+            """,
+        )
+
+
+def test_normalize_replace_may_use_a_group(tmp_path: Path) -> None:
+    doc = _load_text(
+        tmp_path,
+        r"""
+        normalize:
+          - {pattern: 'id-(\d)', replace: 'id \1'}
+        cases:
+          - {name: a, call: "m:f"}
+        """,
+    )
+    assert doc.normalize[0][1] == r"id \1"
+
+
+def test_args_with_a_date_key_are_written_in_the_header(pytester: pytest.Pytester) -> None:
+    """args: の日付のキーでも、期待出力の # args: の行を書ける。"""
+    pytester.makepyfile(m="def f(x):\n    return 1\n")
+    write_casebook(pytester, 'cases:\n  - {name: a, call: "m:f", args: [{2024-01-01: x}]}\n')
+    pytester.runpytest("--casebook-update").assert_outcomes(passed=2)
+    text = (pytester.path / "golden" / "casebook_calc" / "a.txt").read_text(encoding="utf-8")
+    assert '# args: [{"2024-01-01": "x"}]\n' in text

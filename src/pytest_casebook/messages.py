@@ -156,6 +156,10 @@ MESSAGES: dict[str, dict[str, str]] = {
             "[{name}] 期待出力 {label} がありません。"
             "`--casebook-update` を付けて作成し、内容を確認してください。"
         ),
+        "golden_not_utf8": (
+            "[{name}] 期待出力 {label} を UTF-8 で読めません（{error}）。"
+            "UTF-8 で保存し直すか、`--casebook-update` で書き直してください。"
+        ),
         "golden_differs": (
             "出力が期待と異なります。意図した変更なら `--casebook-update` で更新してください。"
         ),
@@ -195,6 +199,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "golden_missing": (
             "[{name}] The golden file {label} does not exist. "
             "Create it with `--casebook-update` and review its contents."
+        ),
+        "golden_not_utf8": (
+            "[{name}] The golden file {label} is not UTF-8 ({error}). "
+            "Save it as UTF-8, or rewrite it with `--casebook-update`."
         ),
         "golden_differs": (
             "The output differs from the golden file. "
@@ -322,6 +330,9 @@ ERRORS: dict[str, dict[str, str]] = {
         "request_type": "{where}: request は 文字列かマッピングで書いてください",
         "request_method": "{where}: request.method が HTTP のメソッドではありません: {method}",
         "request_path": "{where}: request.path は / で始めてください: {path}",
+        "request_query_twice": (
+            "{where}: クエリは request.path か request.query のどちらか一方に書いてください: {path}"
+        ),
         "query_mapping": "{where}: request.query は 名前 -> 値 のマッピングで書いてください",
         "json_and_body": "{where}: request には json と body のどちらか一方だけを書いてください",
         "unknown_matcher": "{where}: 知らない比べ方です: {name}（使えるのは {known}）",
@@ -459,6 +470,9 @@ ERRORS: dict[str, dict[str, str]] = {
         "request_type": "{where}: request must be a string or a mapping",
         "request_method": "{where}: request.method is not an HTTP method: {method}",
         "request_path": "{where}: request.path must start with /: {path}",
+        "request_query_twice": (
+            "{where}: write the query in either request.path or request.query, not both: {path}"
+        ),
         "query_mapping": "{where}: request.query must be a mapping of name -> value",
         "json_and_body": "{where}: write either json or body in request, not both",
         "unknown_matcher": "{where}: unknown matcher: {name} (available: {known})",

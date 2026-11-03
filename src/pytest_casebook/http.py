@@ -165,4 +165,6 @@ def send_with_werkzeug_client(client: Any, request: HttpRequest) -> HttpResponse
     elif request.body is not None:
         kwargs["data"] = request.body
     res = client.open(request.path, **kwargs)
-    return HttpResponse(res.status_code, res.get_data(as_text=True), dict(res.headers))
+    # as_text=True は UTF-8 でない本文（画像など）で例外になる。httpx の .text と同じく置き換える
+    body = res.get_data().decode("utf-8", errors="replace")
+    return HttpResponse(res.status_code, body, dict(res.headers))

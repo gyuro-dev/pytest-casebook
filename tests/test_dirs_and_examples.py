@@ -9,8 +9,11 @@ import subprocess
 import sys
 import textwrap
 from pathlib import Path
+from unittest import mock
 
 import pytest
+
+from pytest_casebook import plugin
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -261,3 +264,31 @@ def test_examples_reports(examples: str, tmp_path: Path) -> None:
     assert '<html lang="en">' in en
     assert "<th>Preconditions</th>" in en
     assert "casebook_hello_en.yaml" in en
+
+
+def test_relative_label_on_another_drive(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Windows で別のドライブなら relpath は ValueError になるので、パスをそのまま書く。"""
+    monkeypatch.setattr(plugin.os.path, "relpath", mock.Mock(side_effect=ValueError))
+    assert plugin._relative_label(Path("D:/cases/a.yaml"), Path("C:/root")) == (
+        Path("D:/cases/a.yaml").as_posix()
+    )
+
+
+def test_relative_label() -> None:
+    root = Path(__file__).parent
+    assert plugin._relative_label(root / "a" / "b.yaml", root) == "a/b.yaml"
+
+
+def test_yaml_at_the_root_does_not_replace_every_slash() -> None:
+    """YAML がルートにあるとき（コンテナなど）、/ を {casebook_dir} に置き換えない。"""
+    doc = mock.Mock(path=Path(Path.cwd().anchor) / "casebook_x.yaml", normalize=[])
+    run = plugin._Run(doc, mock.Mock(), None, plugin._Hooks(None), None, None)
+    assert plugin._normalizer(run, False)("a/b") == "a/b"
+    assert not [real for real, _ in plugin._normalizer(run, False).placeholders]
+
+
+def test_negative_golden_lines_is_an_error(pytester: pytest.Pytester) -> None:
+    pytester.makefile(".yaml", casebook_x='cases:\n  - {name: a, call: "m:f"}\n')
+    result = pytester.runpytest("-o", "casebook_html_golden_lines=-1", "--casebook-html=r.html")
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    result.stderr.fnmatch_lines(["*casebook_html_golden_lines must be a non-negative integer: -1"])

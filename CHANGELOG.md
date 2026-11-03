@@ -7,6 +7,48 @@ incompatible change raises the minor version).
 
 ## [Unreleased]
 
+### Fixed
+
+- `normalize:` and the `pytest_casebook_patterns` / `placeholders` hooks no longer touch the
+  `# exit_code:` and `# status:` lines of golden files. With a pattern such as `\d+`, a changed
+  exit code or status went unnoticed. **A golden file that already holds a replaced value
+  (`# exit_code: <n>`) now fails; rewrite it with `--casebook-update`.**
+- `expect:` values that YAML reads as dates or as numeric keys are compared in the same form as
+  the actual value: `return: 2024-01-15` matches a returned `date`, and `{1: a}` matches
+  `{1: "a"}`. A mismatch with such a value used to end in a `TypeError`.
+- An exact string in `expect:` (`stdout: "value "`) ignores the spaces at the end of a line, as
+  the actual output does. `{$contains: ...}` keeps them.
+- A key that is not a string (`on:` reads as `true`, `1:` as a number) is reported as an unknown
+  key (`CasebookError`) instead of a `TypeError`.
+- A golden file with a byte order mark is read correctly (its first header line used to become
+  part of the body). A golden file that is not UTF-8 fails with a message and can be rewritten
+  with `--casebook-update`.
+- `to_jsonable` no longer raises on a model class, a failing `model_dump()`, a `MagicMock`, a value
+  that contains itself, or a broken `__repr__`; these become their `repr()` (or the type name).
+- Control characters in the output or the exception of the program under test are shown as
+  `\x1b` in `expect:` failures and run errors, so they cannot change what the terminal displays.
+  C1 control characters (`\x80`-`\x9f`) are shown this way too, also in golden diffs.
+- `send_with_werkzeug_client` replaces bytes that are not UTF-8 instead of raising
+  `UnicodeDecodeError`, as `send_with_httpx_client` does.
+- A case name ending with a newline is an error. So are `setup.files`, `golden:` and `stdin_file:`
+  names that point at a directory (`.`, `sub/`) or hold control characters.
+- A bad `replace:` in `normalize:` (`\1` with no such group) is reported when the file is loaded,
+  not as an exception in every case.
+- `run_in_process` turns `sys.exit(True)` into exit code 1, as a subprocess does (it was `True`).
+- When `taskkill` cannot start on Windows, a timeout still stops the command itself.
+- A case file on another Windows drive than the rootdir, or a `golden_dir` on another drive, no
+  longer fails with `ValueError` (the path is shown as it is).
+- A case file in the root directory (`/casebook_x.yaml`, as in a container) no longer replaces
+  every `/` in the output with `{casebook_dir}`.
+- `args:` and `kwargs:` with a date as a key no longer fail while writing the golden file header.
+  Dates in these headers now read `2024-01-01` (the headers are not compared).
+- `casebook_html_golden_lines` rejects a negative number.
+
+### Changed
+
+- **Incompatible**: a `request:` with a query in both `path` (`/a?x=1`) and `query:` is an error.
+  The URL read `/a?x=1?y=2`, and some clients dropped one of the two. Write it in one place.
+
 ## [0.9.2] - 2026-10-29
 
 ### Changed

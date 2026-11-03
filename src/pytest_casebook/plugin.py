@@ -17,7 +17,6 @@ import fnmatch
 import hashlib
 import inspect
 import itertools
-import json
 import os
 import shlex
 import sys
@@ -32,6 +31,7 @@ import pytest
 from . import hookspecs
 from .expect import map_strings, match_text, match_value, value_matcher
 from .golden import (
+    RESULT_KEYS,
     GoldenContent,
     comparable_text,
     golden_differs,
@@ -56,7 +56,7 @@ from .model import (
     load,
     one_line,
 )
-from .normalize import BUILTIN_PATTERNS, Normalizer, compile_patterns
+from .normalize import BUILTIN_PATTERNS, Normalizer, compile_patterns, show_controls
 from .report import CasebookHtmlReport, ReportOutput
 from .runner import (
     CasebookRunError,
@@ -211,7 +211,11 @@ def _html_golden_options(config: pytest.Config) -> tuple[str, int]:
     try:
         limit = int(lines)
     except ValueError:
-        raise pytest.UsageError(f"casebook_html_golden_lines must be an integer: {lines}") from None
+        limit = -1
+    if limit < 0:
+        raise pytest.UsageError(
+            f"casebook_html_golden_lines must be a non-negative integer: {lines}"
+        )
     return mode, limit
 
 
@@ -243,6 +247,18 @@ def _html_enabled(config: pytest.Config) -> bool:
     return bool(config.getoption("--casebook-html")) or bool(_html_reports(config))
 
 
+def _relative_label(path: Path, start: Path) -> str:
+    """
+    start からの相対パスの表記（/ 区切り）。
+
+    Windows で別のドライブにあるときは相対パスにできないので、パスをそのまま書く。
+    """
+    try:
+        return Path(os.path.relpath(path, start)).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
 def _matching_files(config: pytest.Config, patterns: list[str]) -> frozenset[str]:
     """
     パターンに合うケースファイルを、rootdir からの相対パス（/ 区切り。レポートの meta の
@@ -258,7 +274,7 @@ def _matching_files(config: pytest.Config, patterns: list[str]) -> frozenset[str
             )
         for match in root.glob(pattern):
             if match.is_file():
-                found.add(Path(os.path.relpath(match, root)).as_posix())
+                found.add(_relative_label(match, root))
     return frozenset(found)
 
 
@@ -357,7 +373,7 @@ class CasebookFile(pytest.File):
         except CasebookError as e:
             raise self.CollectError(str(e)) from None
 
-        file_label = Path(os.path.relpath(self.path, config.rootpath)).as_posix()
+        file_label = _relative_label(self.path, config.rootpath)
         # レポートの行の文言は、このファイルの言語（YAML の lang:。なければ ini）
         texts = TEXTS[doc.lang]
         # 期待出力の内容は HTML レポートに使うときだけ読む（レポートがなければファイルを読まない）
@@ -497,7 +513,7 @@ def _report_meta(
         "lang": doc.lang,
         "title": doc.title,
         "file_description": doc.description,
-        "golden_dir": Path(os.path.relpath(doc.golden_dir, doc.path.parent)).as_posix(),
+        "golden_dir": _relative_label(doc.golden_dir, doc.path.parent),
         "levels": list(doc.levels),
         "path": [g.name for g in case.groups],
         "path_descriptions": [g.description for g in case.groups],
@@ -631,7 +647,7 @@ def _make_orphan_test(doc: CasebookDoc, file_label: str) -> Callable[..., None]:
         if orphans:
             message = MESSAGES[doc.lang]["unused_golden_files"]
             # ほかのメッセージと同じく、YAML のディレクトリからの相対パスで示す
-            golden_dir = Path(os.path.relpath(doc.golden_dir, doc.path.parent)).as_posix()
+            golden_dir = _relative_label(doc.golden_dir, doc.path.parent)
             pytest.fail(
                 message.format(yaml=doc.path.name, golden_dir=golden_dir, files=orphans),
                 pytrace=False,
@@ -861,7 +877,7 @@ def _run_case(
     # 失敗にするのは except の外で（中で pytest.fail を呼ぶと、元の例外もつながって表示され、
     # 同じメッセージが2回出る）
     if run_error is not None:
-        pytest.fail(f"[{case.name}] {run_error}", pytrace=False)
+        pytest.fail(show_controls(f"[{case.name}] {run_error}"), pytrace=False)
 
     normalizer = _normalizer(run, config.getini("casebook_builtin_patterns"))
     if case.uses_golden:
@@ -1063,9 +1079,9 @@ def _execute_call(run: _Run) -> _Outcome:
 
     header = [("call", str(case.call))]
     if case.args:
-        header.append(("args", json.dumps(case.args, ensure_ascii=False, default=repr)))
+        header.append(("args", compact(to_jsonable(case.args))))
     if case.kwargs:
-        header.append(("kwargs", json.dumps(case.kwargs, ensure_ascii=False, default=repr)))
+        header.append(("kwargs", compact(to_jsonable(case.kwargs))))
     return _Outcome(
         header=header,
         stdout=result.stdout,
@@ -1190,7 +1206,11 @@ def _render_golden(case: Case, outcome: _Outcome, normalizer: Normalizer, descri
     for target, value in outcome.observed.items():
         sections.append((f"observe: {target}", _render_observed(target, value)))
 
-    header = [(key, normalizer(value)) for key, value in outcome.header]
+    # 比べるヘッダー（exit_code / status）は正規化しない。\d+ のような置き換えが当たると、
+    # 終了コードやステータスが変わっても同じ文字列になり、違いに気づけない
+    header = [
+        (key, value if key in RESULT_KEYS else normalizer(value)) for key, value in outcome.header
+    ]
     if description and case.description:
         # description は出力ではなく YAML に書いたものなので、正規化はせず1行にだけする
         header.insert(0, ("description", one_line(case.description)))
@@ -1215,11 +1235,17 @@ def _compare_golden(
     m = MESSAGES[lang]
     actual = _render_golden(case, outcome, normalizer, config.getini("casebook_golden_description"))
     path = doc.golden_path(case)
-    label = Path(os.path.relpath(path, doc.path.parent)).as_posix()
+    label = _relative_label(path, doc.path.parent)
     # 比べるのは結果だけ（# case: などの説明のヘッダーは比べない）
     default_section = DEFAULT_SECTIONS[case.kind]
     got = parse_golden(actual, default_section)
-    expected = parse_golden(read_golden(path), default_section) if path.exists() else None
+    expected: GoldenContent | None = None
+    not_utf8: str | None = None
+    try:
+        if path.exists():
+            expected = parse_golden(read_golden(path), default_section)
+    except UnicodeDecodeError as e:
+        not_utf8 = str(e)
     if config.getoption("--casebook-update"):
         _claim_golden(request, case, path, label, got, m)
         # 結果が同じなら書き直さない（手で書いた期待出力の書き方を崩さず、
@@ -1231,6 +1257,9 @@ def _compare_golden(
         # 書かなかったときも読み直す（同じファイルを使う前のケースが書いていることがある）
         _refresh_report_golden(request, doc, case)
         return
+    if not_utf8 is not None:
+        message = m["golden_not_utf8"].format(name=case.name, label=label, error=not_utf8)
+        pytest.fail(message, pytrace=False)
     if expected is None:
         pytest.fail(m["golden_missing"].format(name=case.name, label=label), pytrace=False)
     if golden_differs(expected, got):
@@ -1348,7 +1377,7 @@ def _record_unchanged(request: pytest.FixtureRequest, path: Path) -> None:
 
 def _golden_label(request: pytest.FixtureRequest, path: Path) -> str:
     """期待出力ファイルの、実行の最後の一覧に出す表記（rootdir からの相対パス）。"""
-    return Path(os.path.relpath(path, request.config.rootpath)).as_posix()
+    return _relative_label(path, request.config.rootpath)
 
 
 def _is_instance_of(error: BaseException, name: str) -> bool:
@@ -1445,10 +1474,13 @@ def _normalized_expect(expected: Any, normalizer: Normalizer) -> Any:
     実際の出力は比べる前に正規化される（日時は `<datetime>` になるなど）ので、YAML に
     `stdout: "1970-01-01T00:00:00"` のように書いた固定の値も同じ形にしないと、
     「期待 "1970-01-01T00:00:00" / 実際 "<datetime>"」で合わなくなる。
+    そのままの文字列は、実際の出力と同じく行末の空白も消す（`stdout: "value "` が
+    実際の "value" と合うように）。{contains} は行の一部なので、空白は残す（"foo " で
+    語の区切りまで書いたものが、"foobar" にも合ってしまわないように）。
     {regex} は正規表現そのものなので触らない。
     """
     if isinstance(expected, str):
-        return normalizer.replace(expected)
+        return normalizer(expected)
     if isinstance(expected, dict):
         ((matcher, pattern),) = expected.items()
         if matcher.lstrip("$") == "contains":
@@ -1463,6 +1495,9 @@ def _normalized_value(expected: Any, normalizer: Normalizer) -> Any:
     実際の値は `map_strings(..., normalizer.replace)` で中の文字列がすべて正規化されるので、
     期待値も同じにする。`{$regex: ...}` の中身だけは正規表現なので触らない
     （`$contains`・`$unordered`・`$includes` の中身は、ふつうの値と同じに扱う）。
+
+    実際の値は `to_jsonable` で JSON にできる形になっているので、YAML が日付や数値のキーとして
+    読んだ期待値も同じ形にする（`return: 2024-01-15` は ISO 形式の文字列、`{1: a}` のキーは "1"）。
     """
     matcher = value_matcher(expected)
     if matcher is not None:
@@ -1470,13 +1505,12 @@ def _normalized_value(expected: Any, normalizer: Normalizer) -> Any:
         if name.lstrip("$") == "regex":
             return expected
         return {name: _normalized_value(body, normalizer)}
-    if isinstance(expected, str):
-        return normalizer.replace(expected)
     if isinstance(expected, list):
         return [_normalized_value(v, normalizer) for v in expected]
     if isinstance(expected, dict):
-        return {k: _normalized_value(v, normalizer) for k, v in expected.items()}
-    return expected
+        return {str(k): _normalized_value(v, normalizer) for k, v in expected.items()}
+    value = to_jsonable(expected)
+    return normalizer.replace(value) if isinstance(value, str) else value
 
 
 def _compare_expect(case: Case, outcome: _Outcome, normalizer: Normalizer, lang: str) -> None:
@@ -1536,7 +1570,9 @@ def _compare_expect(case: Case, outcome: _Outcome, normalizer: Normalizer, lang:
         details = "".join(
             f"\n{m['actual_section'].format(name=name)}\n{text}" for name, text in shown
         )
-        pytest.fail(f"{_title(case, lang)}\n{m['expect_differs']}\n{lines}{details}", pytrace=False)
+        # 出力や例外のメッセージの制御文字で、端末の表示を変えられないようにする
+        message = f"{_title(case, lang)}\n{m['expect_differs']}\n{lines}{details}"
+        pytest.fail(show_controls(message), pytrace=False)
 
 
 def _title(case: Case, lang: str) -> str:
@@ -1565,7 +1601,9 @@ def _normalizer(run: _Run, builtin_patterns: bool) -> Normalizer:
             placeholders += [(str(path), "<tmp>"), (path.as_posix(), "<tmp>")]
     # YAML のディレクトリのパスは、置く場所（人や CI）によって変わるため {casebook_dir} にする
     for path in {doc.path.parent, doc.path.parent.resolve()}:
-        placeholders += [(str(path), CASEBOOK_DIR_TOKEN), (path.as_posix(), CASEBOOK_DIR_TOKEN)]
+        # ルート（/ や C:\\）は使わない。出力のすべての / が {casebook_dir} に置き換わってしまう
+        if path.parent != path:
+            placeholders += [(str(path), CASEBOOK_DIR_TOKEN), (path.as_posix(), CASEBOOK_DIR_TOKEN)]
     # 実際の値が "." や空のものは使わない。load() は絶対パスにするが、parse_document に
     # 相対パスを渡されると YAML のディレクトリが "." になり、出力のすべての "." が
     # {casebook_dir} に置き換わってしまう（空文字は、すべての文字の間に入ってしまう）

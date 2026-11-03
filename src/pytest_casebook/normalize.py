@@ -16,7 +16,7 @@ BUILTIN_PATTERNS: list[tuple[re.Pattern[str], str]] = [
 ]
 
 
-_CONTROL_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+_CONTROL_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
 
 
 def show_controls(text: str) -> str:

@@ -26,6 +26,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import difflib
 import re
 from dataclasses import dataclass, field
@@ -161,18 +162,25 @@ def comparable_text(content: GoldenContent, expected: GoldenContent, actual: Gol
 
 
 def read_golden(path: Path) -> str:
-    """期待出力を読む（git の設定などで CRLF になっていても LF にそろえる）。"""
-    return path.read_text(encoding="utf-8").replace("\r\n", "\n")
+    """
+    期待出力を読む（git の設定などで CRLF になっていても LF にそろえる）。
+
+    メモ帳などが先頭に付ける BOM は除く（残すと1行目のヘッダーが本文になり、比べられなくなる）。
+
+    :raises UnicodeDecodeError: UTF-8 でないとき
+    """
+    return path.read_text(encoding="utf-8-sig").replace("\r\n", "\n")
 
 
 def write_golden(path: Path, text: str) -> bool:
     """
-    期待出力を書く。内容が変わらないときは書かない。
+    期待出力を書く。内容が変わらないときは書かない（UTF-8 で読めないファイルは書き直す）。
 
     :return: 書いたら True
     """
-    if path.exists() and read_golden(path) == text:
-        return False
+    with contextlib.suppress(UnicodeDecodeError):
+        if path.exists() and read_golden(path) == text:
+            return False
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8", newline="\n")
     return True
