@@ -13,7 +13,7 @@ from unittest import mock
 
 import pytest
 
-from pytest_casebook import plugin
+from pytest_casebook import load, plugin
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -292,3 +292,43 @@ def test_negative_golden_lines_is_an_error(pytester: pytest.Pytester) -> None:
     result = pytester.runpytest("-o", "casebook_html_golden_lines=-1", "--casebook-html=r.html")
     assert result.ret == pytest.ExitCode.USAGE_ERROR
     result.stderr.fnmatch_lines(["*casebook_html_golden_lines must be a non-negative integer: -1"])
+
+
+# =============================================================================
+# command の実行に使う ini の値
+# =============================================================================
+
+CALL_ONLY = 'cases:\n  - {name: a, call: "m:f", expect: {return: 1}}\n'
+
+
+@pytest.mark.parametrize("value", ["nope", "base64"])
+def test_bad_encoding_is_a_usage_error(pytester: pytest.Pytester, value: str) -> None:
+    pytester.makefile(".yaml", casebook_x=CALL_ONLY)
+    result = pytester.runpytest("-o", f"casebook_encoding={value}")
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    result.stderr.fnmatch_lines([f"*casebook_encoding must be a text encoding: '{value}'*"])
+
+
+def test_bad_command_prefix_is_a_usage_error(pytester: pytest.Pytester) -> None:
+    """どの設定の誤りかを示す。command を使わないファイルでも、集める前に止まる。"""
+    pytester.makefile(".yaml", casebook_x=CALL_ONLY)
+    result = pytester.runpytest("-o", "casebook_command_prefix='unclosed")
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    result.stderr.fnmatch_lines(["*casebook_command_prefix*No closing quotation*"])
+
+
+def test_valid_command_options_run(pytester: pytest.Pytester) -> None:
+    pytester.makepyfile(m="def f():\n    return 1\n")
+    pytester.makefile(".yaml", casebook_x=CALL_ONLY)
+    result = pytester.runpytest(
+        "-o", "casebook_encoding=cp932", "-o", "casebook_command_prefix=python -m x"
+    )
+    result.assert_outcomes(passed=2)
+
+
+def test_load_with_ini_rejects_a_bad_encoding(tmp_path: Path) -> None:
+    (tmp_path / "pytest.ini").write_text("[pytest]\ncasebook_encoding = nope\n", encoding="utf-8")
+    path = tmp_path / "casebook_x.yaml"
+    path.write_text(CALL_ONLY, encoding="utf-8")
+    with pytest.raises(ValueError, match="casebook_encoding must be a text encoding"):
+        load(path, ini=True)

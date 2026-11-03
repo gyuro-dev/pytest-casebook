@@ -42,6 +42,7 @@ from .golden import (
     write_golden,
 )
 from .http import HttpResponse
+from .inifile import ini_encoding
 from .messages import LANGS, MESSAGES, TEXTS, error, language
 from .model import (
     DEFAULT_GOLDEN_DIR,
@@ -278,8 +279,26 @@ def _matching_files(config: pytest.Config, patterns: list[str]) -> frozenset[str
     return frozenset(found)
 
 
+def _check_command_options(config: pytest.Config) -> None:
+    """
+    command の実行に使う ini の値を、ケースを集める前に確かめる。
+
+    ここで確かめないと、どの設定の誤りかが分からない例外（No closing quotation など）になる。
+    """
+    try:
+        ini_encoding("casebook_encoding", config.getini("casebook_encoding"))
+    except ValueError as e:
+        raise pytest.UsageError(str(e)) from None
+    name = "casebook_command_prefix"
+    try:
+        shlex.split(config.getini(name))
+    except ValueError as e:
+        raise pytest.UsageError(error("bad_shell", where=name, key=name, error=e)) from None
+
+
 def pytest_configure(config: pytest.Config) -> None:
     _texts(config)  # casebook_lang を確かめる
+    _check_command_options(config)
     html = config.getoption("--casebook-html")
     reports = _html_reports(config)
     if html or reports:

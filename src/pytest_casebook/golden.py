@@ -75,7 +75,10 @@ def render(case: Case, header: list[tuple[str, str]], sections: list[tuple[str, 
     lines += [f"# {key}: {_one_line_header(value)}" for key, value in header]
     for title, body in sections:
         lines += [f"----- {title} -----", body]
-    return "\n".join(lines).rstrip() + "\n"
+    text = "\n".join(lines).rstrip() + "\n"
+    # サロゲート文字（切れた絵文字など）は UTF-8 で書けないので、\\ud83d という文字にする。
+    # 比べる前のここで変えるので、ファイルから読んだものと同じ形になる
+    return text.encode("utf-8", "backslashreplace").decode("utf-8")
 
 
 def _one_line_header(value: str) -> str:
@@ -177,12 +180,15 @@ def write_golden(path: Path, text: str) -> bool:
     期待出力を書く。内容が変わらないときは書かない（UTF-8 で読めないファイルは書き直す）。
 
     :return: 書いたら True
+    :raises UnicodeEncodeError: text を UTF-8 にできないとき（今のファイルは変えない）
     """
+    # ファイルを開く前に変換する。開くと中身が消えるので、そのあとで失敗すると空のファイルが残る
+    data = text.encode("utf-8")
     with contextlib.suppress(UnicodeDecodeError):
         if path.exists() and read_golden(path) == text:
             return False
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8", newline="\n")
+    path.write_bytes(data)
     return True
 
 

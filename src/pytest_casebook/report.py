@@ -173,7 +173,8 @@ class CasebookHtmlReport:
                 title, rows, now, output.lang, page_title=page_title, unused=self.unused
             )
             output.path.parent.mkdir(parents=True, exist_ok=True)
-            output.path.write_text(html, encoding="utf-8")
+            # 例外のメッセージのサロゲート文字などで、表の全体を失わないようにする
+            output.path.write_text(html, encoding="utf-8", errors="backslashreplace")
 
     def pytest_terminal_summary(self, terminalreporter: Any) -> None:
         for output in self.outputs:

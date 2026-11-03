@@ -64,7 +64,7 @@ import yaml
 
 from .expect import find_matcher_errors
 from .http import HttpRequest
-from .inifile import IniValue, ini_bool, ini_lines, read_ini
+from .inifile import IniValue, ini_bool, ini_encoding, ini_lines, read_ini
 from .messages import TEXTS, error, language
 
 # ケース名は期待出力のファイル名になるため、ファイル名に使える文字だけにする。
@@ -578,7 +578,7 @@ def load(
     if ini:
         options = {
             "lang": lang,
-            "encoding": str(values.get("casebook_encoding", "utf-8")),
+            "encoding": ini_encoding("casebook_encoding", values.get("casebook_encoding", "utf-8")),
             "builtin_patterns": ini_bool(
                 "casebook_builtin_patterns", values.get("casebook_builtin_patterns", "true")
             ),

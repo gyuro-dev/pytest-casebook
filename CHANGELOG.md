@@ -43,9 +43,21 @@ incompatible change raises the minor version).
 - `args:` and `kwargs:` with a date as a key no longer fail while writing the golden file header.
   Dates in these headers now read `2024-01-01` (the headers are not compared).
 - `casebook_html_golden_lines` rejects a negative number.
+- A surrogate character (a cut emoji in a JSON response, a file name that is not UTF-8) no longer
+  empties files. `--casebook-update` used to leave a 0-byte golden file, losing the old contents,
+  and a failure holding one left a 0-byte HTML report. It is now written as the text `\ud83d`, and
+  `write_golden` converts the text before it opens the file.
+- A bad `casebook_encoding` or `casebook_command_prefix` stops pytest with a message that names the
+  option, before cases are collected. `load(path, ini=True)` raises `ValueError` for a bad
+  `casebook_encoding`.
 
 ### Changed
 
+- **Incompatible**: only CRLF, CR and LF count as line breaks when output is normalized.
+  `\x0b`, `\x0c`, `\x1c`-`\x1e`, `\x85`, `\u2028` and `\u2029` stay as they are, so output in
+  which one of them became a newline is no longer treated as unchanged. A golden file made from
+  such output fails once; rewrite it with `--casebook-update`. At the end of a line they are still
+  removed like other trailing whitespace.
 - **Incompatible**: a `request:` with a query in both `path` (`/a?x=1`) and `query:` is an error.
   The URL read `/a?x=1?y=2`, and some clients dropped one of the two. Write it in one place.
 
