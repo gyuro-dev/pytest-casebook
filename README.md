@@ -7,7 +7,7 @@
 
 English | [日本語](https://github.com/gyuro-dev/pytest-casebook/blob/main/README.ja.md)
 
-A pytest plugin that runs test cases written in YAML and writes the results as a **test specification sheet (an HTML table with categories, subcategories and items)**. It keeps your test specification sheet and your automated tests from drifting apart, because they are the same file.
+A pytest plugin that runs test cases written in YAML and turns the results into a **test specification sheet** (an HTML table of categories, subcategories and items). The sheet and the automated tests come from the same YAML, so they cannot drift apart.
 
 ## Features
 
@@ -20,11 +20,11 @@ A pytest plugin that runs test cases written in YAML and writes the results as a
 - Put **manual checks** that cannot be automated (looking at a screen, printed forms) in the same sheet, with the results written by hand ([how](#manual-cases-manual))
 - Organize cases into **categories, subcategories and items** (any depth) and write an **HTML test specification sheet** (in English or Japanese; [how](#html-report))
 
-Run `pytest --casebook-html=report.html` and the cases in your YAML come out as this test specification sheet. The group hierarchy is merged vertically, and preconditions, expected results and results sit on one row. The contents of each golden file are folded under its row (`price_one.txt` is expanded here).
+`pytest --casebook-html=report.html` turns the cases in your YAML into this test specification sheet. The group hierarchy is merged vertically, and preconditions, expected results and results sit on one row. Each golden file is folded under its row (`price_one.txt` is expanded here).
 
 ![HTML report as a test specification sheet](https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/docs/images/report-top-en.png)
 
-You can also **[try a live demo report](https://gyuro-dev.github.io/pytest-casebook/)** — expand the failure diff and use the filters, which a screenshot cannot show.
+In the **[live demo report](https://gyuro-dev.github.io/pytest-casebook/)** you can expand a failure diff and use the filters, which a screenshot cannot show.
 
 This is (part of) the YAML behind the table above; the whole file is [docs/screenshots-en/casebook_demo_en.yaml](https://github.com/gyuro-dev/pytest-casebook/blob/main/docs/screenshots-en/casebook_demo_en.yaml). Nested `group:`s become the category / subcategory / item columns, `description` becomes "What is checked", and `expect:` becomes "Expected result". Cases without `expect:` are compared with golden files.
 
@@ -83,7 +83,7 @@ The only dependencies are pytest, PyYAML and pluggy (which pytest needs anyway).
 
 ## Getting started: you only write one YAML file
 
-To test a CLI, all you write is one YAML file — no conftest.py, no Python test code. Here we test `hello.py`, a small CLI that greets the name it is given. It stands in for your own CLI: copy the files below and the steps work as written.
+To test a CLI, all you write is one YAML file: no conftest.py, no Python test code. Here we test `hello.py`, a small CLI that greets the name it is given, standing in for your own. Copy the files below and the steps work as written.
 
 ```text
 myproject/
@@ -145,7 +145,7 @@ For cases without `expect:` (here `greet`), `tests/golden/casebook_hello/<case n
 Hello, Alice
 ```
 
-Only the results are compared (`# exit_code:` and everything below the `-----` headings). Lines like `# case:` and `# command:` are explanations for readers, so you can omit them when writing a golden file by hand (any `# …:` lines you keep, such as `# exit_code:`, must stay at the very top of the file). If there is only one output, the body alone is enough (see [Golden files](#golden-files)).
+Only the results are compared (`# exit_code:` and everything below the `-----` headings). Lines like `# case:` and `# command:` are explanations for readers, so you can omit them when writing a golden file by hand. If there is only one output, the body alone is enough (see [Golden files](#golden-files)).
 
 ```text
 Hello, Alice
@@ -153,7 +153,7 @@ Hello, Alice
 
 **3. Review it and commit**
 
-Check that the golden file is correct and commit it together with the YAML. From then on, every `uv run pytest` compares the actual output with this file. When you change the behavior, regenerate with `--casebook-update` and review the changes in the git diff.
+Check that the golden file is correct and commit it with the YAML. From then on, every `uv run pytest` compares the actual output with this file. When the behavior changes, regenerate with `--casebook-update` and review the git diff.
 
 **View the results as a table**
 
@@ -161,12 +161,7 @@ Check that the golden file is correct and commit it together with the YAML. From
 uv run pytest --casebook-html=reports/casebook.html
 ```
 
-The report and the failure messages are in English by default. For Japanese, set `casebook_lang` once in `pyproject.toml`:
-
-```toml
-[tool.pytest.ini_options]
-casebook_lang = "ja"
-```
+The report and the failure messages are in English by default. For Japanese, set `casebook_lang = "ja"` in the ini ([ini options](#ini-options)).
 
 ### Terms
 
@@ -192,7 +187,7 @@ Add `--casebook-html=report.html` to write the results as a test specification s
 - preconditions show non-default state names and the case's own `setup:`. Skip and known-bug reasons are shown under the result
 - the time only counts running the case (not session fixtures that build the environment)
 
-At the top of the page you can narrow the table down. Click a result (e.g. Failed) to show only those cases (click more results to show the cases with any of them, "All" to reset), and type in the box to keep only the cases whose group, case name, command, description, preconditions or expected results contain the text (case-insensitive; several words must all match). The merged group cells are rebuilt for the rows that remain, and files with no matching case are hidden. The per-file counts always describe the whole run. The report is a single HTML file that loads nothing else; without JavaScript, the filter is hidden and the full table is shown.
+At the top of the page you can filter the table. Click a result (e.g. Failed) to keep only those cases (several results: any of them; "All" resets), and type in the box to keep the cases whose group, case name, command, description, preconditions or expected results contain the text (case-insensitive; every word must match). Group cells are re-merged for the remaining rows, and files with no matching case are hidden. The per-file counts always describe the whole run. The report is one self-contained HTML file; without JavaScript it shows the full table and no filter.
 
 To submit "what will be checked" before testing, use it with `--collect-only`. The cases are not run, and every result is "Not run" (the precondition and expected result columns come from the YAML; manual cases without `result:` show "Manual").
 
@@ -210,7 +205,7 @@ A failed case can be expanded below its row to show the diff.
 
 ### Several sheets from one run (casebook_html_reports)
 
-A sheet is usually written for one audience: the customer, the development team, or English-speaking reviewers. When the cases for each audience live in their own YAML files, the `casebook_html_reports` ini option writes one sheet per audience from a single run. Each line is `<html file> = <case file patterns>`: the HTML to write, then the case files to put in it, separated by commas. Both are relative to pytest's rootdir, and the patterns take globs (`*`, `**`), so a directory of case files can become one sheet.
+When each audience (the customer, the development team, English-speaking reviewers) has its own YAML files, the `casebook_html_reports` ini option writes one sheet per audience from a single run. Each line is `<html file> = <case file patterns>`, the patterns separated by commas. Both are relative to pytest's rootdir, and the patterns take globs (`*`, `**`), so a directory of case files can become one sheet.
 
 ```toml
 [tool.pytest.ini_options]
@@ -240,7 +235,7 @@ Results are one of: passed, updated (rewritten by `--casebook-update`), manual (
 
 Most things can be done in YAML alone. Add pytest hooks to conftest.py only when you use a DB or want to pass a test environment.
 
-Most rows have a ready-to-run sample in [examples-en](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en) (the rows whose sample column is "—" do not). You can start by copying a sample directory and renaming things.
+Most rows have a ready-to-run sample in [examples-en](https://github.com/gyuro-dev/pytest-casebook/tree/main/examples-en) ("—" means none). Copy a sample directory and rename things to start.
 
 | What you want to do | Where | What to write | Sample |
 |---|---|---|---|
@@ -420,7 +415,7 @@ timeout: 5                     # default seconds for the cases (a group's or cas
 cases: [...]                   # list of cases or groups
 ```
 
-`command_prefix` and a case's `command` each take either a string, split like a shell command (`store add 'apple pie'`), or a list, passed as is without splitting (`[store, add, apple pie]`). The two forms can be mixed: `command_prefix: store` with `command: [add, 'apple pie']` runs `store add "apple pie"`. The prefix is always placed before the command's arguments. Without `command_prefix` in the file, the ini option `casebook_command_prefix` is used.
+`command_prefix` and a case's `command` each take either a string, split like a shell command (`store add 'apple pie'`), or a list, passed as is without splitting (`[store, add, apple pie]`). The two forms can be mixed: `command_prefix: store` with `command: [add, 'apple pie']` runs `store add "apple pie"`. Without `command_prefix` in the file, the ini option `casebook_command_prefix` is used.
 
 `lang` (`en` or `ja`) sets the language of this file: the messages of its cases (failed comparisons, errors while running, mistakes in the YAML), the texts in its report rows (preconditions, expected results), the default `levels`, and the default of `run_case()`. Without it, the `casebook_lang` ini option applies. Use it when files for different readers are in different languages, e.g. with [several sheets from one run](#several-sheets-from-one-run-casebook_html_reports).
 
@@ -446,7 +441,7 @@ You can select by group name, e.g. `-k Pricing`. The HTML report only shows as m
 |---|---|
 | `name` | Case name. It becomes the golden file name, so use letters (Japanese too), digits, `_`, `-`, `.`; it must not start with `.` or `-`. Names that differ only in letter case (such as `Add` and `add`) are errors, because their golden files collide on Windows |
 | `description` | What is checked |
-| `command` | Arguments to run as a CLI, placed after `command_prefix`. A string is split like a shell command; a list (`[a, 'b c']`) is passed as is without splitting. Either form can be combined with either form of `command_prefix` (e.g. `command_prefix: store` with `command: [add, 'apple pie']`). May be empty (`""`) if `command_prefix` is set |
+| `command` | Arguments to run as a CLI, placed after `command_prefix`. A string is split like a shell command; a list (`[a, 'b c']`) is passed as is ([details](#the-whole-yaml-file)). May be empty (`""`) if `command_prefix` is set |
 | `stdin` | Standard input for the command |
 | `stdin_file` | File passed to standard input, relative to the YAML's directory (not together with `stdin`) |
 | `timeout` | Seconds before the case fails as too slow (`command`, `call` and `request`; [details](#timeouts-timeout)) |
@@ -470,7 +465,7 @@ Write exactly one of `command`, `call`, `request` and `manual`. Keys not in this
 
 ### Expected results (expect)
 
-A case is checked either against its golden file or against `expect:`, never both. Writing `expect:` with any key switches the whole case to the expectations in the YAML: no golden file is read or written for it, and only the items written in `expect:` are compared. So "`exit_code` in the YAML and stdout from the golden file" is not possible; to check both, write both in `expect:`, or leave `expect:` out and let the golden file hold both.
+A case is checked either against its golden file or against `expect:`, never both. With any key in `expect:`, no golden file is read or written, and only the items in `expect:` are compared. So "`exit_code` in the YAML and stdout from the golden file" is not possible: write both in `expect:`, or leave `expect:` out and let the golden file hold both.
 
 ```yaml
 expect:
@@ -504,7 +499,7 @@ expect:
 
 If a call raises but `raises` is not written, the case fails.
 
-Matchers always start with `$` (`{$contains: ...}`, `{$regex: ...}`), so one spelling works everywhere. Inside `return`, `json` and observe targets (`db.*` etc.) the `$` is required, because it distinguishes a matcher from data that really has keys like `contains`; under `stdout`, `stderr`, `raises`, `body` and `headers` it may be omitted (`{contains: ...}`).
+Matchers always start with `$` (`{$contains: ...}`, `{$regex: ...}`). Inside `return`, `json` and observe targets (`db.*` etc.) the `$` is required, because it distinguishes a matcher from data that really has keys like `contains`; under `stdout`, `stderr`, `raises`, `body` and `headers` it may be omitted (`{contains: ...}`).
 
 ```yaml
 expect:
@@ -553,11 +548,11 @@ Only the results are compared: `# exit_code:` (`# status:` for requests) and the
 - `--casebook-update` only rewrites a file when the results changed. Hand-written golden files keep their form as long as the results are the same
 - If a golden file is left over after its case was removed or renamed, the `unused_golden_files` check fails (subdirectories are checked too). pytest-casebook adds this check as one extra test per YAML file, so pytest's collected count is one more than the cases of each file. It is not a row of the HTML report, but when it fails, the file's section lists the unused golden files. It looks at `.txt` files and at files with any extension used in `golden:` (e.g. `.json`), so other files you keep there, such as notes, are not reported. Golden files used by other case files in the same directory count as used, so sharing `golden_dir:` between several YAML files does not cause false alarms. To turn the check off, write `check_orphans: false` in the YAML
 
-With `casebook_golden_description = true` in the ini, golden files written by `--casebook-update` also get a `# description: <the case's description>` line right after `# case:` (only for cases that have a description; a multi-line description becomes one line). Like the other `#` explanation lines it is never compared, so turning the option on does not fail or rewrite existing files: each file picks the line up the next time it is rewritten. To add it to every existing file at once, run `pytest --casebook-update-headers`: it rewrites the headers of the golden files whose results still match (a file whose results differ still fails and is left as is). Since only the results are compared, hand-written golden files that omit the headers are rewritten into the full form too.
+With `casebook_golden_description = true` in the ini, golden files written by `--casebook-update` also get a `# description: <the case's description>` line right after `# case:` (only for cases that have a description; a multi-line description becomes one line). Like the other `#` explanation lines it is never compared, so turning the option on neither fails nor rewrites existing files; each picks the line up when it is next rewritten. To add it everywhere at once, run `pytest --casebook-update-headers`: it rewrites the headers of the golden files whose results still match, and a file whose results differ fails. Since only the results are compared, hand-written golden files without headers are rewritten into the full form too.
 
 ### Values after the action (observe)
 
-`observe:` lists values to read after the action (DB tables, files, …) and **record in the golden file**. It is for cases compared with a golden file. In a case with `expect:`, write the target directly in `expect:` instead (e.g. `expect: {db.users: [...]}`): it is read automatically, with no `observe:` needed. In a case with `expect:`, an `observe:` target that is not also in `expect:` is an error, because its value would be thrown away.
+`observe:` lists values to read after the action (DB tables, files, …) and **record in the golden file**. It is for cases compared with a golden file. In a case with `expect:`, write the target directly in `expect:` (e.g. `expect: {db.users: [...]}`) and it is read for you. An `observe:` target that is not also in `expect:` is an error there, because its value would be thrown away.
 
 - For cases using a golden file, the observed values are added as `----- observe: <target> -----`
 - Lists (DB rows etc.) are written one item per line as JSON, so when a value changes, the diff shows only that line
@@ -591,7 +586,7 @@ cases:
 ```
 
 - The selected state's content, with the case's `setup:` merged over it, is passed to `pytest_casebook_setup` as `data` (`files` are merged per file name)
-- Cases without `state:` use the `default` state. If `states:` has no `default`, they simply have no state content (so adding one named state does not force you to write `default: {}`)
+- Cases without `state:` use the `default` state. If `states:` has no `default`, they have no state content (no need to write `default: {}`)
 - States are written like `setup:` and validated the same way
 
 ### HTTP APIs (request)
@@ -649,7 +644,7 @@ The golden file contains `# status:` and, if the body is JSON, a formatted `----
 
 ### Timeouts (timeout)
 
-`timeout:` is the number of seconds a case may take to run. It can also be written at the top of the file or on a group as the default for the cases inside; the nearest value wins, and a case's own `timeout:` overrides it. A manual case (`manual:`) is never run, so the default does not apply to it.
+`timeout:` is the number of seconds a case may take to run. It can also be written at the top of the file or on a group as the default for the cases inside; the nearest value wins. A manual case (`manual:`) is never run, so it does not apply.
 
 - **command (subprocess)**: the process is stopped and the case fails
 - **call / request**: the function (for request, the `pytest_casebook_request` hook) runs in a separate thread, and the case fails if it has not finished in time. Python cannot stop a thread, so **the function is not stopped**: it keeps running in the background until it returns. Its output after the timeout is not captured, and it does not keep pytest from exiting. To stop a hanging test for real, use [pytest-timeout](https://pypi.org/project/pytest-timeout/)
@@ -685,7 +680,7 @@ cases:
 
 ### Rows of similar cases (params)
 
-Writing many cases that differ only in arguments and expected values repeats the shared keys. Write the shared part once and put the differing rows in `params:`; the case is then a template that expands into one ordinary case per element.
+For cases that differ only in arguments and expected values, write the shared part once and put the differing rows in `params:`. The case is then a template that expands into one ordinary case per element.
 
 ```yaml
 cases:
@@ -700,7 +695,7 @@ cases:
 
 This expands into three cases named `shipping-0`, `shipping-2999` and `shipping-3000`. Every element needs a `name` (the case name becomes `<case name>-<element name>`). Give each element its own `description` too, so that each row of the HTML test specification sheet reads on its own.
 
-An element's keys replace the template's keys wholesale (there is no deep merge): an element's `expect:` replaces the whole template `expect:`. The merged result is validated like any other case. To share other parts of the YAML, anchors (`&` / `*` / `<<:`) also work.
+An element's keys replace the template's keys wholesale (no deep merge: an element's `expect:` replaces the whole template `expect:`). The merged result is validated like any other case. To share other parts of the YAML, anchors (`&` / `*` / `<<:`) also work.
 
 ### Environment variables (env)
 
@@ -911,7 +906,7 @@ The easiest way is to put this comment on the first line of a case file (the sam
 # yaml-language-server: $schema=https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/main/src/pytest_casebook/casebook.schema.json
 ```
 
-`main` follows the latest development version. To match the version you installed, pin the URL to that version's tag, `v<version>`, instead of `main` (e.g. `https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/v0.7.1/src/pytest_casebook/casebook.schema.json` for 0.7.1); an older tag's schema does not know newer keys and flags them as errors. Use the `main` URL to always get the latest.
+`main` follows the latest development version. To match the version you installed, pin the URL to that version's tag, `v<version>`, instead of `main` (e.g. `https://raw.githubusercontent.com/gyuro-dev/pytest-casebook/v0.7.1/src/pytest_casebook/casebook.schema.json` for 0.7.1); an older tag's schema does not know newer keys and flags them as errors.
 
 To apply the schema to every case file without the comment, map it in your VS Code settings (settings.json):
 
