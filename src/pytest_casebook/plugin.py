@@ -21,6 +21,7 @@ import os
 import shlex
 import sys
 import tempfile
+import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -87,9 +88,12 @@ DEFAULT_SECTIONS = {"command": "stdout", "call": "return", "request": "json"}
 
 # レポートでケースを YAML に書いた順に並べるための通し番号
 _order = itertools.count()
-# --casebook-update / --casebook-update-headers で、
-# 期待出力ファイル（normcase したパス）-> (先に使ったテストの nodeid, 結果)
-_GOLDEN_OWNERS = pytest.StashKey[dict[str, tuple[str, GoldenContent]]]()
+# 期待出力の消し忘れの確認で読む、ディレクトリ -> その中のケースファイル（読めるものだけ）。
+# 同じディレクトリの YAML ごとに読み直さないよう、1 度読んだら覚えておく
+_DIR_DOCS = pytest.StashKey[dict[Path, list[CasebookDoc]]]()
+# --casebook-update / --casebook-update-headers で、期待出力ファイルを先に使ったケースの
+# 記録（_claim_golden）の終わりの印。別のワーカーが書いている途中のものと見分ける
+_CLAIM_END = "# casebook: end\n"
 
 
 def pytest_addhooks(pluginmanager: pytest.PytestPluginManager) -> None:
@@ -262,9 +266,13 @@ def _relative_label(path: Path, start: Path) -> str:
 
 def _matching_files(config: pytest.Config, patterns: list[str]) -> frozenset[str]:
     """
-    パターンに合うケースファイルを、rootdir からの相対パス（/ 区切り。レポートの meta の
-    `file` と同じ表記）の集まりにする。`**` も使える（recursive）。今あるファイルで
-    展開するので、ケースを集める前に決まる。
+    パターンに合うケースファイルを、rootdir からの相対パスを normcase したもの
+    （`ReportOutput.select` が meta の `file` を同じく normcase して突き合わせる）の集まりに
+    する。`**` も使える（recursive）。今あるファイルで展開するので、ケースを集める前に決まる。
+
+    normcase するのは、Windows でディレクトリ名の大文字小文字をディスクと違えて書いても
+    （`Tests/` と `tests/`）合うようにするため。glob はワイルドカードでない部分を
+    パターンに書いたままの表記で返し、集めたケースの `file` はディスクの表記になる。
     """
     root = config.rootpath
     found: set[str] = set()
@@ -275,7 +283,7 @@ def _matching_files(config: pytest.Config, patterns: list[str]) -> frozenset[str
             )
         for match in root.glob(pattern):
             if match.is_file():
-                found.add(_relative_label(match, root))
+                found.add(os.path.normcase(_relative_label(match, root)))
     return frozenset(found)
 
 
@@ -604,11 +612,25 @@ def _load_doc(config: pytest.Config, path: Path) -> CasebookDoc:
 
 
 def _sibling_docs(config: pytest.Config, doc: CasebookDoc) -> list[CasebookDoc]:
-    """同じディレクトリにある、ほかのケースファイル（読めないものは除く）。"""
+    """
+    同じディレクトリにある、ほかのケースファイル（読めないものは除く）。
+
+    ディレクトリの中身は 1 度だけ読んで覚えておく（YAML が N 本あると、消し忘れの確認が
+    N 回あり、そのたびに全部を読み直すと N² 回の読み込みになるため）。
+    """
+    cache = config.stash.setdefault(_DIR_DOCS, {})
+    directory = doc.path.parent
+    if directory not in cache:
+        cache[directory] = _dir_docs(config, directory)
+    return [d for d in cache[directory] if d.path != doc.path]
+
+
+def _dir_docs(config: pytest.Config, directory: Path) -> list[CasebookDoc]:
+    """ディレクトリにあるケースファイルをすべて読む（読めないものは除く）。"""
     patterns = config.getini("casebook_files")
     docs = []
-    for path in sorted(doc.path.parent.iterdir()):
-        if path == doc.path or not any(fnmatch.fnmatch(path.name, p) for p in patterns):
+    for path in sorted(directory.iterdir()):
+        if not any(fnmatch.fnmatch(path.name, p) for p in patterns):
             continue
         # 名前がパターンに合うディレクトリ（casebook_data.yaml/ など）は読まない
         if not path.is_file():
@@ -694,15 +716,13 @@ class _Outcome:
     observed: dict[str, Any] = field(default_factory=dict)
 
 
-# run_case() が呼ぶ hook の名前 -> 最初の結果だけを使う hook（firstresult）かどうか
-_HOOK_FIRSTRESULT = {
-    "pytest_casebook_run_command": True,
-    "pytest_casebook_request": True,
-    "pytest_casebook_observe": True,
-    "pytest_casebook_setup": False,
-    "pytest_casebook_prepare_call": False,
-    "pytest_casebook_placeholders": False,
-    "pytest_casebook_patterns": False,
+# run_case() が呼ぶ hook の名前 -> 最初の結果だけを使う hook（firstresult）かどうか。
+# hookspecs の @hookspec(firstresult=...) から導く（pluggy が関数に付ける pytest_spec 属性）。
+# hook を足したときに、ここに書き足し忘れて run_case() だけが壊れることのないように
+_HOOK_FIRSTRESULT: dict[str, bool] = {
+    name: bool(getattr(hookspecs, name).pytest_spec.get("firstresult"))
+    for name in dir(hookspecs)
+    if name.startswith("pytest_casebook_")
 }
 
 
@@ -941,6 +961,12 @@ def _execute_case(run: _Run, encoding: str) -> _Outcome:
         # （run_in_process）、call: の関数、request: の hook からも見え、別プロセスで実行する
         # ときはその環境も受け継ぐ
         stack.enter_context(_environ_overlay(_expanded_env(run.doc, case)))
+        if case.call is not None:
+            # YAML と同じディレクトリのモジュールを、conftest.py なしで import できるようにする
+            # （pytest がテストのファイルのディレクトリを sys.path に加えるのと同じ）。
+            # このケースの間だけにし、ほかのディレクトリのケースやふつうのテストの import を
+            # 変えない（先頭に加えるので、同じ名前のモジュールがあると隠してしまう）
+            stack.enter_context(_importable(str(run.doc.path.parent)))
         if run.workdir is not None:
             _write_files(run.workdir, case.setup_files)
         # setup: がないケースでも呼ぶ（data は空）。後片付けが毎回行われ、
@@ -1075,13 +1101,23 @@ def _run_error_hint(
     return ""
 
 
+@contextlib.contextmanager
+def _importable(directory: str) -> Iterator[None]:
+    """この中だけ、directory を sys.path の先頭に加える（もう入っていれば何もしない）。"""
+    if directory in sys.path:
+        yield
+        return
+    sys.path.insert(0, directory)
+    try:
+        yield
+    finally:
+        with contextlib.suppress(ValueError):
+            sys.path.remove(directory)
+
+
 def _execute_call(run: _Run) -> _Outcome:
     case = run.case
-    # YAML と同じディレクトリのモジュールを、conftest.py なしで import できるようにする
-    # （pytest がテストのファイルのディレクトリを sys.path に加えるのと同じ）
-    yaml_dir = str(run.doc.path.parent)
-    if yaml_dir not in sys.path:
-        sys.path.insert(0, yaml_dir)
+    # YAML のディレクトリは _execute_case が sys.path に加えてある
     func = import_callable(str(case.call))
     args = copy.deepcopy(case.args)
     kwargs = copy.deepcopy(case.kwargs)
@@ -1266,7 +1302,7 @@ def _compare_golden(
     except UnicodeDecodeError as e:
         not_utf8 = str(e)
     if config.getoption("--casebook-update"):
-        _claim_golden(request, case, path, label, got, m)
+        _claim_golden(request, case, path, label, actual, got, default_section, m)
         # 結果が同じなら書き直さない（手で書いた期待出力の書き方を崩さず、
         # ヘッダーだけの違いで差分が出ないようにする）
         if (expected is None or golden_differs(expected, got)) and write_golden(path, actual):
@@ -1295,7 +1331,8 @@ def _compare_golden(
     # 同じファイルを使うほかのケースが先に書いていれば書かない（# case: の違いで、
     # ケースごとに書き直し合わないように）
     if config.getoption("--casebook-update-headers"):
-        if _claim_golden(request, case, path, label, got, m) and write_golden(path, actual):
+        claimed = _claim_golden(request, case, path, label, actual, got, default_section, m)
+        if claimed and write_golden(path, actual):
             _record_update(request, path, "")
         else:
             _record_unchanged(request, path)
@@ -1323,7 +1360,9 @@ def _claim_golden(
     case: Case,
     path: Path,
     label: str,
+    actual: str,
     got: GoldenContent,
+    default_section: str,
     m: dict[str, str],
 ) -> bool:
     """
@@ -1333,17 +1372,67 @@ def _claim_golden(
     次の実行で先のケースが失敗する。golden: で同じファイルを指したときや、Windows で
     大文字小文字だけが違うケース名（Add と add）のときに起きる。食い違えば失敗にする。
 
+    先に使ったケースの記録は、プロセスの中の辞書ではなくファイルに置く（_golden_claims_dir）。
+    pytest-xdist では 2 つのケースが別のワーカーで動くことがあり、辞書ではお互いが見えずに
+    黙って上書きしてしまうため。排他で作れたケースが、そのファイルの持ち主になる。
+
+    :param actual: このケースの結果（期待出力の形式。記録に書く）
+    :param got: actual の比べる部分
+    :param default_section: 記録を読み直すときの、見出しのない本文の扱い
     :return: このケースが、そのファイルを最初に使ったケースなら True
     """
-    owners = request.config.stash.setdefault(_GOLDEN_OWNERS, {})
     nodeid: str = request.node.nodeid
-    owner = owners.setdefault(os.path.normcase(path.resolve()), (nodeid, got))
-    if owner[0] != nodeid and golden_differs(owner[1], got):
+    key = os.path.normcase(path.resolve()).encode("utf-8", "surrogatepass")
+    record = _golden_claims_dir(request) / hashlib.sha256(key).hexdigest()
+    try:
+        with record.open("x", encoding="utf-8") as f:
+            f.write(f"{nodeid}\n{actual}{_CLAIM_END}")
+    except FileExistsError:
+        pass
+    else:
+        return True
+    owner, text = _read_claim(record)
+    if owner == nodeid:
+        # 同じテストのやり直し（pytest-rerunfailures など）
+        return True
+    if golden_differs(parse_golden(text, default_section), got):
         pytest.fail(
-            m["golden_shared"].format(name=case.name, label=label, other=owner[0]),
+            m["golden_shared"].format(name=case.name, label=label, other=owner),
             pytrace=False,
         )
-    return owner[0] == nodeid
+    return False
+
+
+def _golden_claims_dir(request: pytest.FixtureRequest) -> Path:
+    """
+    期待出力ファイルの持ち主の記録を置くディレクトリ（tmp_path_factory の basetemp の下）。
+
+    pytest-xdist のワーカーの basetemp は、まとめ役の basetemp の下にワーカーごとに作られる
+    （popen-gw0 など）ので、その親を使えば、どのワーカーからも同じ場所になる。
+    """
+    factory: pytest.TempPathFactory = request.getfixturevalue("tmp_path_factory")
+    base = factory.getbasetemp()
+    if hasattr(request.config, "workerinput"):
+        base = base.parent
+    directory = base / "casebook-golden-claims"
+    directory.mkdir(exist_ok=True)
+    return directory
+
+
+def _read_claim(record: Path) -> tuple[str, str]:
+    """
+    持ち主の記録を (テストの nodeid, 結果) として読む。
+
+    別のワーカーが書いている途中なら、終わりの印（_CLAIM_END）が付くまで少し待つ。
+    """
+    text = ""
+    for _ in range(200):
+        text = record.read_text(encoding="utf-8")
+        if text.endswith(_CLAIM_END):
+            break
+        time.sleep(0.01)
+    owner, _, body = text.removesuffix(_CLAIM_END).partition("\n")
+    return owner, body
 
 
 def _result_changes(expected: GoldenContent | None, got: GoldenContent) -> str:

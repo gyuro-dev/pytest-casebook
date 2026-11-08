@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import datetime
 import html
+import os
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -93,9 +94,10 @@ class ReportOutput:
     lang: str | None = None
 
     def select(self, rows: list[CaseRow]) -> list[CaseRow]:
+        """`files` に入るケースの行（`files` は normcase したパス。_matching_files と同じ）。"""
         if self.files is None:
             return rows
-        return [row for row in rows if row.meta["file"] in self.files]
+        return [row for row in rows if os.path.normcase(row.meta["file"]) in self.files]
 
 
 class CasebookHtmlReport:

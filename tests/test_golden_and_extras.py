@@ -6,6 +6,7 @@ async の関数・skip / xfail・HTML の時間の確認。
 from __future__ import annotations
 
 import decimal
+import enum
 import math
 import re
 import textwrap
@@ -652,6 +653,19 @@ def test_decimal_becomes_a_number(project: pytest.Pytester) -> None:
         """,
     )
     project.runpytest().assert_outcomes(passed=2)
+
+
+def test_int_and_str_enums_are_written_by_name() -> None:
+    """IntEnum・StrEnum のメンバーも、ふつうの Enum と同じく `クラス名.メンバー名` にする。"""
+
+    class Status(enum.IntEnum):
+        ACTIVE = 1
+
+    class Mode(enum.StrEnum):
+        FAST = "fast"
+
+    assert to_jsonable(Status.ACTIVE) == "Status.ACTIVE"
+    assert to_jsonable({"mode": Mode.FAST, "n": 1}) == {"mode": "Mode.FAST", "n": 1}
 
 
 def test_html_shows_the_golden_written_by_update(project: pytest.Pytester) -> None:

@@ -7,6 +7,7 @@ project fixture の ini は casebook_lang = ja なので、`lang: en` を書い�
 
 from __future__ import annotations
 
+import os
 import textwrap
 from pathlib import Path
 
@@ -182,6 +183,22 @@ def _ini(project: pytest.Pytester, *reports: str) -> None:
     project.makeini(
         f"[pytest]\npythonpath = .\ncasebook_lang = ja\ncasebook_html_reports =\n{lines}\n"
     )
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows のファイル名だけが大文字小文字を区別しない")
+def test_html_reports_match_files_regardless_of_case_on_windows(project: pytest.Pytester) -> None:
+    """
+    パターンのディレクトリ名の大文字小文字をディスクと違えて書いても（Tests/ と tests/）、
+    そのファイルのケースが表に入る（glob はパターンに書いた表記で返すため）。
+    """
+    (project.mkdir("tests") / "casebook_en.yaml").write_text(
+        textwrap.dedent(EN_CASES), encoding="utf-8"
+    )
+    _ini(project, "reports/en.html = Tests/casebook_*.yaml")
+    result = project.runpytest("--casebook-update")
+    result.stdout.fnmatch_lines(["*Test specification (HTML):*reports*en.html*"])
+    page = (project.path / "reports" / "en.html").read_text(encoding="utf-8")
+    assert "casebook_en.yaml" in page
 
 
 def test_html_reports_write_one_sheet_per_line(project: pytest.Pytester) -> None:

@@ -308,6 +308,28 @@ def _two_yamls(project: pytest.Pytester, a_golden_dir: str, b_golden_dir: str | 
     )
 
 
+def test_sibling_yamls_are_read_once_per_directory(
+    project: pytest.Pytester, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """消し忘れの確認で読む同じディレクトリの YAML は、ディレクトリごとに 1 度だけ読む。"""
+    from pytest_casebook import plugin
+
+    for name in ("casebook_a", "casebook_b", "casebook_c"):
+        write_casebook(project, "cases:\n  - {name: x, call: calc:add, args: [1, 2]}\n", name=name)
+    project.runpytest("--casebook-update").assert_outcomes(passed=6)
+    loaded: list[Path] = []
+    original = plugin._load_doc
+
+    def counting(config: pytest.Config, path: Path) -> plugin.CasebookDoc:
+        loaded.append(path)
+        return original(config, path)
+
+    monkeypatch.setattr(plugin, "_load_doc", counting)
+    project.runpytest().assert_outcomes(passed=6)
+    # 集めるときに 3 回と、消し忘れの確認でディレクトリを 1 回（3 ファイル）。N² にならない
+    assert len(loaded) == 6
+
+
 def test_shared_golden_dir_does_not_report_each_other(project: pytest.Pytester) -> None:
     """2つの YAML が同じ golden_dir: を使っても、互いの期待出力を消し忘れと間違えない。"""
     _two_yamls(project, "shared", "shared")

@@ -42,6 +42,9 @@ def _safe_repr(value: Any) -> str:
 
 def _to_jsonable(value: Any) -> Any:
     """to_jsonable の本体。"""
+    # Enum は int や str より先に見る（IntEnum・StrEnum のメンバーも `クラス名.メンバー名` にする）
+    if isinstance(value, enum.Enum):
+        return f"{type(value).__name__}.{value.name}"
     if value is None or isinstance(value, bool | int | float | str):
         return value
     if isinstance(value, decimal.Decimal):
@@ -50,8 +53,6 @@ def _to_jsonable(value: Any) -> Any:
             return repr(value) if value.is_snan() else float(value)
         # YAML に書いた 300 や 1.5 と比べられるようにする（float は近い値への丸めを含む）
         return int(value) if value == value.to_integral_value() else float(value)
-    if isinstance(value, enum.Enum):
-        return f"{type(value).__name__}.{value.name}"
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return {
             "__type__": type(value).__name__,

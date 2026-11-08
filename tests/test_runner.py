@@ -114,6 +114,20 @@ def test_bad_module_name_is_reported(spec: str) -> None:
         runner.import_callable(spec)
 
 
+def test_module_error_during_import_is_reported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    モジュール本体が import 中に上げる例外（文法の誤りなど）も、import の誤りとして知らせる
+    （素のトレースバックではなく、ほかの実行の誤りと同じ 1 行のメッセージにする）。
+    """
+    (tmp_path / "casebook_broken_mod.py").write_text("def f(:\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    message = "cannot import module casebook_broken_mod: SyntaxError: "
+    with pytest.raises(runner.CasebookRunError, match=message):
+        runner.import_callable("casebook_broken_mod:f")
+
+
 @pytest.mark.parametrize(("value", "code"), [(True, 1), (False, 0)])
 def test_run_in_process_exit_with_a_bool(value: bool, code: int) -> None:
     """sys.exit(not ok) の真偽値は、別プロセスと同じ数の終了コードにする。"""
