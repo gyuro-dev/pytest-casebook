@@ -7,6 +7,31 @@ incompatible change raises the minor version).
 
 ## [Unreleased]
 
+### Fixed
+
+- Under pytest-xdist, two cases that share a golden file (`golden:` pointing at the same file,
+  or names that differ only in case on Windows) with different results were not caught by
+  `--casebook-update` when they ran on different workers: the later case silently overwrote the
+  file. The check now works across workers (the record is kept under pytest's base temporary
+  directory instead of in each process).
+- `casebook_html_reports`: on Windows with Python 3.11 or 3.13 and later, a pattern whose
+  directory name differs in case from the one on disk (`Tests/casebook_*.yaml` for `tests/`)
+  matched no case, and the sheet was not written.
+- An exception raised by the module of a `call:` case while it is imported (a `SyntaxError`, a
+  missing configuration file, ...) is reported like the other run errors (`cannot import module
+  calc: SyntaxError: ...`) instead of as a raw traceback.
+- `IntEnum` and `StrEnum` members are written as `ClassName.MEMBER`, as the documentation says
+  for enums (they used to be written as the plain number or string). **A golden file that holds
+  such a value changes; rewrite it with `--casebook-update`.**
+- The directory of a `call:` case's YAML is added to `sys.path` only while that case runs. It
+  used to stay there (at the front) for the rest of the session, so a module next to one YAML
+  could shadow a module of the same name in later cases and tests.
+
+### Changed
+
+- `unused_golden_files` reads the other case files of a directory once per directory instead of
+  once per case file.
+
 ## [0.10.0] - 2026-11-03
 
 ### Fixed

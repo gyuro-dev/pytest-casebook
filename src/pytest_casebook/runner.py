@@ -274,9 +274,12 @@ def import_callable(spec: str) -> Callable[..., Any]:
     module_name, _, attr_path = spec.partition(":")
     try:
         obj: Any = importlib.import_module(module_name)
-    except (ImportError, ValueError, TypeError) as e:
-        # ValueError は空のモジュール名、TypeError は相対 import（.mod）
-        raise CasebookRunError(error("import_failed", module=module_name, error=e)) from e
+    # ImportError のほか、ValueError は空のモジュール名、TypeError は相対 import（.mod）。
+    # モジュール本体が import 中に上げる例外（SyntaxError・設定ファイルがないなど）も、
+    # ほかの実行の誤りと同じ形で知らせる（素のトレースバックにしない）
+    except Exception as e:
+        shown = e if isinstance(e, ImportError | ValueError | TypeError) else describe_exception(e)
+        raise CasebookRunError(error("import_failed", module=module_name, error=shown)) from e
     for attr in attr_path.split("."):
         try:
             obj = getattr(obj, attr)

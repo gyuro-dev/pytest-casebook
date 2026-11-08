@@ -616,6 +616,57 @@ def test_shared_golden_with_different_results_fails_on_update(project: pytest.Py
     assert "3" in golden(project, "sum")
 
 
+def test_shared_golden_is_checked_across_xdist_workers(project: pytest.Pytester) -> None:
+    """
+    同じ期待出力ファイルを使う 2 つのケースが pytest-xdist の別のワーカーで動いても、
+    結果が違えば --casebook-update で失敗にする（ワーカーの中だけの記録では互いが見えない）。
+    """
+    pytest.importorskip("xdist")
+    write_casebook(
+        project,
+        "check_orphans: false\ncases:\n"
+        "  - {name: three, call: calc:add, args: [1, 2], golden: sum.txt}\n",
+        name="casebook_a",
+    )
+    write_casebook(
+        project,
+        "check_orphans: false\ngolden_dir: golden/casebook_a\ncases:\n"
+        "  - {name: seven, call: calc:add, args: [3, 4], golden: sum.txt}\n",
+        name="casebook_b",
+    )
+    # loadfile はファイルごとにワーカーを分けるので、2 つのケースは必ず別のワーカーで動く
+    result = project.runpytest("-n", "2", "--dist", "loadfile", "--casebook-update")
+    result.assert_outcomes(passed=1, failed=1)
+    result.stdout.fnmatch_lines(["*期待出力 * はケース * も使っていて、結果が違います*"])
+
+
+def test_yaml_dir_is_on_sys_path_only_while_its_case_runs(project: pytest.Pytester) -> None:
+    """
+    call: のために YAML のディレクトリを sys.path に加えるのは、そのケースの間だけ。
+    ほかのディレクトリのケースからは、前のケースの YAML のディレクトリは見えない
+    （そこにある json.py のようなモジュールが、あとの import を隠さないように）。
+    """
+    a = project.mkdir("a")
+    (a / "a_mod.py").write_text("def f():\n    return 1\n", encoding="utf-8")
+    (a / "casebook_a.yaml").write_text(
+        "check_orphans: false\ncases:\n  - {name: f, call: a_mod:f, expect: {return: 1}}\n",
+        encoding="utf-8",
+    )
+    b = project.mkdir("b")
+    (b / "b_mod.py").write_text(
+        "import os\nimport sys\n\n\ndef check():\n"
+        "    here = os.path.dirname(os.path.abspath(__file__))\n"
+        "    return os.path.join(os.path.dirname(here), 'a') in sys.path\n",
+        encoding="utf-8",
+    )
+    (b / "casebook_b.yaml").write_text(
+        "check_orphans: false\ncases:\n"
+        "  - {name: check, call: b_mod:check, expect: {return: false}}\n",
+        encoding="utf-8",
+    )
+    project.runpytest("a", "b").assert_outcomes(passed=2)
+
+
 def test_run_error_is_shown_once(project: pytest.Pytester) -> None:
     """
     実行の誤り（import できないなど）は、メッセージを1回だけ出す
