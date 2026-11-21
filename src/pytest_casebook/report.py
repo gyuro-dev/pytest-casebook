@@ -484,11 +484,14 @@ def _file_section(texts: dict[str, Any], rows: list[CaseRow], unused: list[str])
     # 期待出力の内容を出すファイルには、<…>（実行ごとに変わる値の置き換え）の注記を1回だけ出す
     if any(r.meta.get("golden_text") for r in rows):
         golden += f"<div class='muted'>{_e(texts['golden_note'])}</div>"
+    # グループのないファイルでは、大項目ごとの集計は（分類なし）の1行だけで、
+    # すぐ上の件数と同じになるので出さない
+    summary = _summary_table(texts, rows, labels[0]) if labels else ""
     return (
         f"<section><h2>{_e(first['title'])} <span class='file'>{_e(first['file'])}</span></h2>"
         f"{desc}{golden}"
         f"<div class='counts'>{_e(texts['cases'].format(n=len(rows)))} {_counts(texts, rows)}</div>"
-        f"{_summary_table(texts, rows, labels[0] if labels else texts['group'])}"
+        f"{summary}"
         f"{_problem_list(texts, rows)}{_unused_golden(texts, unused)}"
         f"{_case_table(texts, rows, labels)}</section>"
     )
@@ -655,6 +658,25 @@ a { color: var(--info); }
 }
 .filter button.golden-toggle[aria-pressed="true"] { background: var(--head); }
 .filter button.golden-toggle:focus-visible { outline: 2px solid var(--info); outline-offset: 1px; }
+@media print {
+  :root:not([data-theme="light"]), :root[data-theme] {
+    --bg: #ffffff; --fg: #1f2328; --muted: #656d76; --line: #d0d7de; --head: #f6f8fa;
+    --group: #f6f8fa; --code: #eff1f3;
+    --ok: #1a7f37; --ok-bg: #dafbe1; --ng: #cf222e; --ng-bg: #ffebe9;
+    --warn: #9a6700; --warn-bg: #fff8c5; --info: #0969da; --info-bg: #ddf4ff;
+    --skip: #57606a; --skip-bg: #eaeef2; color-scheme: light;
+  }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { padding: 0; }
+  header, main { max-width: none; }
+  header .filter { display: none !important; }
+  header > .counts[hidden] { display: block !important; }
+  .scroll, pre { overflow: visible; max-height: none; }
+  h2, h3 { break-after: avoid; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
+  tr:target td { outline: none; }
+}
 """
 
 # ページ上部の絞り込み。外部のファイルを読まず、HTML に埋め込む。
@@ -672,6 +694,10 @@ a { color: var(--info); }
 # 開け閉めする（絞り込みで表から外れている行の分も。表に戻したとき、ほかの行とそろう）。
 # 1つずつ開け閉めしたときもボタンの表示を合わせる（toggle は親に伝わらないので、
 # document で捕捉の段階に受ける）。
+#
+# 「確認が必要なケース」のリンクを押したときは、飛ぶ先の行が絞り込みで表から外れていれば
+# 絞り込みを外し、失敗の詳細を開く（リンクの既定の動き＝その行への移動は、そのあとに起きる）。
+# ページを #case-N 付きで開いたときも、その行の詳細を開く。
 # 埋め込みの JavaScript とCSS にはコメントを書かない（英語のレポートに日本語が入らないように）。
 _JS = r"""
 (() => {
@@ -763,6 +789,23 @@ _JS = r"""
   });
   input.addEventListener("input", apply);
 
+  const reveal = (id) => {
+    const found = tables.flatMap((t) => t.cases).find((c) => c.tr.id === id);
+    if (!found) return;
+    if (!found.tr.isConnected) {
+      selected.clear();
+      input.value = "";
+      apply();
+    }
+    if (found.detail) {
+      found.detail.querySelectorAll("details:not(.golden)").forEach((d) => (d.open = true));
+    }
+  };
+  document.addEventListener("click", (event) => {
+    const link = event.target.closest && event.target.closest('a[href^="#case-"]');
+    if (link) reveal(link.getAttribute("href").slice(1));
+  });
+
   const goldenToggle = bar.querySelector(".golden-toggle");
   if (goldenToggle) {
     const golden = Array.from(document.querySelectorAll("details.golden"));
@@ -785,5 +828,6 @@ _JS = r"""
   document.querySelector("header > .counts").hidden = true;
   bar.hidden = false;
   apply();
+  if (location.hash) reveal(decodeURIComponent(location.hash.slice(1)));
 })();
 """

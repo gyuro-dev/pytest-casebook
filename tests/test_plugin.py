@@ -951,6 +951,54 @@ def test_html_report_is_self_contained(project: pytest.Pytester) -> None:
     assert "@import" not in page
 
 
+def test_html_report_summary_table_only_with_groups(project: pytest.Pytester) -> None:
+    """
+    グループのないファイルには、大項目ごとの集計を出さない（（分類なし）の1行だけで、
+    件数の行と同じになるため）。グループのあるファイルには今までどおり出す。
+    """
+    write_casebook(
+        project,
+        "check_orphans: false\ncases:\n  - {name: a, call: calc:add, args: [1, 2]}\n",
+        name="casebook_flat",
+    )
+    write_casebook(
+        project,
+        "check_orphans: false\ncases:\n  - group: 計算\n"
+        "    cases:\n      - {name: b, call: calc:add, args: [1, 2]}\n",
+        name="casebook_grouped",
+    )
+    project.runpytest("--casebook-update")
+    report = project.path / "report.html"
+    project.runpytest(f"--casebook-html={report}")
+    page = report.read_text(encoding="utf-8")
+    assert page.count("<table class='summary'>") == 1
+    assert "<tr><td>計算</td><td class='num'>1</td>" in page
+    assert TEXTS["ja"]["ungrouped"] not in page
+
+
+def test_html_report_prints_as_a_sheet(project: pytest.Pytester) -> None:
+    """
+    印刷・PDF 保存では、絞り込みを隠して件数を出し、明るい配色で、表や差分を切らずに出す。
+    「確認が必要なケース」のリンクは、絞り込みを外して失敗の詳細を開く。
+    """
+    write_casebook(project, "cases:\n  - {name: add, call: calc:add, args: [1, 2]}\n")
+    project.runpytest("--casebook-update")
+    report = project.path / "report.html"
+    project.runpytest(f"--casebook-html={report}")
+    page = report.read_text(encoding="utf-8")
+    print_css = page[page.index("@media print") :]
+    for rule in (
+        "header .filter { display: none !important; }",
+        "header > .counts[hidden] { display: block !important; }",
+        ".scroll, pre { overflow: visible; max-height: none; }",
+        "print-color-adjust: exact;",
+        "--bg: #ffffff;",
+    ):
+        assert rule in print_css
+    assert """closest('a[href^="#case-"]')""" in page
+    assert 'details:not(.golden)").forEach((d) => (d.open = true))' in page
+
+
 JAPANESE = re.compile("[぀-ヿ一-鿿]")
 
 

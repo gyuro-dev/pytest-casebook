@@ -44,6 +44,17 @@ def test_value_matchers_mismatch(expected: object, message: str) -> None:
     assert message in problems[0]
 
 
+def test_multiline_value_mismatch_is_a_diff() -> None:
+    """ファイルの内容などの複数行の文字列は、1行に並べず unified diff で違いを示す。"""
+    (problem,) = match_value(
+        {"out.csv": "id,name\n1,佐藤\n2,鈴木\n"}, {"out.csv": "id,name\n1,佐藤\n2,鈴本\n"}, "files"
+    )
+    assert problem.startswith("files.out.csv: differs from the expected value\n")
+    assert "\n-2,鈴木\n+2,鈴本" in problem
+    # 1行どうしは、これまでどおり期待と実際を並べる
+    assert match_value("a", "b", "v") == ['v: expected "a" / actual "b"']
+
+
 def test_data_without_dollar_is_still_data() -> None:
     """$ のないキーはデータとして比べる（contains というキーを持つデータと紛れない）。"""
     assert match_value({"contains": "a"}, {"contains": "a", "x": 1}, "v") == []

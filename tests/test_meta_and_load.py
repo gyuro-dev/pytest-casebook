@@ -350,6 +350,32 @@ def test_case_name_ending_with_a_newline(tmp_path: Path) -> None:
         _load_text(tmp_path, 'cases:\n  - {name: "a\\n", call: "m:f"}\n')
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        'cases:\n  - {name: 0, call: "m:f"}\n',
+        'cases:\n  - {name: t, call: "m:f", params: [{name: 2999}]}\n',
+    ],
+)
+def test_numeric_case_name_asks_for_quotes(tmp_path: Path, text: str) -> None:
+    """境界値の {name: 0} は YAML では数値なので、引用符で囲むよう知らせる。"""
+    with pytest.raises(pytest_casebook.CasebookError, match=r'name: "(0|2999)"'):
+        _load_text(tmp_path, text)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows の環境変数名は大文字小文字を区別しない")
+def test_env_names_merge_regardless_of_case_on_windows(tmp_path: Path) -> None:
+    doc = _load_text(
+        tmp_path,
+        """
+        env: {PATH: /bin, Foo: a}
+        cases:
+          - {name: a, call: "m:f", env: {path: null, FOO: b}}
+        """,
+    )
+    assert doc.cases[0].env == {"FOO": "b"}
+
+
 # YAML のダブルクォートの中の書き方（\\\\ は \、\\n は改行）
 @pytest.mark.parametrize("name", [".", "sub/", "sub\\\\", "sub/.", "a\\nb"])
 def test_setup_file_must_name_a_file(tmp_path: Path, name: str) -> None:

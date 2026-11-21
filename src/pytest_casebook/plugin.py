@@ -301,11 +301,30 @@ def _check_command_options(config: pytest.Config) -> None:
     try:
         shlex.split(config.getini(name))
     except ValueError as e:
-        raise pytest.UsageError(error("bad_shell", where=name, key=name, error=e)) from None
+        # pytest_configure で casebook_lang を確かめたあとに呼ぶ
+        with language(config.getini("casebook_lang")):
+            message = error("bad_shell", where=name, key=name, error=e)
+        raise pytest.UsageError(message) from None
+
+
+def _check_file_patterns(config: pytest.Config) -> None:
+    """
+    casebook_files がファイル名だけのパターンか確かめる。
+
+    パターンはファイル名と比べるので、`specs/*.yaml` のようにディレクトリを書くと、
+    誤りにならずにどのファイルにも合わず、ケースが1件も集まらない。
+    """
+    for pattern in config.getini("casebook_files"):
+        if "/" in pattern or "\\" in pattern:
+            raise pytest.UsageError(
+                "casebook_files takes file name patterns (casebook_*.yaml), not paths: "
+                f"{pattern} (choose the directories with testpaths or the command line)"
+            )
 
 
 def pytest_configure(config: pytest.Config) -> None:
     _texts(config)  # casebook_lang を確かめる
+    _check_file_patterns(config)
     _check_command_options(config)
     html = config.getoption("--casebook-html")
     reports = _html_reports(config)
@@ -1302,10 +1321,18 @@ def _compare_golden(
     except UnicodeDecodeError as e:
         not_utf8 = str(e)
     if config.getoption("--casebook-update"):
-        _claim_golden(request, case, path, label, actual, got, default_section, m)
+        # 同じファイルを使うほかのケースが先に使っていれば、書くのはそのケースに任せる
+        # （結果が同じことは _claim_golden が確かめる）。pytest-xdist で2つのワーカーが
+        # 同じファイルを同時に書いたり、# case: の行がどちらのケースになるかが実行ごとに
+        # 変わったりしないように
+        claimed = _claim_golden(request, case, path, label, actual, got, default_section, m)
         # 結果が同じなら書き直さない（手で書いた期待出力の書き方を崩さず、
         # ヘッダーだけの違いで差分が出ないようにする）
-        if (expected is None or golden_differs(expected, got)) and write_golden(path, actual):
+        if (
+            claimed
+            and (expected is None or golden_differs(expected, got))
+            and write_golden(path, actual)
+        ):
             _record_update(request, path, _result_changes(expected, got))
         else:
             _record_unchanged(request, path)

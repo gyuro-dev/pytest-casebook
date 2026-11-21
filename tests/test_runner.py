@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 import time
@@ -77,6 +78,28 @@ def test_program_is_found_on_path_from_env(tmp_path: Path, monkeypatch: pytest.M
 def test_env_names_are_case_insensitive_on_windows() -> None:
     merged = runner._overlay_env({"PATH": "a", "X": "1"}, {"Path": "b"})
     assert merged == {"X": "1", "Path": "b"}
+
+
+def test_async_function_runs_under_a_running_event_loop() -> None:
+    """
+    イベントループが動いているスレッドから呼んでも、async def の関数を最後まで動かす
+    （asyncio.run の RuntimeError を、関数が上げた例外と取り違えない）。
+    """
+
+    async def add(a: int, b: int) -> int:
+        await asyncio.sleep(0)
+        print("added")
+        return a + b
+
+    async def fail() -> None:
+        raise ValueError("boom")
+
+    async def main() -> tuple[runner.CallResult, runner.CallResult]:
+        return runner.invoke(add, [1, 2], {}), runner.invoke(fail, [], {})
+
+    ok, failed = asyncio.run(main())
+    assert (ok.error, ok.value, ok.stdout) == (None, 3, "added\n")
+    assert isinstance(failed.error, ValueError)
 
 
 def test_timeout_also_stops_grandchildren(tmp_path: Path) -> None:
