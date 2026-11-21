@@ -697,7 +697,8 @@ a { color: var(--info); }
 #
 # 「確認が必要なケース」のリンクを押したときは、飛ぶ先の行が絞り込みで表から外れていれば
 # 絞り込みを外し、失敗の詳細を開く（リンクの既定の動き＝その行への移動は、そのあとに起きる）。
-# ページを #case-N 付きで開いたときも、その行の詳細を開く。
+# ページを #case-N 付きで開いたときと、ブラウザの戻る・進むで #case-N が変わったときも、
+# その行を表に戻して詳細を開き、その行へ移る（行の ID は case-<数字> なので、デコードしない）。
 # 埋め込みの JavaScript とCSS にはコメントを書かない（英語のレポートに日本語が入らないように）。
 _JS = r"""
 (() => {
@@ -828,6 +829,14 @@ _JS = r"""
   document.querySelector("header > .counts").hidden = true;
   bar.hidden = false;
   apply();
-  if (location.hash) reveal(decodeURIComponent(location.hash.slice(1)));
+  const revealHash = () => {
+    if (!location.hash.startsWith("#case-")) return;
+    const id = location.hash.slice(1);
+    reveal(id);
+    const row = document.getElementById(id);
+    if (row) row.scrollIntoView();
+  };
+  window.addEventListener("hashchange", revealHash);
+  revealHash();
 })();
 """

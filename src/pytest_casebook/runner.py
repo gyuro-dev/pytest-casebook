@@ -356,7 +356,7 @@ def _run_coroutine(coro: Coroutine[Any, Any, _T]) -> _T:
         except BaseException as e:  # noqa: BLE001
             errors.append(e)
 
-    worker = threading.Thread(target=target, name="casebook-async")
+    worker = threading.Thread(target=target, name="casebook-async", daemon=True)
     worker.start()
     worker.join()
     if errors:

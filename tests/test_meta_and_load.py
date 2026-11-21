@@ -355,11 +355,12 @@ def test_case_name_ending_with_a_newline(tmp_path: Path) -> None:
     [
         'cases:\n  - {name: 0, call: "m:f"}\n',
         'cases:\n  - {name: t, call: "m:f", params: [{name: 2999}]}\n',
+        'cases:\n  - {name: 100, call: "m:f", params: [{name: a}]}\n',  # テンプレートの名前
     ],
 )
 def test_numeric_case_name_asks_for_quotes(tmp_path: Path, text: str) -> None:
     """境界値の {name: 0} は YAML では数値なので、引用符で囲むよう知らせる。"""
-    with pytest.raises(pytest_casebook.CasebookError, match=r'name: "(0|2999)"'):
+    with pytest.raises(pytest_casebook.CasebookError, match=r'name: "(0|2999|100)"'):
         _load_text(tmp_path, text)
 
 

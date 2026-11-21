@@ -850,7 +850,7 @@ def _expand_params(
     if not (isinstance(params, list) and params and all(isinstance(p, dict) for p in params)):
         raise CasebookError(error("params_list", where=loc))
     template = {k: v for k, v in item.items() if k != "params"}
-    name = _str(template.get("name"), loc, "name", required=True)
+    name = _name(template.get("name"), loc)
     for param in params:
         # 誤りの表示とレポートの行番号は、要素自身の行を優先する（分からなければ
         # テンプレートの行）。_parse_case が merged の id で行を引けるように登録する

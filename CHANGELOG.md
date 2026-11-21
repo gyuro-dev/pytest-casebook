@@ -28,7 +28,9 @@ incompatible change raises the minor version).
   could shadow a module of the same name in later cases and tests.
 - Under pytest-xdist, `--casebook-update` let every case that shares a golden file write it, so
   two workers could write the same file at once and the `# case:` line named whichever case
-  wrote last. Only the case that used the file first writes it now.
+  wrote last. Only the case that used the file first writes it now. With `--casebook-html`, the
+  report rows of the other cases show their own result as the golden contents, so they are not
+  empty when that case's worker has not written the file yet.
 - `request.headers: {Authorization: null}` sent a header with the value `None`. A `null` now
   leaves the `request_defaults` header out of that request (as `null` does in `env:`). A list or
   a mapping as a header value is an error instead of being sent as its text, and `null` in
@@ -58,7 +60,8 @@ incompatible change raises the minor version).
   - Printing (or saving as PDF) hides the filter, shows the counts, uses the light colors and
     does not cut wide tables or long diffs.
   - A link under "Cases to check" clears the filter when its row is hidden and opens the
-    failure details.
+    failure details. So does opening the page with `#case-N`, or going back and forward
+    between such links.
   - A file without groups no longer gets the per-group summary table (it held one
     "(ungrouped)" row that repeated the counts above it).
 

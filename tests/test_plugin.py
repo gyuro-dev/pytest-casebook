@@ -640,6 +640,50 @@ def test_shared_golden_is_checked_across_xdist_workers(project: pytest.Pytester)
     result.stdout.fnmatch_lines(["*期待出力 * はケース * も使っていて、結果が違います*"])
 
 
+def test_shared_golden_is_written_by_the_first_case(project: pytest.Pytester) -> None:
+    """
+    同じ期待出力ファイルを使うケースの結果が同じなら、--casebook-update で書くのは最初に
+    使ったケースだけ（# case: の行はそのケースのまま。次の更新でも書き直し合わない）。
+    """
+    write_casebook(
+        project,
+        """
+        cases:
+          - {name: three, call: calc:add, args: [1, 2], golden: sum.txt}
+          - {name: also_three, call: calc:add, args: [2, 1], golden: sum.txt}
+        """,
+    )
+    project.runpytest("--casebook-update").assert_outcomes(passed=3)
+    text = golden(project, "sum")
+    assert text.startswith("# case: three\n")
+    result = project.runpytest("--casebook-update")
+    result.assert_outcomes(passed=3)
+    assert golden(project, "sum") == text
+
+
+def test_shared_golden_text_in_the_report_under_xdist(project: pytest.Pytester) -> None:
+    """
+    pytest-xdist で --casebook-update と HTML レポートを一緒に使っても、書くのをほかの
+    ケースに任せたケースの行にも、期待出力の内容が出る（持ち主のワーカーが書く前に
+    ファイルを読み直すと、空や古い内容になる）。
+    """
+    pytest.importorskip("xdist")
+    for name, args in (("casebook_a", "[1, 2]"), ("casebook_b", "[2, 1]")):
+        write_casebook(
+            project,
+            "check_orphans: false\ngolden_dir: golden/shared\ncases:\n"
+            f"  - {{name: {name[-1]}, call: calc:add, args: {args}, golden: sum.txt}}\n",
+            name=name,
+        )
+    report = project.path / "report.html"
+    result = project.runpytest(
+        "-n", "2", "--dist", "loadfile", "--casebook-update", f"--casebook-html={report}"
+    )
+    result.assert_outcomes(passed=2)
+    page = report.read_text(encoding="utf-8")
+    assert page.count("<details class='golden'>") == 2
+
+
 def test_yaml_dir_is_on_sys_path_only_while_its_case_runs(project: pytest.Pytester) -> None:
     """
     call: のために YAML のディレクトリを sys.path に加えるのは、そのケースの間だけ。
@@ -997,6 +1041,10 @@ def test_html_report_prints_as_a_sheet(project: pytest.Pytester) -> None:
         assert rule in print_css
     assert """closest('a[href^="#case-"]')""" in page
     assert 'details:not(.golden)").forEach((d) => (d.open = true))' in page
+    # ブラウザの戻る・進むでも開く。行の ID は case-<数字> なので、ハッシュはデコードしない
+    # （壊れた %xx のハッシュで URIError にならないように）
+    assert 'window.addEventListener("hashchange", revealHash);' in page
+    assert "decodeURIComponent" not in page
 
 
 JAPANESE = re.compile("[぀-ヿ一-鿿]")
