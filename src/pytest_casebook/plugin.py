@@ -301,11 +301,30 @@ def _check_command_options(config: pytest.Config) -> None:
     try:
         shlex.split(config.getini(name))
     except ValueError as e:
-        raise pytest.UsageError(error("bad_shell", where=name, key=name, error=e)) from None
+        # pytest_configure で casebook_lang を確かめたあとに呼ぶ
+        with language(config.getini("casebook_lang")):
+            message = error("bad_shell", where=name, key=name, error=e)
+        raise pytest.UsageError(message) from None
+
+
+def _check_file_patterns(config: pytest.Config) -> None:
+    """
+    casebook_files がファイル名だけのパターンか確かめる。
+
+    パターンはファイル名と比べるので、`specs/*.yaml` のようにディレクトリを書くと、
+    誤りにならずにどのファイルにも合わず、ケースが1件も集まらない。
+    """
+    for pattern in config.getini("casebook_files"):
+        if "/" in pattern or "\\" in pattern:
+            raise pytest.UsageError(
+                "casebook_files takes file name patterns (casebook_*.yaml), not paths: "
+                f"{pattern} (choose the directories with testpaths or the command line)"
+            )
 
 
 def pytest_configure(config: pytest.Config) -> None:
     _texts(config)  # casebook_lang を確かめる
+    _check_file_patterns(config)
     _check_command_options(config)
     html = config.getoption("--casebook-html")
     reports = _html_reports(config)
@@ -501,20 +520,31 @@ def _text_expect_line(label: str, value: Any, texts: dict[str, Any]) -> str:
     return _shorten(f"{label} = {compact(to_jsonable(value))}")
 
 
-def _golden_text(doc: CasebookDoc, case: Case, mode: str, limit: int, texts: dict[str, Any]) -> str:
+def _golden_text(
+    doc: CasebookDoc,
+    case: Case,
+    mode: str,
+    limit: int,
+    texts: dict[str, Any],
+    *,
+    content: GoldenContent | None = None,
+) -> str:
     """
     HTML レポートに出す、期待出力ファイルの内容（レポートで、ケースの行の下に折りたたんで出す）。
 
     比較と同じ、比べる部分だけを出す（`# case:` などの説明のヘッダーは出さない）。
     summary なら limit 行で打ち切り、「…（あと n 行）」を添える。ファイルがない
     （`--casebook-update` の前など）か読めなければ、空にする（エラーにしない）。
+
+    :param content: ファイルの代わりに出す内容（None ならファイルを読む）
     """
     if mode == "off" or not case.uses_golden:
         return ""
-    try:
-        content = parse_golden(read_golden(doc.golden_path(case)), DEFAULT_SECTIONS[case.kind])
-    except (OSError, ValueError):
-        return ""
+    if content is None:
+        try:
+            content = parse_golden(read_golden(doc.golden_path(case)), DEFAULT_SECTIONS[case.kind])
+        except (OSError, ValueError):
+            return ""
     text = comparable_text(content, content, content).rstrip("\n")
     if not text:
         return ""
@@ -1302,15 +1332,25 @@ def _compare_golden(
     except UnicodeDecodeError as e:
         not_utf8 = str(e)
     if config.getoption("--casebook-update"):
-        _claim_golden(request, case, path, label, actual, got, default_section, m)
+        # 同じファイルを使うほかのケースが先に使っていれば、書くのはそのケースに任せる
+        # （結果が同じことは _claim_golden が確かめる）。pytest-xdist で2つのワーカーが
+        # 同じファイルを同時に書いたり、# case: の行がどちらのケースになるかが実行ごとに
+        # 変わったりしないように
+        claimed = _claim_golden(request, case, path, label, actual, got, default_section, m)
         # 結果が同じなら書き直さない（手で書いた期待出力の書き方を崩さず、
         # ヘッダーだけの違いで差分が出ないようにする）
-        if (expected is None or golden_differs(expected, got)) and write_golden(path, actual):
+        if (
+            claimed
+            and (expected is None or golden_differs(expected, got))
+            and write_golden(path, actual)
+        ):
             _record_update(request, path, _result_changes(expected, got))
         else:
             _record_unchanged(request, path)
-        # 書かなかったときも読み直す（同じファイルを使う前のケースが書いていることがある）
-        _refresh_report_golden(request, doc, case)
+        # 書いたケースは、書いた（または残した）ファイルを読み直す。書くのをほかのケースに
+        # 任せたケースは、このケースの結果から作る（結果が同じことは確かめてある）。
+        # pytest-xdist では、持ち主のワーカーがまだ書いていないことがあるため
+        _refresh_report_golden(request, doc, case, None if claimed else got)
         return
     if not_utf8 is not None:
         message = m["golden_not_utf8"].format(name=case.name, label=label, error=not_utf8)
@@ -1338,12 +1378,19 @@ def _compare_golden(
             _record_unchanged(request, path)
 
 
-def _refresh_report_golden(request: pytest.FixtureRequest, doc: CasebookDoc, case: Case) -> None:
+def _refresh_report_golden(
+    request: pytest.FixtureRequest,
+    doc: CasebookDoc,
+    case: Case,
+    content: GoldenContent | None = None,
+) -> None:
     """
     HTML レポートに出す期待出力の内容を、書き直したあとのものにする。
 
     内容は集めるときに読んでいるので、`--casebook-update` で作った・書き直した
     期待出力は、ここで読み直さないとレポートに出ない（または古いまま出る）。
+
+    :param content: 出す内容（None ならファイルを読み直す）
     """
     config = request.config
     if not _html_enabled(config):
@@ -1352,7 +1399,9 @@ def _refresh_report_golden(request: pytest.FixtureRequest, doc: CasebookDoc, cas
     if isinstance(meta, dict):
         # 集めるときと同じく、このファイルの言語（YAML の lang:。なければ ini）
         texts = TEXTS[doc.lang]
-        meta["golden_text"] = _golden_text(doc, case, *_html_golden_options(config), texts)
+        meta["golden_text"] = _golden_text(
+            doc, case, *_html_golden_options(config), texts, content=content
+        )
 
 
 def _claim_golden(

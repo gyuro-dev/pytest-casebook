@@ -54,20 +54,7 @@ def match_text(expected: Any, actual: str, label: str, lang: str = "en") -> list
         expected = expected.rstrip("\n")
         if expected == actual:
             return []
-        if "\n" in expected or "\n" in actual:
-            # 末尾の改行は取り除いてあるので、行は改行なしで比べて、あとで改行でつなぐ
-            # （keepends で比べると、最後の行どうしが1行につながってしまう）
-            diff = "\n".join(
-                difflib.unified_diff(
-                    show_controls(expected).splitlines(),
-                    show_controls(actual).splitlines(),
-                    fromfile=m["diff_expected"].format(label=label),
-                    tofile=m["diff_actual"].format(label=label),
-                    lineterm="",
-                )
-            )
-            return [m["text_differs"].format(label=label) + f"\n{diff.rstrip()}"]
-        return [_mismatch(m, label, expected, actual)]
+        return [_text_mismatch(m, label, expected, actual)]
 
     ((matcher, pattern),) = expected.items()
     matcher = matcher.lstrip("$")  # {contains} と {$contains} は同じ
@@ -84,6 +71,29 @@ def match_text(expected: Any, actual: str, label: str, lang: str = "en") -> list
 
 def _mismatch(m: dict[str, str], label: str, expected: Any, actual: Any) -> str:
     return m["mismatch"].format(label=label, expected=_show(expected), actual=_show(actual))
+
+
+def _text_mismatch(m: dict[str, str], label: str, expected: str, actual: str) -> str:
+    """
+    違う2つの文字列の説明。どちらかが複数行なら unified diff にする（`\\n` でつないだ
+    1行に並べると、長い文字列のどこが違うのかが分からないため）。
+
+    末尾の改行は、呼ぶ側で取り除いておく。
+    """
+    if "\n" not in expected and "\n" not in actual:
+        return _mismatch(m, label, expected, actual)
+    # 行は改行なしで比べて、あとで改行でつなぐ
+    # （keepends で比べると、最後の行どうしが1行につながってしまう）
+    diff = "\n".join(
+        difflib.unified_diff(
+            show_controls(expected).splitlines(),
+            show_controls(actual).splitlines(),
+            fromfile=m["diff_expected"].format(label=label),
+            tofile=m["diff_actual"].format(label=label),
+            lineterm="",
+        )
+    )
+    return m["text_differs"].format(label=label) + f"\n{diff.rstrip()}"
 
 
 def match_value(expected: Any, actual: Any, label: str, lang: str = "en") -> list[str]:
@@ -123,8 +133,9 @@ def match_value(expected: Any, actual: Any, label: str, lang: str = "en") -> lis
         return problems
     if isinstance(expected, str) and isinstance(actual, str):
         # ファイルの内容などは末尾の改行の有無を問わない（YAML の書き方で変わりやすいため）
-        if expected.rstrip("\n") != actual.rstrip("\n"):
-            return [_mismatch(m, label, expected, actual)]
+        expected, actual = expected.rstrip("\n"), actual.rstrip("\n")
+        if expected != actual:
+            return [_text_mismatch(m, label, expected, actual)]
         return []
     # NaN は NaN と一致させる（YAML の .nan と、Decimal("NaN") などから来た float）
     if (

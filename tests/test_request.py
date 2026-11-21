@@ -425,3 +425,51 @@ def test_flask_binary_response() -> None:
     res = send_with_werkzeug_client(app.test_client(), HttpRequest("GET", "/b"))
     assert res.status == 200
     assert res.body == "\ufffd\ufffd"
+
+
+def test_null_header_leaves_out_the_default(tmp_path: Path) -> None:
+    """
+    request.headers の null は request_defaults のヘッダーを送らない印（env: の null と同じ）。
+
+    "None" という値のヘッダーを送ると、認証なしのつもりが不正なトークンの確かめになる。
+    """
+    path = tmp_path / "casebook_h.yaml"
+    path.write_text(
+        textwrap.dedent(
+            """
+            request_defaults:
+              headers: {Authorization: Bearer default, X-Keep: a}
+            cases:
+              - name: no_token
+                request: {path: /x, headers: {authorization: null, X-Id: 1}}
+                expect: {status: 401}
+            """
+        ),
+        encoding="utf-8",
+    )
+    (case,) = pytest_casebook.load(path).cases
+    assert case.request is not None
+    assert case.request.headers == {"X-Keep": "a", "X-Id": "1"}
+
+
+@pytest.mark.parametrize("value", ["[a, b]", "{a: 1}"])
+def test_header_value_must_be_a_scalar(tmp_path: Path, value: str) -> None:
+    """リストやマッピングを文字列にして送らない（スキーマと同じく文字列・数値・真偽値だけ）。"""
+    path = tmp_path / "casebook_h.yaml"
+    path.write_text(
+        f"cases:\n  - {{name: a, request: {{path: /x, headers: {{X-A: {value}}}}}}}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(pytest_casebook.CasebookError, match=r"request\.headers"):
+        pytest_casebook.load(path)
+
+
+def test_null_default_header_is_an_error(tmp_path: Path) -> None:
+    """request_defaults の null には消す相手がない（ケースの request.headers に書くよう案内）。"""
+    path = tmp_path / "casebook_h.yaml"
+    path.write_text(
+        "request_defaults: {headers: {Authorization: null}}\ncases:\n  - {name: a, request: /x}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(pytest_casebook.CasebookError, match="Authorization: null"):
+        pytest_casebook.load(path)

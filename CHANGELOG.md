@@ -26,11 +26,44 @@ incompatible change raises the minor version).
 - The directory of a `call:` case's YAML is added to `sys.path` only while that case runs. It
   used to stay there (at the front) for the rest of the session, so a module next to one YAML
   could shadow a module of the same name in later cases and tests.
+- Under pytest-xdist, `--casebook-update` let every case that shares a golden file write it, so
+  two workers could write the same file at once and the `# case:` line named whichever case
+  wrote last. Only the case that used the file first writes it now. With `--casebook-html`, the
+  report rows of the other cases show their own result as the golden contents, so they are not
+  empty when that case's worker has not written the file yet.
+- `request.headers: {Authorization: null}` sent a header with the value `None`. A `null` now
+  leaves the `request_defaults` header out of that request (as `null` does in `env:`). A list or
+  a mapping as a header value is an error instead of being sent as its text, and `null` in
+  `request_defaults.headers` is an error.
+- An `async def` function in a `call:` case failed with `RuntimeError: asyncio.run() cannot be
+  called from a running event loop` (reported as if the function had raised it) when the case
+  ran in a thread with a running event loop. The coroutine now runs in its own thread.
+- `load(..., ini=True)` reported a `casebook_command_prefix` that cannot be split as a
+  `CasebookError` in English. It is a `ValueError`, like the other ini values, in the language
+  of `casebook_lang`. The same pytest usage error follows `casebook_lang` too.
+- On Windows, `env:` names that differ only in case (`PATH` in the file, `path: null` in a case)
+  did not override or remove each other.
 
 ### Changed
 
 - `unused_golden_files` reads the other case files of a directory once per directory instead of
   once per case file.
+- An `expect:` value that is a multi-line string (a file's contents in `files`, a string in
+  `return` or `json`) is shown as a unified diff when it differs, as `stdout` already was.
+- A case name or `params` element name written as a number (`name: 0`) is reported with a hint
+  to quote it.
+- A `casebook_files` pattern with a directory (`specs/*.yaml`) is a usage error. The patterns
+  are matched against file names, so such a pattern collected nothing without saying so.
+- The JSON schema requires `cases` in a group, accepts `null` in `request.headers`, and rejects
+  an empty `golden_dir`, `state` or `golden`, as loading the file does.
+- HTML report:
+  - Printing (or saving as PDF) hides the filter, shows the counts, uses the light colors and
+    does not cut wide tables or long diffs.
+  - A link under "Cases to check" clears the filter when its row is hidden and opens the
+    failure details. So does opening the page with `#case-N`, or going back and forward
+    between such links.
+  - A file without groups no longer gets the per-group summary table (it held one
+    "(ungrouped)" row that repeated the counts above it).
 
 ## [0.10.0] - 2026-11-03
 

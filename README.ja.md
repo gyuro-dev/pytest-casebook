@@ -506,7 +506,7 @@ HTML レポートの階層の列は、実際に使われているグループの
 | `description` | 確認する内容 |
 | `command` | CLI として実行する引数。`command_prefix` の後ろに付く。文字列は shell と同じ書き方で区切り、リスト（`[a, 'b c']`）はそのまま渡す（[書き方](#yaml-の全体)）。`command_prefix` があれば空文字（`""`）でもよい |
 | `stdin` | command の標準入力 |
-| `stdin_file` | 標準入力に渡すファイル。YAML のディレクトリからの相対パス。`stdin` とは同時に書けない |
+| `stdin_file` | 標準入力に渡すファイル（UTF-8）。YAML のディレクトリからの相対パス。`stdin` とは同時に書けない |
 | `timeout` | ケースを時間切れで失敗にするまでの秒数（`command`・`call`・`request`。[詳しく](#時間の上限-timeout)） |
 | `env` | ケースを実行する間の環境変数。今の環境変数に重ねる（[書き方](#環境変数-env)） |
 | `call` | 呼び出す関数（`モジュール:関数`、`モジュール:クラス.メソッド`）。`async def` の関数は終わるまで待つ |
@@ -533,7 +533,7 @@ HTML レポートの階層の列は、実際に使われているグループの
 ケースは、期待出力ファイルか `expect:` のどちらか一方と比べます。\
 `expect:` にキーを1つでも書くと、期待出力ファイルは読みも書きもせず、`expect:` に書いた項目だけを比べます。\
 そのため、「`exit_code` は YAML に書き、stdout は期待出力ファイルで比べる」ことはできません。\
-両方を確かめるときは、両方を `expect:` に書くか、`expect:` を書かずに期待出力ファイルに両方を残します。
+両方を確かめるときは、両方を `expect:` に書くか、`expect:` を書かずに期待出力ファイルに両方を残します。書いていない項目は比べないので、`stdout` だけを書くと `exit_code` が 1 でも成功になります。終わり方も確かめるときは、`exit_code`（request は `status`）も書きます。
 
 ```yaml
 expect:
@@ -715,6 +715,11 @@ cases:
       json: {title: 牛乳を買う}         # 書いたキーだけを比べる
       headers: {Location: {$regex: '^/todos/\d+$'}}
       db.todos: [{title: 牛乳を買う}]   # DB の変化も確かめられる
+  - name: no_token
+    request:
+      path: /todos
+      headers: {Authorization: null}   # null なら request_defaults のヘッダーを送らない
+    expect: {status: 401}
 ```
 
 conftest.py には、リクエストを送る hook を書きます。\
@@ -1133,7 +1138,7 @@ pytest がテストの場所として受け取るので、JUnit XML（xunit1）�
 
 | 名前 | 既定値 | 内容 |
 |---|---|---|
-| `casebook_files` | `casebook_*.yaml` `casebook_*.yml` `*.casebook.yaml` `*.casebook.yml` | 集めるファイル名のパターン |
+| `casebook_files` | `casebook_*.yaml` `casebook_*.yml` `*.casebook.yaml` `*.casebook.yml` | 集めるファイル名のパターン（ディレクトリは書けない。集める場所は `testpaths` などで選ぶ） |
 | `casebook_command_prefix` | （なし） | command の前に付ける引数 |
 | `casebook_encoding` | `utf-8` | command の出力の文字コード |
 | `casebook_golden_dir` | `golden` | 期待出力ファイルの置き場所。その下に、ケースファイル名（拡張子なし）のディレクトリを作る |

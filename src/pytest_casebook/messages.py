@@ -232,6 +232,10 @@ ERRORS: dict[str, dict[str, str]] = {
         "in_case": "（ケース {name}）",
         "unknown_keys": "{where}: 知らないキーがあります: {keys}",
         "not_string": "{where}: {key} は文字列で書いてください",
+        "name_number": (
+            "{where}: name が数値（{name}）になっています。"
+            '数字の名前は name: "{name}" のように引用符で囲んでください'
+        ),
         "not_bool": "{where}: {key} は true か false で書いてください",
         "not_string_list": "{where}: {key} は文字列のリストで書いてください",
         "normalize_list": "{where}: normalize は {{pattern, replace}} のリストで書いてください",
@@ -323,6 +327,11 @@ ERRORS: dict[str, dict[str, str]] = {
         "status_int": "{where}: expect.status は整数で書いてください",
         "headers_mapping": "{where}: expect.headers は ヘッダー名 -> 値 で書いてください",
         "name_value_mapping": "{where}: {key} は 名前 -> 値 のマッピングで書いてください",
+        "default_header_null": (
+            "{where}: request_defaults.headers の {name} に null は書けません"
+            "（既定のヘッダーを送らないケースでは、"
+            "その request.headers に {name}: null と書きます）"
+        ),
         "request_defaults_mapping": "{where}: request_defaults は マッピングで書いてください",
         "request_form": (
             "{where}: request は 'メソッド パス'（例: 'POST /users'）の形で書いてください"
@@ -380,6 +389,9 @@ ERRORS: dict[str, dict[str, str]] = {
         "in_case": " (case {name})",
         "unknown_keys": "{where}: unknown keys: {keys}",
         "not_string": "{where}: {key} must be a string",
+        "name_number": (
+            '{where}: name is a number ({name}); quote a name made of digits, as in name: "{name}"'
+        ),
         "not_bool": "{where}: {key} must be true or false",
         "not_string_list": "{where}: {key} must be a list of strings",
         "normalize_list": "{where}: normalize must be a list of {{pattern, replace}}",
@@ -465,6 +477,10 @@ ERRORS: dict[str, dict[str, str]] = {
         "status_int": "{where}: expect.status must be an integer",
         "headers_mapping": "{where}: expect.headers must be a mapping of header name -> value",
         "name_value_mapping": "{where}: {key} must be a mapping of name -> value",
+        "default_header_null": (
+            "{where}: request_defaults.headers cannot set {name} to null"
+            " (to leave a default header out of a case, write {name}: null in its request.headers)"
+        ),
         "request_defaults_mapping": "{where}: request_defaults must be a mapping",
         "request_form": "{where}: request must be 'METHOD PATH' (e.g. 'POST /users')",
         "request_type": "{where}: request must be a string or a mapping",

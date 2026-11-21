@@ -66,6 +66,7 @@ from .expect import find_matcher_errors
 from .http import HttpRequest
 from .inifile import IniValue, ini_bool, ini_encoding, ini_lines, read_ini
 from .messages import TEXTS, error, language
+from .runner import same_env_name
 
 # ケース名は期待出力のファイル名になるため、ファイル名に使える文字だけにする。
 # 先頭の . と - は認めない（.foo.txt は隠しファイルになり、消し忘れの確認からも漏れる）。
@@ -389,6 +390,18 @@ def _str(value: Any, where: str, key: str, *, required: bool = False) -> str:
     return value
 
 
+def _name(value: Any, where: str) -> str:
+    """
+    ケース名（params の要素名も）を確かめる。
+
+    境界値の `{name: 0}` のように数値を書くと YAML では数値になるので、引用符で囲むよう
+    知らせる（そのまま文字列にすると、`010` が `8` に、`1.50` が `1.5` になってしまう）。
+    """
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        raise CasebookError(error("name_number", where=where, name=value))
+    return _str(value, where, "name", required=True)
+
+
 def _bool(value: Any, where: str, key: str) -> bool:
     """真偽値を確かめる（"false" のような文字列を True と取り違えないように）。"""
     if not isinstance(value, bool):
@@ -567,13 +580,13 @@ def load(
     if levels is None and "casebook_levels" in values:
         levels = tuple(ini_lines(values["casebook_levels"])) or None
     if command_prefix is None:
-        command_prefix = tuple(
-            _shell_split(
-                str(values.get("casebook_command_prefix", "")),
-                "casebook_command_prefix",
-                "casebook_command_prefix",
-            )
-        )
+        # ini の値の誤りなので、ほかの ini の値と同じく ValueError にする（言語は lang）
+        name = "casebook_command_prefix"
+        with language(lang):
+            try:
+                command_prefix = tuple(_shell_split(str(values.get(name, "")), name, name))
+            except CasebookError as e:
+                raise ValueError(str(e)) from None
     options: dict[str, Any] = {}
     if ini:
         options = {
@@ -837,7 +850,7 @@ def _expand_params(
     if not (isinstance(params, list) and params and all(isinstance(p, dict) for p in params)):
         raise CasebookError(error("params_list", where=loc))
     template = {k: v for k, v in item.items() if k != "params"}
-    name = _str(template.get("name"), loc, "name", required=True)
+    name = _name(template.get("name"), loc)
     for param in params:
         # 誤りの表示とレポートの行番号は、要素自身の行を優先する（分からなければ
         # テンプレートの行）。_parse_case が merged の id で行を引けるように登録する
@@ -848,7 +861,7 @@ def _expand_params(
         if "name" not in param:
             raise CasebookError(error("params_name", where=ploc))
         merged = {**template, **param}
-        merged["name"] = f"{name}-{_str(param['name'], ploc, 'name', required=True)}"
+        merged["name"] = f"{name}-{_name(param['name'], ploc)}"
         if pline is not None:
             doc._source_lines[id(merged)] = pline
         doc.cases.append(_parse_case(merged, doc, inherited, ploc))
@@ -866,7 +879,7 @@ def _parse_case(item: dict[str, Any], doc: CasebookDoc, inherited: _Inherited, l
     manual）→ stdin → env → request → 引数 → timeout → 状態と setup → observe と expect。
     """
     _check_keys(item, _CASE_KEYS, loc)
-    name = _str(item.get("name"), loc, "name", required=True)
+    name = _name(item.get("name"), loc)
     # match と $ では、末尾の改行（name: | で書いたときなど）を通してしまう
     if not NAME_RE.fullmatch(name):
         raise CasebookError(error("bad_name", where=loc, name=repr(name)))
@@ -1130,12 +1143,17 @@ def _env(value: Any, loc: str) -> dict[str, str | None]:
 
 
 def _merge_env(outer: dict[str, str], inner: dict[str, str | None]) -> dict[str, str]:
-    """外側の env に内側の env を上書きで重ねる（内側で null にした変数は消す）。"""
+    """
+    外側の env に内側の env を上書きで重ねる（内側で null にした変数は消す）。
+
+    Windows では `PATH` と `path` が同じ変数なので、名前の大文字小文字を区別せずに
+    上書きする・消す（両方を残すと、どちらが使われるか分からなくなる）。
+    """
     merged = dict(outer)
     for name, value in inner.items():
-        if value is None:
-            merged.pop(name, None)
-        else:
+        for key in [k for k in merged if same_env_name(k, name)]:
+            del merged[key]
+        if value is not None:
             merged[name] = value
     return merged
 
@@ -1263,13 +1281,23 @@ def _parse_expect(value: Any, kind: str, loc: str) -> dict[str, Any]:
     return value
 
 
-def _str_mapping(value: Any, loc: str, key: str) -> dict[str, str]:
-    """ヘッダーのような 名前 -> 文字列 のマッピング（値は文字列にそろえる）。"""
+def _headers(value: Any, loc: str, key: str) -> dict[str, str | None]:
+    """
+    ヘッダーの 名前 -> 値 のマッピング（値は文字列にそろえる）。
+
+    値は文字列・数値・真偽値（スキーマと同じ）。null は request_defaults のヘッダーを
+    送らない印として None のまま返す（env: の null と同じ）。リストやマッピングは、
+    文字列にすると `['a', 'b']` のような値が黙って送られるので誤りにする。
+    """
     if value is None:
         return {}
-    if not (isinstance(value, dict) and all(isinstance(k, str) for k in value)):
+    if not (
+        isinstance(value, dict)
+        and all(isinstance(k, str) for k in value)
+        and all(v is None or isinstance(v, str | int | float) for v in value.values())
+    ):
         raise CasebookError(error("name_value_mapping", where=loc, key=key))
-    return {k: str(v) for k, v in value.items()}
+    return {k: None if v is None else str(v) for k, v in value.items()}
 
 
 def _request_defaults(value: Any, where: str) -> dict[str, str]:
@@ -1279,7 +1307,12 @@ def _request_defaults(value: Any, where: str) -> dict[str, str]:
     if not isinstance(value, dict):
         raise CasebookError(error("request_defaults_mapping", where=where))
     _check_keys(value, {"headers"}, f"{where}: request_defaults")
-    return _str_mapping(value.get("headers"), where, "request_defaults.headers")
+    headers = _headers(value.get("headers"), where, "request_defaults.headers")
+    # 既定のヘッダーには、消す相手がない
+    for name, header in headers.items():
+        if header is None:
+            raise CasebookError(error("default_header_null", where=where, name=name))
+    return {k: v for k, v in headers.items() if v is not None}
 
 
 def _parse_request(value: Any, default_headers: dict[str, str], loc: str) -> HttpRequest:
@@ -1316,16 +1349,17 @@ def _parse_request(value: Any, default_headers: dict[str, str], loc: str) -> Htt
         raise CasebookError(error("request_query_twice", where=loc, path=repr(path)))
     if "json" in value and "body" in value:
         raise CasebookError(error("json_and_body", where=loc))
-    own_headers = _str_mapping(value.get("headers"), loc, "request.headers")
+    own_headers = _headers(value.get("headers"), loc, "request.headers")
     # ヘッダー名は大文字小文字を区別しないので、既定と違う書き方（Authorization と
-    # authorization）でも上書きにする（両方送らない）
+    # authorization）でも上書きにする（両方送らない）。null にしたヘッダーは送らない
+    # （request_defaults の Authorization を外して、認証なしを確かめるときなど）
     overridden = {name.lower() for name in own_headers}
     kept = {k: v for k, v in default_headers.items() if k.lower() not in overridden}
     return HttpRequest(
         method=method,
         path=path,
         query=query,
-        headers={**kept, **own_headers},
+        headers={**kept, **{k: v for k, v in own_headers.items() if v is not None}},
         json=value.get("json"),
         body=_str(value["body"], loc, "request.body") if "body" in value else None,
     )

@@ -317,6 +317,35 @@ def test_bad_command_prefix_is_a_usage_error(pytester: pytest.Pytester) -> None:
     result.stderr.fnmatch_lines(["*casebook_command_prefix*No closing quotation*"])
 
 
+def test_bad_command_prefix_message_follows_casebook_lang(pytester: pytest.Pytester) -> None:
+    pytester.makefile(".yaml", casebook_x=CALL_ONLY)
+    result = pytester.runpytest("-o", "casebook_lang=ja", "-o", "casebook_command_prefix='unclosed")
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    result.stderr.fnmatch_lines(["*casebook_command_prefix を引数に区切れません*"])
+
+
+def test_load_with_ini_rejects_a_bad_command_prefix(tmp_path: Path) -> None:
+    """ほかの ini の値の誤りと同じく ValueError で、言語は casebook_lang に従う。"""
+    (tmp_path / "pytest.ini").write_text(
+        "[pytest]\ncasebook_lang = ja\ncasebook_command_prefix = 'unclosed\n", encoding="utf-8"
+    )
+    path = tmp_path / "casebook_x.yaml"
+    path.write_text(CALL_ONLY, encoding="utf-8")
+    with pytest.raises(ValueError, match="casebook_command_prefix を引数に区切れません"):
+        load(path, ini=True)
+
+
+@pytest.mark.parametrize("pattern", ["specs/*.yaml", "specs\\*.yaml"])
+def test_casebook_files_with_a_directory_is_a_usage_error(
+    pytester: pytest.Pytester, pattern: str
+) -> None:
+    """パターンはファイル名と比べるので、ディレクトリを書くと黙って1件も集まらない。"""
+    pytester.makefile(".yaml", casebook_x=CALL_ONLY)
+    result = pytester.runpytest("-o", f"casebook_files={pattern}")
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    result.stderr.fnmatch_lines(["*casebook_files takes file name patterns*"])
+
+
 def test_valid_command_options_run(pytester: pytest.Pytester) -> None:
     pytester.makepyfile(m="def f():\n    return 1\n")
     pytester.makefile(".yaml", casebook_x=CALL_ONLY)

@@ -443,7 +443,7 @@ You can select by group name, e.g. `-k Pricing`. The HTML report only shows as m
 | `description` | What is checked |
 | `command` | Arguments to run as a CLI, placed after `command_prefix`. A string is split like a shell command; a list (`[a, 'b c']`) is passed as is ([details](#the-whole-yaml-file)). May be empty (`""`) if `command_prefix` is set |
 | `stdin` | Standard input for the command |
-| `stdin_file` | File passed to standard input, relative to the YAML's directory (not together with `stdin`) |
+| `stdin_file` | File passed to standard input (UTF-8), relative to the YAML's directory (not together with `stdin`) |
 | `timeout` | Seconds before the case fails as too slow (`command`, `call` and `request`; [details](#timeouts-timeout)) |
 | `env` | Environment variables while the case runs, put over the current ones ([how](#environment-variables-env)) |
 | `call` | Function to call (`module:function`, `module:Class.method`). `async def` functions are awaited |
@@ -465,7 +465,7 @@ Write exactly one of `command`, `call`, `request` and `manual`. Keys not in this
 
 ### Expected results (expect)
 
-A case is checked either against its golden file or against `expect:`, never both. With any key in `expect:`, no golden file is read or written, and only the items in `expect:` are compared. So "`exit_code` in the YAML and stdout from the golden file" is not possible: write both in `expect:`, or leave `expect:` out and let the golden file hold both.
+A case is checked either against its golden file or against `expect:`, never both. With any key in `expect:`, no golden file is read or written, and only the items in `expect:` are compared. So "`exit_code` in the YAML and stdout from the golden file" is not possible: write both in `expect:`, or leave `expect:` out and let the golden file hold both. Items you leave out are not compared: with only `stdout` written, the case passes even if `exit_code` is 1. To check how the run ended, write `exit_code` (`status` for request) too.
 
 ```yaml
 expect:
@@ -613,6 +613,11 @@ cases:
       json: {title: buy milk}          # only the keys you write are compared
       headers: {Location: {$regex: '^/todos/\d+$'}}
       db.todos: [{title: buy milk}]    # the DB changes can be checked too
+  - name: no_token
+    request:
+      path: /todos
+      headers: {Authorization: null}   # null leaves out the request_defaults header
+    expect: {status: 401}
 ```
 
 In conftest.py, write the hook that sends the request. `pytest_casebook.http` has adapters for common clients (they only call the client's methods and do not import any framework).
@@ -940,7 +945,7 @@ All options start with `--casebook-`. Generic names such as `--update-golden` ma
 
 | Name | Default | Meaning |
 |---|---|---|
-| `casebook_files` | `casebook_*.yaml` `casebook_*.yml` `*.casebook.yaml` `*.casebook.yml` | file name patterns to collect |
+| `casebook_files` | `casebook_*.yaml` `casebook_*.yml` `*.casebook.yaml` `*.casebook.yml` | file name patterns to collect (no directories; choose where to collect with `testpaths` and the like) |
 | `casebook_command_prefix` | (none) | arguments prepended to commands |
 | `casebook_encoding` | `utf-8` | encoding of command output |
 | `casebook_golden_dir` | `golden` | where golden files live. A directory per case file name is created under it |

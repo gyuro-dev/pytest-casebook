@@ -53,6 +53,7 @@
     },
     "golden_dir": {
       "type": "string",
+      "minLength": 1,
       "description": "Where golden files are stored (relative to this file) / 期待出力の置き場所（このファイルからの相対パス）"
     },
     "check_orphans": {
@@ -143,7 +144,8 @@
     "group": {
       "type": "object",
       "required": [
-        "group"
+        "group",
+        "cases"
       ],
       "additionalProperties": false,
       "properties": {
@@ -157,6 +159,7 @@
         },
         "state": {
           "type": "string",
+          "minLength": 1,
           "description": "Default state of the cases inside / 中のケースの既定の状態"
         },
         "marks": {
@@ -357,7 +360,8 @@
           "description": "The result of a manual case checked by hand (omit while not done yet) / 手動のケースを手で確かめた結果（まだなら書かない）"
         },
         "state": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "setup": {
           "$ref": "#/$defs/setup"
@@ -398,6 +402,7 @@
         },
         "golden": {
           "type": "string",
+          "minLength": 1,
           "description": "Golden file name (defaults to <name>.txt) / 期待出力のファイル名（省略時は <name>.txt）"
         }
       }
@@ -476,7 +481,16 @@
               "type": "object"
             },
             "headers": {
-              "$ref": "#/$defs/headers"
+              "type": "object",
+              "additionalProperties": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean",
+                  "null"
+                ]
+              },
+              "description": "Headers laid over request_defaults.headers; null leaves a default header out / request_defaults.headers に重ねるヘッダー。null なら既定のヘッダーを送らない"
             },
             "json": {
               "description": "JSON body / JSON の本文"

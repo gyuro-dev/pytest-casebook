@@ -15,7 +15,7 @@ import subprocess
 import sys
 import threading
 import traceback as tb_module
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Coroutine, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TypeVar, cast
@@ -142,7 +142,7 @@ def _kill_tree(proc: subprocess.Popen[str]) -> None:
     proc.kill()
 
 
-def _same_name(a: str, b: str) -> bool:
+def same_env_name(a: str, b: str) -> bool:
     """同じ環境変数の名前か（Windows は大文字小文字を区別しない）。"""
     return a.upper() == b.upper() if os.name == "nt" else a == b
 
@@ -156,7 +156,7 @@ def _overlay_env(base: dict[str, str], extra: Mapping[str, str]) -> dict[str, st
     """
     merged = dict(base)
     for name, value in extra.items():
-        for key in [k for k in merged if _same_name(k, name)]:
+        for key in [k for k in merged if same_env_name(k, name)]:
             del merged[key]
         merged[name] = value
     return merged
@@ -173,7 +173,7 @@ def _find_program(name: str, env: dict[str, str]) -> str:
     """
     if os.sep in name or (os.altsep and os.altsep in name):
         return name
-    path = next((v for k, v in env.items() if _same_name(k, "PATH")), None)
+    path = next((v for k, v in env.items() if same_env_name(k, "PATH")), None)
     return shutil.which(name, path=path) or name
 
 
@@ -327,11 +327,41 @@ def _call_captured(
         try:
             value = func(*args, **kwargs)
             if inspect.iscoroutine(value):
-                value = asyncio.run(value)
+                value = _run_coroutine(value)
         # 例外も結果の1つとして、期待値（raises）と比べる
         except Exception as e:  # noqa: BLE001
             return CallResult(error=e, stdout=out.getvalue(), stderr=err.getvalue())
     return CallResult(value=value, stdout=out.getvalue(), stderr=err.getvalue())
+
+
+def _run_coroutine(coro: Coroutine[Any, Any, _T]) -> _T:
+    """
+    coroutine を終わるまで動かし、その戻り値を返す（例外はそのまま上げる）。
+
+    このスレッドでイベントループが動いているとき（async のコードから run_case() を
+    呼んだときなど）は、asyncio.run が RuntimeError を上げ、それが関数の例外と
+    区別できなくなるので、別のスレッドの新しいループで動かす。
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    result: list[_T] = []
+    errors: list[BaseException] = []
+    context = contextvars.copy_context()
+
+    def target() -> None:
+        try:
+            result.append(context.run(asyncio.run, coro))
+        except BaseException as e:  # noqa: BLE001
+            errors.append(e)
+
+    worker = threading.Thread(target=target, name="casebook-async", daemon=True)
+    worker.start()
+    worker.join()
+    if errors:
+        raise errors[0]
+    return result[0]
 
 
 class WorkerTimeout(Exception):
